@@ -8,6 +8,7 @@ package net.vulkanmod.vulkan.texture;
  */
 
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.vulkanmod.render.texture.ImageUploadHelper;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -32,6 +33,8 @@ public class VulkanImage {
 
     private static final VkDevice DEVICE = Vulkan.getVkDevice();
 
+    public static final Long2ObjectOpenHashMap<VulkanImage> IMAGES = new Long2ObjectOpenHashMap<>();
+
     public final String name;
     public final int format;
     public final int aspect;
@@ -52,6 +55,7 @@ public class VulkanImage {
     private final long[] levelImageViews;
 
     private long sampler;
+    private int viewFormat = 0;
 
     /** Not a Vulkan layout: marks an image whose mip levels are in different layouts. */
     public static final int LAYOUT_MIXED = -1;
@@ -106,6 +110,8 @@ public class VulkanImage {
         image.mainImageView = createImageView(image.id, image.viewType, image.format, image.aspect, image.arrayLayers, 0, image.mipLevels);
 
         image.sampler = SamplerManager.getSampler(builder.clamp, builder.linearFiltering, builder.mipLevels - 1);
+
+        IMAGES.put(image.id, image);
 
         return image;
     }
@@ -450,6 +456,8 @@ public class VulkanImage {
                         }
                     });
 
+        IMAGES.remove(this.id);
+
         this.id = 0L;
     }
 
@@ -496,7 +504,18 @@ public class VulkanImage {
     }
 
     public long getImageView() {
-        return mainImageView;
+        if (this.viewFormat == 0 || this.viewFormat == this.format) {
+            return mainImageView;
+        }
+
+        int format = this.viewFormat;
+        long imageView = this.imageViews.get(format);
+        if (imageView == VK_NULL_HANDLE) {
+            imageView = createImageView(this.id, VK_IMAGE_VIEW_TYPE_2D, format, this.aspect, this.arrayLayers, 0, this.mipLevels);
+            this.imageViews.put(format, imageView);
+        }
+
+        return imageView;
     }
 
     public long getImageView(int format) {
@@ -526,6 +545,14 @@ public class VulkanImage {
 
     public long getSampler() {
         return sampler;
+    }
+
+    public int getViewFormat() {
+        return viewFormat;
+    }
+
+    public void setViewFormat(int viewFormat) {
+        this.viewFormat = viewFormat;
     }
 
     public static Builder builder(int width, int height) {
@@ -615,7 +642,7 @@ public class VulkanImage {
                 case VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB,
                      VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT,
                      VK_FORMAT_R8G8B8A8_UINT, VK_FORMAT_R8G8B8A8_SINT,
-                     VK_FORMAT_R32_SFLOAT -> 4;
+                     VK_FORMAT_R32_SFLOAT, VK_FORMAT_B10G11R11_UFLOAT_PACK32 -> 4;
                 case VK_FORMAT_R16_SFLOAT -> 2;
                 case VK_FORMAT_R8_UNORM -> 1;
                 case VK_FORMAT_R16G16B16A16_SFLOAT -> 8;
