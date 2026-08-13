@@ -47,6 +47,7 @@ public abstract class DeviceManager {
     public static VkPhysicalDeviceMemoryProperties memoryProperties;
 
     public static SurfaceProperties surfaceProperties;
+    public static boolean fullScreenExclusiveControl = false;
 
     static GraphicsQueue graphicsQueue;
     static PresentQueue presentQueue;
@@ -245,9 +246,21 @@ public abstract class DeviceManager {
 //                deviceVulkan13Features.pNext(deviceVulkan11Features.address());
             }
 
+            fullScreenExclusiveControl = false;
             Set<String> enabledExtensions = new HashSet<>(Vulkan.REQUIRED_EXTENSION);
             if (Vulkan.DYNAMIC_RENDERING) {
                 enabledExtensions.add(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+            }
+            if (Vulkan.surfaceCapabilities2Supported) {
+                Set<String> availableExtensions = getAvailableExtension(stack, physicalDevice).stream()
+                        .map(VkExtensionProperties::extensionNameString)
+                        .collect(toSet());
+
+                if (availableExtensions.contains(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)) {
+                    enabledExtensions.add(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
+                    fullScreenExclusiveControl = true;
+                    Initializer.LOGGER.info("VK_EXT_full_screen_exclusive enabled: opting out of full screen exclusive control");
+                }
             }
             createInfo.ppEnabledExtensionNames(asPointerBuffer(enabledExtensions));
 
