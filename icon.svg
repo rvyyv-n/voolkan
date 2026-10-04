@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1417"/><stop offset="1" stop-color="#0d0a0c"/>
+    </linearGradient>
+    <linearGradient id="v" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff5a4d"/><stop offset="1" stop-color="#b3122b"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="976" height="976" rx="236" fill="url(#bg)"/>
+  <rect x="24" y="24" width="976" height="976" rx="236" fill="none" stroke="url(#rim)" stroke-width="6"/>
+  <!-- a sharp v, left arm heavier, with a slim blade slicing the right arm -->
+  <path d="M200 252 H372 L512 600 L652 252 H824 L580 790 H444 Z" fill="url(#v)"/>
+  <path d="M512 600 L652 252 H700 L548 640 Z" fill="#000" opacity=".18"/>
+  <rect x="300" y="842" width="424" height="22" rx="11" fill="#ff5a4d" opacity=".55"/>
+</svg>

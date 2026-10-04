@@ -1,3 +1,14 @@
+﻿# voolkan
+
+voolkan is an **unofficial fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral**, licensed under **LGPL-3.0** (see `LICENSE`). It is not affiliated with or endorsed by the VulkanMod project.
+
+Goal: a legacy-hardware-friendly build for Minecraft 1.21.11 (aimed at GPUs without `VK_KHR_dynamic_rendering`, e.g. AMD Radeon R7 350), with stability and low-latency work, for a clean competitive sword PvP setup. Windows only. Private until stable.
+
+All original code is copyright its VulkanMod authors; modified files carry a modification notice (see `docs/conventions.md`). Project docs live in `docs/` (start at `docs/README.md`); the plan is in `ROADMAP.md`.
+
+---
+
+The text below is the upstream VulkanMod README, kept for reference.
 # <a href="https://github.com/xCollateral/VulkanMod"> <img src="./src/main/resources/assets/vulkanmod/vlogo.png" width="125"/> </a>
 
 # VulkanMod
