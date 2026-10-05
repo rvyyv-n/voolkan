@@ -4,7 +4,8 @@ package net.vulkanmod.vulkan;
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * bind guard: fall back to the main render target when a pipeline is bound with no render pass;
- * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option.
+ * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option;
+ * submission serials so GPU fences can wait for the frame that holds the work recorded when they were created.
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -98,6 +99,9 @@ public class Renderer {
     private ArrayList<Long> inFlightFences;
     // Fence of the most recently submitted frame, VK_NULL_HANDLE when there is none to wait for
     private long lastSubmittedFence = VK_NULL_HANDLE;
+    // Number of frame command buffer submissions so far, and the serial last submitted with each frame slot's fence
+    private long submitSerial = 0;
+    private long[] slotSerials;
     private List<CommandPool.CommandBuffer> transferCbs;
 
     private Framebuffer boundFramebuffer;
@@ -197,6 +201,7 @@ public class Renderer {
 
         imageAvailableSemaphores = new ArrayList<>(framesNum);
         inFlightFences = new ArrayList<>(framesNum);
+        slotSerials = new long[framesNum];
 
         try (MemoryStack stack = stackPush()) {
             VkSemaphoreCreateInfo semaphoreInfo = VkSemaphoreCreateInfo.calloc(stack);
@@ -415,6 +420,7 @@ public class Renderer {
             }
 
             lastSubmittedFence = inFlightFences.get(currentFrame);
+            slotSerials[currentFrame] = ++submitSerial;
 
             // Semaphore waited command buffers will be reset right after waiting this command buffer's fence
             Synchronization.INSTANCE.scheduleCbReset();
@@ -492,10 +498,43 @@ public class Renderer {
                 throw new RuntimeException("Failed to submit draw command buffer: %s".formatted(VkResult.decode(vkResult)));
             }
 
+            slotSerials[currentFrame] = ++submitSerial;
+
             vkWaitForFences(device, inFlightFences.get(currentFrame), true, VUtil.UINT64_MAX);
 
             this.beginMainRenderPass(stack);
         }
+    }
+
+    /** Serial of the submission that will contain the commands recorded from now on. */
+    public long nextSubmitSerial() {
+        return submitSerial + 1;
+    }
+
+    /**
+     * Waits until the GPU has finished the submission with the given serial (see nextSubmitSerial).
+     * A submission that has not happened yet is flushed when the caller is willing to wait, and reported
+     * as not complete for a poll (timeout 0), like a GL fence without the flush flag.
+     *
+     * @return true if the submission has completed
+     */
+    public boolean awaitSubmission(long serial, long timeoutNanos) {
+        if (serial > submitSerial) {
+            if (timeoutNanos == 0 || !recordingCmds) {
+                return false;
+            }
+
+            flushCmds();
+        }
+
+        // A frame slot's fence is reused by later submissions; once the slot holds a newer serial this one is long done
+        for (int i = 0; i < slotSerials.length; i++) {
+            if (slotSerials[i] == serial) {
+                return vkWaitForFences(device, inFlightFences.get(i), true, timeoutNanos) == VK_SUCCESS;
+            }
+        }
+
+        return true;
     }
 
     public void submitUploads() {

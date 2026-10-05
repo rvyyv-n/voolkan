@@ -23,8 +23,8 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] **M1** 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
 
 ## Phase 2: Stability
-- [ ] 2.1 Port upstream fix PRs #827, #798, #872, #870
-- [ ] 2.2 Per-mip image layout tracking; implement `copyTextureToTexture` and real fences
+- [x] 2.1 Port upstream fix PRs #827, #798, #872, #870 (reimplemented from the PR descriptions)
+- [x] 2.2 Per-mip image layout tracking; implement `copyTextureToTexture` and real fences (verified on lavapipe menu only: validation clean on the legacy R7 profile; copy and fence paths not exercised without a world, need the R7)
 
 ## Phase 3: Speed and input delay
 - [x] 3.1 Frame queue 1, low-latency mode, swapchain image-count option (verified on lavapipe only; effect on the R7 needs PresentMon, see 3.3)

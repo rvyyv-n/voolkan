@@ -3,7 +3,8 @@ package net.vulkanmod.vulkan.texture;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * GL_UNPACK_ROW_LENGTH of 0 means tightly packed, and the staged upload size covers only the region read.
+ * GL_UNPACK_ROW_LENGTH of 0 means tightly packed, and the staged upload size covers only the region read;
+ * image layouts are tracked per mip level.
  */
 
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
@@ -52,7 +53,11 @@ public class VulkanImage {
 
     private long sampler;
 
-    private int currentLayout;
+    /** Not a Vulkan layout: marks an image whose mip levels are in different layouts. */
+    public static final int LAYOUT_MIXED = -1;
+
+    // Layout of each mip level, starts UNDEFINED
+    private final int[] levelLayouts;
 
     // Used for already allocated images e.g. swap chain images
     public VulkanImage(String name, long id, int format, int mipLevels, int width, int height, int formatSize, int usage, long imageView) {
@@ -72,6 +77,7 @@ public class VulkanImage {
 
         this.size = width * height * formatSize;
         this.levelImageViews = new long[mipLevels];
+        this.levelLayouts = new int[mipLevels];
 
         this.sampler = SamplerManager.getDefaultSampler();
     }
@@ -90,6 +96,7 @@ public class VulkanImage {
 
         this.size = width * height * formatSize;
         this.levelImageViews = new long[builder.mipLevels];
+        this.levelLayouts = new int[builder.mipLevels];
     }
 
     public static VulkanImage createTextureImage(Builder builder) {
@@ -258,7 +265,7 @@ public class VulkanImage {
 
         VkCommandBuffer commandBuffer = ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().getHandle();
         try (MemoryStack stack = stackPush()) {
-            transferDstLayout(stack, commandBuffer);
+            transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
             final int srcOffset = (int) (stagingBuffer.getOffset());
 
@@ -270,12 +277,8 @@ public class VulkanImage {
         }
     }
 
-    private void transferDstLayout(MemoryStack stack, VkCommandBuffer commandBuffer) {
-        transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    }
-
     public void readOnlyLayout() {
-        if (this.currentLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+        if (this.isInLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
             return;
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -299,18 +302,48 @@ public class VulkanImage {
         this.sampler = sampler;
     }
 
+    /** Transitions every mip level to newLayout. */
     public void transitionImageLayout(MemoryStack stack, VkCommandBuffer commandBuffer, int newLayout) {
-        transitionImageLayout(stack, commandBuffer, this, newLayout);
+        transitionImageLayout(stack, commandBuffer, 0, this.mipLevels, newLayout);
+    }
+
+    /** Transitions a single mip level to newLayout. */
+    public void transitionLevelLayout(MemoryStack stack, VkCommandBuffer commandBuffer, int level, int newLayout) {
+        transitionImageLayout(stack, commandBuffer, level, 1, newLayout);
     }
 
     public static void transitionImageLayout(MemoryStack stack, VkCommandBuffer commandBuffer, VulkanImage image, int newLayout) {
-        if (image.currentLayout == newLayout) {
-            return;
-        }
+        image.transitionImageLayout(stack, commandBuffer, newLayout);
+    }
 
+    /**
+     * Transitions levels [baseLevel, baseLevel + levelCount) to newLayout. Each run of consecutive levels
+     * that share a layout gets one barrier with that run's real old layout.
+     */
+    public void transitionImageLayout(MemoryStack stack, VkCommandBuffer commandBuffer, int baseLevel, int levelCount, int newLayout) {
+        final int end = baseLevel + levelCount;
+        int runStart = baseLevel;
+
+        while (runStart < end) {
+            final int oldLayout = this.levelLayouts[runStart];
+            int runEnd = runStart + 1;
+            while (runEnd < end && this.levelLayouts[runEnd] == oldLayout) {
+                runEnd++;
+            }
+
+            if (oldLayout != newLayout) {
+                transitionRun(stack, commandBuffer, runStart, runEnd - runStart, oldLayout, newLayout);
+            }
+
+            runStart = runEnd;
+        }
+    }
+
+    private void transitionRun(MemoryStack stack, VkCommandBuffer commandBuffer, int baseLevel, int levelCount,
+                               int oldLayout, int newLayout) {
         int sourceStage, srcAccessMask, destinationStage, dstAccessMask = 0;
 
-        switch (image.currentLayout) {
+        switch (oldLayout) {
             case VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                 srcAccessMask = 0;
                 sourceStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -335,7 +368,7 @@ public class VulkanImage {
                 srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
                 sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             }
-            default -> throw new RuntimeException("Unexpected value:" + image.currentLayout);
+            default -> throw new RuntimeException("Unexpected value:" + oldLayout);
         }
 
         switch (newLayout) {
@@ -365,33 +398,20 @@ public class VulkanImage {
             default -> throw new RuntimeException("Unexpected value:" + newLayout);
         }
 
-        transitionLayout(stack, commandBuffer, image, image.currentLayout, newLayout,
-                         sourceStage, srcAccessMask, destinationStage, dstAccessMask);
-    }
-
-    public static void transitionLayout(MemoryStack stack, VkCommandBuffer commandBuffer, VulkanImage image, int oldLayout, int newLayout,
-                                        int sourceStage, int srcAccessMask, int destinationStage, int dstAccessMask) {
-        transitionLayout(stack, commandBuffer, image, 0, oldLayout, newLayout,
-                         sourceStage, srcAccessMask, destinationStage, dstAccessMask);
-    }
-
-    public static void transitionLayout(MemoryStack stack, VkCommandBuffer commandBuffer, VulkanImage image, int baseLevel, int oldLayout, int newLayout,
-                                        int sourceStage, int srcAccessMask, int destinationStage, int dstAccessMask) {
-
         VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack);
         barrier.sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER);
-        barrier.oldLayout(image.currentLayout);
+        barrier.oldLayout(oldLayout);
         barrier.newLayout(newLayout);
         barrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
         barrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-        barrier.image(image.getId());
+        barrier.image(this.getId());
 
         barrier.subresourceRange().baseMipLevel(baseLevel);
-        barrier.subresourceRange().levelCount(VK_REMAINING_MIP_LEVELS);
+        barrier.subresourceRange().levelCount(levelCount);
         barrier.subresourceRange().baseArrayLayer(0);
         barrier.subresourceRange().layerCount(VK_REMAINING_ARRAY_LAYERS);
 
-        barrier.subresourceRange().aspectMask(image.aspect);
+        barrier.subresourceRange().aspectMask(this.aspect);
 
         barrier.srcAccessMask(srcAccessMask);
         barrier.dstAccessMask(dstAccessMask);
@@ -403,7 +423,7 @@ public class VulkanImage {
                              null,
                              barrier);
 
-        image.currentLayout = newLayout;
+        Arrays.fill(this.levelLayouts, baseLevel, baseLevel + levelCount, newLayout);
     }
 
     private static boolean hasStencilComponent(int format) {
@@ -433,12 +453,38 @@ public class VulkanImage {
         this.id = 0L;
     }
 
+    /** Layout shared by every mip level, or LAYOUT_MIXED when the levels differ. */
     public int getCurrentLayout() {
-        return currentLayout;
+        final int layout = this.levelLayouts[0];
+        for (int i = 1; i < this.levelLayouts.length; i++) {
+            if (this.levelLayouts[i] != layout) {
+                return LAYOUT_MIXED;
+            }
+        }
+        return layout;
     }
 
-    public void setCurrentLayout(int currentLayout) {
-        this.currentLayout = currentLayout;
+    public boolean isInLayout(int layout) {
+        for (int l : this.levelLayouts) {
+            if (l != layout) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public int getLevelLayout(int level) {
+        return this.levelLayouts[level];
+    }
+
+    /** Records the layout of every level without issuing a barrier (use after the layout changed implicitly). */
+    public void setCurrentLayout(int layout) {
+        Arrays.fill(this.levelLayouts, layout);
+    }
+
+    /** Records the layout of one level without issuing a barrier. */
+    public void setLevelLayout(int level, int layout) {
+        this.levelLayouts[level] = layout;
     }
 
     public long getId() {

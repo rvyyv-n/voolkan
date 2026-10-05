@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy framebuffers use the level image view and level extent, are cached per (pass, level, views) and support depth-only.
+ * legacy framebuffers use the level image view and level extent, are cached per (pass, level, views) and support depth-only; depth level helper for per-mip layouts.
  */
 
 import net.vulkanmod.vulkan.Renderer;
@@ -260,12 +260,9 @@ public class Framebuffer {
         return colorAttachment.getLevelImageView(level);
     }
 
-    /**
-     * True when the colour image has several mip levels. VulkanImage tracks one layout for the whole
-     * image, so passes rendering into one level must keep every level in the same layout.
-     */
-    boolean hasMultiLevelColorAttachment() {
-        return this.colorAttachment != null && this.colorAttachment.mipLevels > 1;
+    /** Mip level of the depth attachment this framebuffer renders into (its legacy view covers one level). */
+    int getDepthLevel() {
+        return this.depthAttachment != null ? Math.min(this.level, this.depthAttachment.mipLevels - 1) : 0;
     }
 
     public int getLevel() {

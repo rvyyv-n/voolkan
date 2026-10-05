@@ -3,7 +3,7 @@ package net.vulkanmod.render.engine;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * oversized buffer writes fall back to a one-shot staging buffer.
+ * oversized buffer writes fall back to a one-shot staging buffer; copyTextureToTexture and createFence are implemented.
  */
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
@@ -622,7 +622,17 @@ public class VkCommandEncoder implements CommandEncoder {
             } else if (gpuTexture2.isClosed()) {
                 throw new IllegalStateException("Destination texture is closed");
             } else {
-                // TODO implement
+                var srcImage = ((VkGpuTexture) gpuTexture).getVulkanImage();
+                var dstImage = ((VkGpuTexture) gpuTexture2).getVulkanImage();
+
+                VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+
+                // Transfers cannot run inside a render pass; the next draw rebinds its target
+                Renderer.getInstance().endRenderPass(commandBuffer);
+
+                try (MemoryStack stack = stackPush()) {
+                    ImageUtil.copyImageToImageCmd(stack, commandBuffer, srcImage, dstImage, mipLevel, l, m, j, k, n, o);
+                }
             }
         } else {
             throw new IllegalArgumentException("Invalid mipLevel " + mipLevel + ", must be >= 0 and < " + gpuTexture.getMipLevels() + " and < " + gpuTexture2.getMipLevels());
@@ -634,8 +644,9 @@ public class VkCommandEncoder implements CommandEncoder {
         if (this.inRenderPass) {
             throw new IllegalStateException("Close the existing render pass before performing additional commands");
         } else {
-//            throw new UnsupportedOperationException();
-            // TODO
+            // Completes when the frame submission holding the commands recorded so far has finished on the GPU
+            final long serial = Renderer.getInstance().nextSubmitSerial();
+
             return new GpuFence() {
                 @Override
                 public void close() {
@@ -643,8 +654,8 @@ public class VkCommandEncoder implements CommandEncoder {
                 }
 
                 @Override
-                public boolean awaitCompletion(long l) {
-                    return true;
+                public boolean awaitCompletion(long timeoutNanos) {
+                    return Renderer.getInstance().awaitSubmission(serial, timeoutNanos);
                 }
             };
         }

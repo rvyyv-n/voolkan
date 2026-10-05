@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; keep all mip levels in one layout for multi-level colour targets.
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; mip level layouts are tracked per level.
  */
 
 import net.vulkanmod.vulkan.Renderer;
@@ -25,12 +25,10 @@ public class RenderPass {
 
     final int attachmentCount;
 
-    /**
-     * Legacy path, colour image with several mip levels: the render pass ends in COLOR_ATTACHMENT_OPTIMAL
-     * (a render pass final layout only applies to the single level in the framebuffer view) and the whole
-     * image is transitioned to the requested final layout after vkCmdEndRenderPass, like the dynamic path does.
-     */
-    final boolean explicitColorFinalLayout;
+    // Mip levels the legacy pass was begun on; the final layout of the pass applies to these levels only
+    private int activeColorLevel;
+    private int activeDepthLevel;
+
     AttachmentInfo colorAttachmentInfo;
     AttachmentInfo depthAttachmentInfo;
 
@@ -46,9 +44,6 @@ public class RenderPass {
             count++;
 
         this.attachmentCount = count;
-
-        this.explicitColorFinalLayout = !Vulkan.DYNAMIC_RENDERING && colorAttachmentInfo != null
-                                        && framebuffer.hasMultiLevelColorAttachment();
 
         if (!Vulkan.DYNAMIC_RENDERING) {
             createRenderPass();
@@ -67,9 +62,7 @@ public class RenderPass {
 
             int i = 0;
 
-            final int colorFinalLayout = explicitColorFinalLayout
-                    ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-                    : (colorAttachmentInfo != null ? colorAttachmentInfo.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED);
+            final int colorFinalLayout = colorAttachmentInfo != null ? colorAttachmentInfo.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED;
 
             // Color attachment
             if (colorAttachmentInfo != null) {
@@ -158,17 +151,16 @@ public class RenderPass {
 
     public void beginRenderPass(VkCommandBuffer commandBuffer, long framebufferId, MemoryStack stack) {
 
-        if (colorAttachmentInfo != null
-            && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-        {
+        // The framebuffer view covers one mip level, and so does the pass: only that level changes layout
+        if (colorAttachmentInfo != null) {
+            this.activeColorLevel = framebuffer.getLevel();
             framebuffer.getColorAttachment()
-                       .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                       .transitionLevelLayout(stack, commandBuffer, this.activeColorLevel, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
         }
-        if (depthAttachmentInfo != null
-            && framebuffer.getDepthAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-        {
+        if (depthAttachmentInfo != null) {
+            this.activeDepthLevel = framebuffer.getDepthLevel();
             framebuffer.getDepthAttachment()
-                       .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+                       .transitionLevelLayout(stack, commandBuffer, this.activeDepthLevel, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
         }
 
         VkRenderPassBeginInfo renderPassInfo = VkRenderPassBeginInfo.calloc(stack);
@@ -222,24 +214,12 @@ public class RenderPass {
         else {
             vkCmdEndRenderPass(commandBuffer);
 
-            if (colorAttachmentInfo != null) {
-                VulkanImage colorImage = framebuffer.getColorAttachment();
-
-                if (explicitColorFinalLayout) {
-                    // Every level is in COLOR_ATTACHMENT_OPTIMAL here; move the whole image in one barrier
-                    colorImage.setCurrentLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-                    try (MemoryStack stack = MemoryStack.stackPush()) {
-                        colorImage.transitionImageLayout(stack, commandBuffer, colorAttachmentInfo.finalLayout);
-                    }
-                }
-                else {
-                    colorImage.setCurrentLayout(colorAttachmentInfo.finalLayout);
-                }
-            }
+            // The render pass final layout applies to the level in the framebuffer view only
+            if (colorAttachmentInfo != null)
+                framebuffer.getColorAttachment().setLevelLayout(this.activeColorLevel, colorAttachmentInfo.finalLayout);
 
             if (depthAttachmentInfo != null)
-                framebuffer.getDepthAttachment().setCurrentLayout(depthAttachmentInfo.finalLayout);
+                framebuffer.getDepthAttachment().setLevelLayout(this.activeDepthLevel, depthAttachmentInfo.finalLayout);
         }
 
         Renderer.getInstance().setBoundRenderPass(null);
@@ -331,8 +311,7 @@ public class RenderPass {
             return 0;
         }
 
-        int layout = explicitColorFinalLayout ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : colorAttachmentInfo.finalLayout;
-        return switch (layout) {
+        return switch (colorAttachmentInfo.finalLayout) {
             case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> 1;
             case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> 2;
             default -> 0;
