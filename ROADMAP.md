@@ -32,11 +32,11 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 3.3 PresentMon captures on the R7 + summary: capture script and `docs/presentmon.md` done; **the R7 captures are for the owner**
 
 ## Phase 4: Minimal GUI
+(4.5 is parked, see the Parked section.)
 - [x] 4.1 "Compatibility" block on the Video page
 - [x] 4.2 Language-file completeness check
 - [x] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; Preset row done (Performance also maxes the refresh rate); values in `docs/presets.md`
 - [x] 4.4 Branding: replace the VulkanMod logo and name in the UI (settings screen header, window and mod list text) with the voolkan logo and name; keep upstream credit in the About text and README
-- [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
 
 ## Phase 5: Release
 - [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
@@ -44,9 +44,14 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 5.2 Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
 
 ## Phase 6: Other Minecraft versions
-- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
-- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
+(6.1 and 6.2 are parked, see the Parked section.)
 
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
+(7.1 is parked, see the Parked section.)
 Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
+
+## Parked (owner decision, not being worked on)
+- [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
+- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
+- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
 - [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
