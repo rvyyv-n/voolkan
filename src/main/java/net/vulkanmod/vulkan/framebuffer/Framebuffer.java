@@ -3,10 +3,9 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * mip-level aware framebuffers for the legacy render pass path.
+ * legacy framebuffers use the level image view and level extent, are cached per (pass, level, views) and support depth-only.
  */
 
-import it.unimi.dsi.fastutil.objects.Reference2LongArrayMap;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -17,6 +16,8 @@ import org.lwjgl.vulkan.*;
 
 import java.nio.LongBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import static net.vulkanmod.vulkan.Vulkan.DYNAMIC_RENDERING;
 import static org.lwjgl.vulkan.VK10.*;
@@ -40,7 +41,13 @@ public class Framebuffer {
 
     private int level;
 
-    private final Reference2LongArrayMap<RenderPass> renderpassToFramebufferMap = new Reference2LongArrayMap<>();
+    /**
+     * Cache key for VkFramebuffer handles. RenderPass has identity equality, and the views are part of
+     * the key so that a different mip level (or a re-created view) never reuses a stale framebuffer.
+     */
+    private record FramebufferKey(RenderPass renderPass, int level, long colorView, long depthView) {}
+
+    private final Map<FramebufferKey, Long> renderpassToFramebufferMap = new HashMap<>();
 
     // SwapChain
     protected Framebuffer() {
@@ -101,25 +108,31 @@ public class Framebuffer {
         this.createImages();
     }
 
-    private long createFramebuffer(RenderPass renderPass) {
+    private long createFramebuffer(RenderPass renderPass, long colorView, long depthView) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
 
-            LongBuffer attachments;
-            if (colorAttachment != null && depthAttachment != null) {
-                attachments = stack.longs(colorAttachment.getImageView(), depthAttachment.getImageView());
-            } else if (colorAttachment != null) {
-                attachments = stack.longs(colorAttachment.getImageView());
-            } else {
-                throw new IllegalStateException();
+            // Attachment order must match the render pass: colour first (if any), then depth
+            int count = (renderPass.colorAttachmentInfo != null ? 1 : 0) + (renderPass.depthAttachmentInfo != null ? 1 : 0);
+            if (count == 0) {
+                throw new IllegalStateException("Render pass without attachments");
             }
+
+            LongBuffer attachments = stack.mallocLong(count);
+            if (renderPass.colorAttachmentInfo != null) {
+                attachments.put(colorView);
+            }
+            if (renderPass.depthAttachmentInfo != null) {
+                attachments.put(depthView);
+            }
+            attachments.flip();
 
             LongBuffer pFramebuffer = stack.mallocLong(1);
 
             VkFramebufferCreateInfo framebufferInfo = VkFramebufferCreateInfo.calloc(stack);
             framebufferInfo.sType$Default();
             framebufferInfo.renderPass(renderPass.getId());
-            framebufferInfo.width(this.width);
-            framebufferInfo.height(this.height);
+            framebufferInfo.width(this.getLevelWidth());
+            framebufferInfo.height(this.getLevelHeight());
             framebufferInfo.layers(1);
             framebufferInfo.pAttachments(attachments);
 
@@ -129,6 +142,22 @@ public class Framebuffer {
 
             return pFramebuffer.get(0);
         }
+    }
+
+    /** View used as colour attachment: the single-level view of the targeted mip level. */
+    private long legacyColorView() {
+        return this.colorAttachment != null ? this.colorAttachment.getLevelImageView(this.level) : VK_NULL_HANDLE;
+    }
+
+    /** View used as depth attachment: it must cover exactly one mip level. */
+    private long legacyDepthView() {
+        if (this.depthAttachment == null) {
+            return VK_NULL_HANDLE;
+        }
+
+        return this.depthAttachment.mipLevels > 1
+                ? this.depthAttachment.getLevelImageView(Math.min(this.level, this.depthAttachment.mipLevels - 1))
+                : this.depthAttachment.getImageView();
     }
 
     public void beginRenderPass(VkCommandBuffer commandBuffer, RenderPass renderPass, MemoryStack stack) {
@@ -144,7 +173,18 @@ public class Framebuffer {
     }
 
     protected long getFramebufferId(RenderPass renderPass) {
-        return this.renderpassToFramebufferMap.computeIfAbsent(renderPass, renderPass1 -> createFramebuffer(renderPass));
+        long colorView = legacyColorView();
+        long depthView = legacyDepthView();
+
+        FramebufferKey key = new FramebufferKey(renderPass, this.level, colorView, depthView);
+
+        Long id = this.renderpassToFramebufferMap.get(key);
+        if (id == null) {
+            id = createFramebuffer(renderPass, colorView, depthView);
+            this.renderpassToFramebufferMap.put(key, id);
+        }
+
+        return id;
     }
 
     public VkViewport.Buffer viewport(MemoryStack stack) {
@@ -181,7 +221,7 @@ public class Framebuffer {
         }
 
         final VkDevice device = Vulkan.getVkDevice();
-        final var ids = renderpassToFramebufferMap.values().toLongArray();
+        final long[] ids = renderpassToFramebufferMap.values().stream().mapToLong(Long::longValue).toArray();
 
         MemoryManager.getInstance().addFrameOp(
                 () -> Arrays.stream(ids).forEach(id ->
@@ -193,7 +233,8 @@ public class Framebuffer {
     }
 
     public void setLevel(int level) {
-        int maxLevel = this.colorAttachment.mipLevels - 1;
+        VulkanImage levelImage = this.colorAttachment != null ? this.colorAttachment : this.depthAttachment;
+        int maxLevel = levelImage.mipLevels - 1;
         if (level > maxLevel) {
             throw new IllegalStateException(
                     "Requested mip level (%d) greater than color attachments max mip level (%d)"
