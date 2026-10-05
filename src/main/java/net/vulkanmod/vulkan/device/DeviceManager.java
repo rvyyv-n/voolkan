@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.device;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * choose the render path after device pick; enable dynamic rendering only when used; log capabilities and report device setup failures readably.
+ * choose the render path after device pick; enable dynamic rendering only when used; log capabilities (including the selectable devices) and report device setup failures readably.
  */
 
 import dev.voolkan.compat.RenderPath;
@@ -69,6 +69,9 @@ public abstract class DeviceManager {
 
     private static void logCapabilities() {
         Initializer.LOGGER.info("GPU: {} ({}), driver {}, Vulkan {}", device.deviceName, device.vendorIdString, device.driverVersion, device.vkVersion);
+        for (int i = 0; i < suitableDevices.size(); i++) {
+            Initializer.LOGGER.info("Selectable device {}: {}", i, suitableDevices.get(i).deviceName);
+        }
         Initializer.LOGGER.info("VK_KHR_dynamic_rendering: {}, multi-draw indirect: {}, validation: {}",
                                 device.isDynamicRenderingSupported() ? "supported" : "not supported",
                                 device.isDrawIndirectSupported() ? "supported" : "not supported",

@@ -13,8 +13,6 @@
 
   "vulkanmod.options.buttons.apply": "Apply",
   "vulkanmod.options.buttons.undo": "Undo",
-  "vulkanmod.options.buttons.kofi": "Support VulkanMod",
-  "voolkan.options.about": "voolkan is an unofficial fork of VulkanMod by xCollateral, licensed under the LGPL-3.0. This button opens the upstream author's Ko-fi page; the money goes to the VulkanMod project, not to voolkan.",
   "vulkanmod.options.buttons.update_available": "Update available!",
 
   "vulkanmod.options.advCulling": "Advanced Chunk Culling",

@@ -54,3 +54,4 @@ Paths used by the scripts can be overridden in a git-ignored `tools\local.env.ps
 - Decompiling a jar: `java -jar tools\bin\vineflower-1.12.0.jar <in.jar> <outdir>`.
 - PresentMon: `%LOCALAPPDATA%\Microsoft\WinGet\Links\presentmon.exe` (alias added by winget; open a new shell).
 - RenderDoc: `C:\Program Files\RenderDoc\qrenderdoc.exe`. Note: the base has no RenderDoc/debug-label switch (debug labels are gated on the compile-time `ENABLE_VALIDATION_LAYERS`).
+- The R7 is in the mod's GPU selector on a normal run (checked: `Selectable device 0: AMD Radeon R7 200 Series`, logged at startup). The scripts that set `VK_DRIVER_FILES` (lavapipe, the R7 profile without `-Native`, `run-validation.ps1 -Lavapipe`) hide the real GPU from the Vulkan loader, so only lavapipe appears there. `run-validation.ps1` without `-Lavapipe` runs on the real GPU.
