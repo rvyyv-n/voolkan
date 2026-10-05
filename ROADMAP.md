@@ -44,8 +44,8 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 5.2 Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
 
 ## Phase 6: Other Minecraft versions
-- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25)
-- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (desk research done in `docs/mc-26-2-research.md`; the R7 checks and the recheck before 6.1 remain)
+- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research, plan and a compile probe done in `docs/26-1-port-plan.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2; no port started, waits for owner decisions (section 5 of that file)
+- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (desk research and web checks done in `docs/mc-26-2-research.md`; the R7 checks remain)
 
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
 - [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
