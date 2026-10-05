@@ -1,5 +1,11 @@
 package net.vulkanmod.gl;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * renderbuffers with no sampler filter set skip the sampler build.
+ */
+
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.vulkanmod.vulkan.texture.ImageUtil;
 import net.vulkanmod.vulkan.texture.SamplerManager;
@@ -156,6 +162,11 @@ public class VkGlRenderbuffer {
     }
 
     void updateSampler() {
+        // A renderbuffer is a render target, not a sampled resource, so it may have no
+        // sampler filter set (minFilter == 0, the unset default); no sampler is needed then.
+        if (minFilter == 0)
+            return;
+
         if (vulkanImage == null)
             return;
 

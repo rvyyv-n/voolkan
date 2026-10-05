@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true.
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes.
  */
 
 import net.vulkanmod.vulkan.device.Device;
@@ -382,7 +382,7 @@ public class Vulkan {
     }
 
     public static void checkResult(int result, String errorMessage) {
-        if (result != VK_SUCCESS) {
+        if (result < VK_SUCCESS) {
             throw new RuntimeException(String.format("%s: %s", errorMessage, VkResult.decode(result)));
         }
     }

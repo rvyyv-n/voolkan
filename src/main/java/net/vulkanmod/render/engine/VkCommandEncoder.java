@@ -1,5 +1,11 @@
 package net.vulkanmod.render.engine;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * oversized buffer writes fall back to a one-shot staging buffer.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.GpuFence;
@@ -291,6 +297,14 @@ public class VkCommandEncoder implements CommandEncoder {
                     var commandBuffer = Renderer.getInstance().getTransferCb();
 
                     StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
+
+                    // Large immediate batches (e.g. many entities sharing one RenderType) can
+                    // exceed the default staging buffer; fall back to a one-shot oversized buffer.
+                    if (size > stagingBuffer.getBufferSize()) {
+                        stagingBuffer = new StagingBuffer(size);
+                        stagingBuffer.scheduleFree();
+                    }
+
                     stagingBuffer.copyBuffer(size, byteBuffer);
 
                     long srcOffset = stagingBuffer.getOffset();

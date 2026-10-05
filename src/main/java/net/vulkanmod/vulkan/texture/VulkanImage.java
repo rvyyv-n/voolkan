@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.texture;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * GL_UNPACK_ROW_LENGTH of 0 means tightly packed, and the staged upload size covers only the region read.
+ */
+
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
 import net.vulkanmod.render.texture.ImageUploadHelper;
 import net.vulkanmod.vulkan.Renderer;
@@ -229,7 +235,10 @@ public class VulkanImage {
                                       int unpackSkipRows, int unpackSkipPixels, int unpackRowLength,
                                       long srcPtr)
     {
-        long uploadSize = (long) (unpackRowLength * height - unpackSkipPixels) * this.formatSize;
+        // In GL a row length of 0 means rows are tightly packed, i.e. the row stride is the region width
+        final int rowLength = unpackRowLength != 0 ? unpackRowLength : width;
+
+        long uploadSize = (long) (rowLength * (height - 1) + width) * this.formatSize;
 
         StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
 
@@ -240,7 +249,7 @@ public class VulkanImage {
             stagingBuffer.scheduleFree();
         }
 
-        srcPtr += ((long) unpackRowLength * unpackSkipRows + unpackSkipPixels) * this.formatSize;
+        srcPtr += ((long) rowLength * unpackSkipRows + unpackSkipPixels) * this.formatSize;
 
         stagingBuffer.align(this.formatSize);
         stagingBuffer.copyBuffer((int) uploadSize, srcPtr);
@@ -255,7 +264,7 @@ public class VulkanImage {
 
             ImageUtil.copyBufferToImageCmd(stack, commandBuffer, bufferId, this.id,
                                            arrayLayer, mipLevel, width, height, xOffset, yOffset,
-                                           srcOffset, unpackRowLength, height);
+                                           srcOffset, rowLength, height);
 
             ImageUtil.imageTransferMemoryBarrier(stack, commandBuffer, this, mipLevel);
         }
