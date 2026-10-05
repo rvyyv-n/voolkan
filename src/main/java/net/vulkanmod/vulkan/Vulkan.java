@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * render path (dynamic rendering or legacy render pass) is chosen at runtime.
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true.
  */
 
 import net.vulkanmod.vulkan.device.Device;
@@ -46,8 +46,8 @@ import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
 
 public class Vulkan {
 
-        public static final boolean ENABLE_VALIDATION_LAYERS = false;
-//    public static final boolean ENABLE_VALIDATION_LAYERS = true;
+    /** Enabled with -Dvoolkan.validation=true (needs the Khronos validation layer installed). */
+    public static final boolean ENABLE_VALIDATION_LAYERS = Boolean.getBoolean("voolkan.validation");
 
     /**
      * Set once by {@link DeviceManager} after the physical device is picked; read-only afterwards.

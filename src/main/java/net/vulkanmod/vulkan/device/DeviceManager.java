@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.device;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * choose the render path after device pick; enable dynamic rendering only when used.
+ * choose the render path after device pick; enable dynamic rendering only when used; log capabilities and report device setup failures readably.
  */
 
 import dev.voolkan.compat.RenderPath;
@@ -58,10 +58,21 @@ public abstract class DeviceManager {
             DeviceManager.getSuitableDevices(instance);
             DeviceManager.pickPhysicalDevice();
             DeviceManager.createLogicalDevice();
+            logCapabilities();
         } catch (Exception e) {
-            Initializer.LOGGER.info(getAvailableDevicesInfo());
-            throw new RuntimeException(e);
+            Initializer.LOGGER.error("voolkan could not set up a Vulkan device: {}{}", e.getMessage(), getAvailableDevicesInfo());
+            throw new RuntimeException("voolkan could not set up a Vulkan device (" + e.getMessage()
+                                       + "). It needs a GPU with Vulkan 1.2 and VK_KHR_swapchain; update your graphics driver. "
+                                       + "Devices found:" + getAvailableDevicesInfo(), e);
         }
+    }
+
+    private static void logCapabilities() {
+        Initializer.LOGGER.info("GPU: {} ({}), driver {}, Vulkan {}", device.deviceName, device.vendorIdString, device.driverVersion, device.vkVersion);
+        Initializer.LOGGER.info("VK_KHR_dynamic_rendering: {}, multi-draw indirect: {}, validation: {}",
+                                device.isDynamicRenderingSupported() ? "supported" : "not supported",
+                                device.isDrawIndirectSupported() ? "supported" : "not supported",
+                                Vulkan.ENABLE_VALIDATION_LAYERS ? "on" : "off");
     }
 
     static List<Device> getAvailableDevices(VkInstance instance) {
@@ -137,7 +148,7 @@ public abstract class DeviceManager {
                 device.isDynamicRenderingSupported());
 
         Vulkan.DYNAMIC_RENDERING = choice.path() == RenderPath.DYNAMIC;
-        Initializer.LOGGER.info("Render path: {} ({})", choice.path(), choice.reason());
+        Initializer.LOGGER.info("Render path chosen: {} ({})", choice.path(), choice.reason());
     }
 
     static Device autoPickDevice() {
@@ -358,6 +369,9 @@ public abstract class DeviceManager {
             stringBuilder.append("\tDevice: %s\n".formatted(device.deviceName));
 
             stringBuilder.append("\t\tVulkan Version: %s\n".formatted(device.vkVersion));
+
+            stringBuilder.append("\t\tVK_KHR_dynamic_rendering: %s\n".formatted(
+                    device.isDynamicRenderingSupported() ? "supported" : "not supported"));
 
             stringBuilder.append("\t\t");
             var unsupportedExtensions = device.getUnsupportedExtensions(Vulkan.REQUIRED_EXTENSION);
