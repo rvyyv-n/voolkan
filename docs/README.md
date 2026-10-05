@@ -12,7 +12,7 @@ Elsewhere in the repo:
 
 | Path | What |
 |---|---|
-| `AGENTS.md` / `CLAUDE.md` | rules for AI agents working here |
+| `AGENTS.md` | rules for automated agents working here |
 | `ROADMAP.md` | phases 0-6 checklist |
 | `tools/` | harness scripts (`run-*.ps1`, `summarise-vk-log.ps1`, `make-test-world.ps1`), `profiles/` |
 | `tools/mesa`, `tools/bin` | downloaded tools, git-ignored |

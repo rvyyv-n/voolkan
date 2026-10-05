@@ -10,7 +10,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 0.5 Test harness: scripts, profile, summariser and docs done; **test world not yet generated** (needs `make-test-world.ps1 -AcceptEula`); profile is provisional until 0.6
 - [ ] 0.6 Owner: run `vulkaninfo` on the R7 and commit it to `docs/gpu/r7-350/`
 - [x] 0.7 CI workflow (`.github/workflows/build.yml`; not yet run, repo not on GitHub Actions)
-- [x] 0.8 Project docs: `AGENTS.md`, `CLAUDE.md`, `docs/upstream.md`, `docs/conventions.md`
+- [x] 0.8 Project docs: `AGENTS.md`, `docs/upstream.md`, `docs/conventions.md`
 
 ## Phase 1: 1.21.11 runs on the R7 350
 - [x] 1.1 Runtime render path (config / `-Dvoolkan.renderPath` / device support); required set = swapchain only; gate indirect draw
