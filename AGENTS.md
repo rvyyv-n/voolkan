@@ -23,9 +23,9 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's o
 
 ## Git rules
 - Commit locally with the repo's configured identity. One commit per logical step.
-- **Never push**, and don't create GitHub repos, PRs or releases, unless the owner says so.
+- Push only your own work branch (never `main`). Changes reach `main` through a pull request: open it against `main` when the work is finished, with a short description and the test results, and let the owner merge it (or merge when told to). Don't create GitHub repos or releases, and don't push tags, unless the owner says so.
 - **No AI attribution** anywhere: no Co-Authored-By, no "generated with".
-- Don't move or edit `main` without the owner's OK; work on `feat/*`, `fix/*`, `setup/*` branches.
+- Never commit or push directly to `main`; work on `feat/*`, `fix/*`, `setup/*` branches (`pass-N` for build passes).
 - Ask before anything destructive outside your worktree.
 
 ## One folder, one chat

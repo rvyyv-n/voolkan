@@ -11,7 +11,7 @@
 | `setup/*` | tooling, docs, repo setup, e.g. `setup/phase-0` |
 | `wip/*` | throwaway worktree branches |
 
-Branches are short-lived and merged into `main`. `upstream/*` remote branches are read-only. Tag `upstream-base` marks the upstream commit we are based on.
+Branches are short-lived and reach `main` through a pull request (CI in `.github/workflows/build.yml` runs on it). Merge with a normal merge or squash, then delete the branch. Pull requests are only for new work: a branch already merged cannot get one. `upstream/*` remote branches are read-only. Tag `upstream-base` marks the upstream commit we are based on.
 
 ## Tags and versions
 
