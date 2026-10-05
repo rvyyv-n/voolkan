@@ -31,3 +31,11 @@ bin/
 # fabric
 
 run/
+
+# voolkan local
+logs/
+tools/mesa/
+tools/bin/
+tools/local.env.ps1
+*.7z
+test-world/*/
