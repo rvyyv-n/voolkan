@@ -67,6 +67,13 @@
 
   "vulkanmod.options.searchFieldPlaceholder": "Search Graphics Settings",
 
+  "voolkan.options.preset": "Preset",
+  "voolkan.options.preset.tooltip": "Stages a set of values in the options. Check them, then press Apply (or Undo to drop them).",
+  "voolkan.options.preset.custom": "Custom",
+  "voolkan.options.preset.performance": "Performance",
+  "voolkan.options.preset.balanced": "Balanced",
+  "voolkan.options.preset.quality": "Quality",
+
   "voolkan.options.compat": "Compatibility",
   "voolkan.options.compat.renderPath": "Render Path",
   "voolkan.options.compat.renderPath.tooltip": "Read-only. Which Vulkan rendering API is in use: dynamic rendering, or the legacy render pass path for GPUs without VK_KHR_dynamic_rendering.",

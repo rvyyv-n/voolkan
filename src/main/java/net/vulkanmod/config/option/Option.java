@@ -1,6 +1,13 @@
 package net.vulkanmod.config.option;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add getNameKey() so presets can find options by translation key.
+ */
+
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.vulkanmod.config.gui.widget.OptionWidget;
 
 import java.util.function.Consumer;
@@ -132,6 +139,11 @@ public abstract class Option<T> {
 
     public Component getName() {
         return this.name;
+    }
+
+    /** Translation key of the option name, or null when the name is not translatable. */
+    public String getNameKey() {
+        return this.name.getContents() instanceof TranslatableContents contents ? contents.getKey() : null;
     }
 
     public Option<T> setOnChange(Runnable runnable) {

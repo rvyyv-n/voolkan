@@ -5,12 +5,13 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block on the Video page.
+ * read-only Compatibility block and a Presets row on the Video page.
  */
 
 import com.mojang.blaze3d.platform.Window;
 import dev.voolkan.compat.CompatInfo;
 import dev.voolkan.gui.InfoOption;
+import dev.voolkan.gui.Preset;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
@@ -37,6 +38,8 @@ public abstract class Options {
     private static final Minecraft minecraft = Minecraft.getInstance();
     private static final Window window = minecraft.getWindow();
     private static final net.minecraft.client.Options mcOptions = minecraft.options;
+
+    private static List<OptionPage> currentPages = List.of();
 
     public static List<OptionPage> getOptionPages() {
         List<OptionPage> optionPages = new ArrayList<>();
@@ -65,6 +68,7 @@ public abstract class Options {
         );
         optionPages.add(page);
 
+        currentPages = optionPages;
         return optionPages;
     }
 
@@ -144,7 +148,18 @@ public abstract class Options {
             refreshRateOption.updateActiveState();
         });
 
+        var presetOption = new CyclingOption<>(Component.translatable("voolkan.options.preset"),
+                                               Preset.values(),
+                                               value -> {},
+                                               () -> Preset.CUSTOM)
+                .setTranslator(Preset::displayName)
+                .setTooltip(value -> Component.translatable("voolkan.options.preset.tooltip"));
+        presetOption.setOnChange(() -> presetOption.getNewValue().stage(currentPages));
+
         return new OptionBlock[]{
+                new OptionBlock("", new Option<?>[]{
+                        presetOption
+                }),
                 new OptionBlock("", new Option<?>[]{
                         windowModeOption,
                         resolutionOption,
