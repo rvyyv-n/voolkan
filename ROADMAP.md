@@ -45,7 +45,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 
 ## Phase 6: Other Minecraft versions
 - [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25)
-- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU
+- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (desk research done in `docs/mc-26-2-research.md`; the R7 checks and the recheck before 6.1 remain)
 
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
 - [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)

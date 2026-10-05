@@ -7,6 +7,11 @@
 | `upstream.md` | how to fetch/rebase/cherry-pick from upstream VulkanMod |
 | `conventions.md` | branches, tags, commits, packages, properties, LGPL notice |
 | `upstream-pr-plan.md` | plan for sending fixes to upstream VulkanMod (nothing opened) |
+| `presets.md` | values of the Video page Presets row |
+| `presentmon.md` | how to capture and compare frame times on the R7 |
+| `settings-ui-proposal.md` | scope proposal for the settings UI overhaul (4.5, skipped) |
+| `line-refs.txt` | plan file:line references checked by `tools\check-linerefs.ps1` |
+| `mc-26-2-research.md` | notes on 26.2 Vulkan requirements and OpenGL + Sodium (6.2) |
 | `modrinth.md` | draft Modrinth listing (not published) |
 | `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task 0.6) |
 
@@ -15,7 +20,7 @@ Elsewhere in the repo:
 | Path | What |
 |---|---|
 | `AGENTS.md` | rules for automated agents working here |
-| `ROADMAP.md` | phases 0-6 checklist |
+| `ROADMAP.md` | phases 0-7 checklist |
 | `tools/` | harness scripts (`run-*.ps1`, `summarise-vk-log.ps1`, `make-test-world.ps1`), `profiles/` |
 | `tools/mesa`, `tools/bin` | downloaded tools, git-ignored |
 | `test-world/` | test-world notes; the generated world is git-ignored |
