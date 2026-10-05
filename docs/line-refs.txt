@@ -1,5 +1,7 @@
 # Line refs from the plan, verified against upstream-base (2026-10-05).
 # Format: path under src/main/java/net/vulkanmod/ | line | regex that must match that line
+# NOTE: these describe upstream-base. On feat/render-path (Phase 1) the fixes moved or removed many of these lines,
+# so check-linerefs.ps1 reports drift there by design; run it on a checkout of upstream-base to re-verify.
 # Checked by tools/check-linerefs.ps1. After upstream changes, fix drifted entries (or run with -Report).
 vulkan/Vulkan.java | 44 | ENABLE_VALIDATION_LAYERS = false
 vulkan/Vulkan.java | 47 | DYNAMIC_RENDERING = true

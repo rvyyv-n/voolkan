@@ -13,13 +13,13 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 0.8 Project docs: `AGENTS.md`, `CLAUDE.md`, `docs/upstream.md`, `docs/conventions.md`
 
 ## Phase 1: 1.21.11 runs on the R7 350
-- [ ] 1.1 Runtime render path (config / `-Dvoolkan.renderPath` / device support); required set = swapchain only; gate indirect draw
-- [ ] 1.2 Legacy `RenderPass`: attachment indexing, clear values, mip-level render area
-- [ ] 1.3 Legacy `Framebuffer`: level image view + extent, cache by (pass, level, view), depth-only
-- [ ] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
-- [ ] 1.5 Startup capability log, readable errors, validation via system property
-- [ ] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
-- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7
+- [x] 1.1 Runtime render path (config / `-Dvoolkan.renderPath` / device support); required set = swapchain only; gate indirect draw
+- [x] 1.2 Legacy `RenderPass`: attachment indexing, clear values, mip-level render area
+- [x] 1.3 Legacy `Framebuffer`: level image view + extent, cache by (pass, level, view), depth-only
+- [x] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
+- [x] 1.5 Startup capability log, readable errors, validation via system property
+- [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
+- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. **Still open:** test world (owner runs `make-test-world.ps1 -AcceptEula`), world/F3/fullscreen/post-effect checklist, real R7
 - [ ] **M1** 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
 
 ## Phase 2: Stability

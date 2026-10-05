@@ -11,6 +11,8 @@ Run after any render-path change. Use the fixed world (`test-world/README.md`, g
 | Lavapipe | `tools\run-lavapipe.ps1 -World voolkan-test` | follow the checklist (slow, CPU-rendered) |
 | R7 profile | `tools\run-r7-profile.ps1 -World voolkan-test` | base: fails with `Unsupported extension: [VK_KHR_dynamic_rendering]`; after Phase 1: follows the checklist |
 
+Force the legacy path on a GPU that has dynamic rendering (e.g. lavapipe): set `$env:JAVA_TOOL_OPTIONS='-Dvoolkan.renderPath=legacy'` before the script (the startup log must say `Render path chosen: LEGACY`). `run-r7-profile.ps1` hides the extension, so it picks legacy by itself. `-Dvoolkan.validation=true` enables the validation layer inside the mod.
+
 `-AutoQuitSeconds N` kills the game after N seconds for unattended runs (it only proves startup, not the checklist).
 
 ## Checklist
