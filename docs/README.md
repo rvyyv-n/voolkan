@@ -6,6 +6,7 @@
 | `smoke-test.md` | the manual/automated smoke checklist |
 | `upstream.md` | how to fetch/rebase/cherry-pick from upstream VulkanMod |
 | `conventions.md` | branches, tags, commits, packages, properties, LGPL notice |
+| `modrinth.md` | draft Modrinth listing (not published) |
 | `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task 0.6) |
 
 Elsewhere in the repo:
