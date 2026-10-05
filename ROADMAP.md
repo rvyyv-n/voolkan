@@ -40,7 +40,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 
 ## Phase 5: Release
 - [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
-- [ ] 5.1 LGPL pass (`COPYING` added with the beta): `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
+- [ ] 5.1 LGPL pass (`COPYING`, `THIRD_PARTY_NOTICES.md`, `licenses/`, README credit and jar licence files done; verbatim Apache-2.0 text still to add (blocked by the commit hook); the Sodium-derived light pipeline's licence still to verify): `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
 - [ ] 5.2 Later: upstream PR with render-path detection + bug fixes
 
 ## Phase 6: Other Minecraft versions

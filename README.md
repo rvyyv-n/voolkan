@@ -8,6 +8,10 @@ Goal: a legacy-hardware-friendly build for Minecraft 1.21.11 (aimed at GPUs with
 
 All original code is copyright its VulkanMod authors; modified files carry a modification notice (see `docs/conventions.md`). Project docs live in `docs/` (start at `docs/README.md`); the plan is in `ROADMAP.md`.
 
+## Credits and licences
+
+voolkan is LGPL-3.0 (`LICENSE`, `COPYING`). It is built on **VulkanMod by xCollateral and contributors**, and bundles Fabric API modules and LWJGL. Full credits, third-party licences and the list of bundled libraries: `THIRD_PARTY_NOTICES.md` and `licenses/`.
+
 ---
 
 The text below is the upstream VulkanMod README, kept for reference.

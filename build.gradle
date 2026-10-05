@@ -92,6 +92,13 @@ jar {
 	from("LICENSE") {
 		rename { "${it}_${project.base.archivesName.get()}"}
 	}
+	from("COPYING") {
+		rename { "${it}_${project.base.archivesName.get()}"}
+	}
+	from("THIRD_PARTY_NOTICES.md")
+	from("licenses") {
+		into "licenses"
+	}
 }
 
 // configure the maven publication
