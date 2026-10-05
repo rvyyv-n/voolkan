@@ -26,5 +26,6 @@ Elsewhere in the repo:
 | `smoke-run.ps1` | unattended validation / R7-profile / lavapipe startup runs, VUID diff against `tools/baselines/` (`-SaveBaseline` to record) |
 | `upstream-check.ps1` | fetch, list upstream commits since our base, likely conflicts, `-CherryPick <sha>`, `-TrialRebase` |
 | `check-notices.ps1` | fail if a changed upstream Java file lacks the LGPL modification notice |
+| `check-lang.ps1` | fail if a `vulkanmod.*` / `voolkan.*` string key used in the code is missing from `en_us.json` |
 | `check-linerefs.ps1` | verify `docs/line-refs.txt` (plan file:line refs); `-Report` shows where drifted lines moved |
 | `presentmon-summary.ps1` | `-Capture -Seconds N` or `-Csv file`: avg/p95/p99/1%-low frame times and latency columns |
