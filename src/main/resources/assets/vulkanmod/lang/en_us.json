@@ -65,5 +65,13 @@
 
   "vulkanmod.options.textureAnimations": "Texture Animations",
 
-  "vulkanmod.options.searchFieldPlaceholder": "Search Graphics Settings"
+  "vulkanmod.options.searchFieldPlaceholder": "Search Graphics Settings",
+
+  "voolkan.options.compat": "Compatibility",
+  "voolkan.options.compat.renderPath": "Render Path",
+  "voolkan.options.compat.renderPath.tooltip": "Read-only. Which Vulkan rendering API is in use: dynamic rendering, or the legacy render pass path for GPUs without VK_KHR_dynamic_rendering.",
+  "voolkan.options.compat.gpu": "GPU",
+  "voolkan.options.compat.api": "Vulkan API",
+  "voolkan.options.compat.dynamicRendering": "Dynamic Rendering",
+  "voolkan.options.compat.swapchainFormat": "Swapchain Format"
 }

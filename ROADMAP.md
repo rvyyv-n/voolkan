@@ -32,7 +32,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 3.3 PresentMon captures on the R7 + summary: capture script and `docs/presentmon.md` done; **the R7 captures are for the owner**
 
 ## Phase 4: Minimal GUI
-- [ ] 4.1 "Compatibility" block on the Video page
+- [x] 4.1 "Compatibility" block on the Video page
 - [ ] 4.2 Language-file completeness check
 - [ ] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; exact values per preset to be decided
 - [ ] 4.4 Branding: replace the VulkanMod logo and name in the UI (settings screen header, window and mod list text) with the voolkan logo and name; keep upstream credit in the About text and README

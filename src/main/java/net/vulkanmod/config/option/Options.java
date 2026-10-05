@@ -4,10 +4,13 @@ package net.vulkanmod.config.option;
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
- * frame queue of 1, low-latency and swapchain image-count options.
+ * frame queue of 1, low-latency and swapchain image-count options;
+ * read-only Compatibility block on the Video page.
  */
 
 import com.mojang.blaze3d.platform.Window;
+import dev.voolkan.compat.CompatInfo;
+import dev.voolkan.gui.InfoOption;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
@@ -197,6 +200,14 @@ public abstract class Options {
                         new SwitchOption(Component.translatable("options.autosaveIndicator"),
                                 value -> mcOptions.showAutosaveIndicator().set(value),
                                 () -> mcOptions.showAutosaveIndicator().get())
+                }),
+                new OptionBlock(Component.translatable("voolkan.options.compat").getString(), new Option<?>[]{
+                        new InfoOption(Component.translatable("voolkan.options.compat.renderPath"), CompatInfo::renderPath)
+                                .setTooltip(v -> Component.translatable("voolkan.options.compat.renderPath.tooltip")),
+                        new InfoOption(Component.translatable("voolkan.options.compat.gpu"), CompatInfo::gpu),
+                        new InfoOption(Component.translatable("voolkan.options.compat.api"), CompatInfo::apiVersion),
+                        new InfoOption(Component.translatable("voolkan.options.compat.dynamicRendering"), CompatInfo::dynamicRendering),
+                        new InfoOption(Component.translatable("voolkan.options.compat.swapchainFormat"), CompatInfo::swapchainFormat)
                 })
         };
     }
