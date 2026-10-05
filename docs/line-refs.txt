@@ -1,0 +1,32 @@
+# Line refs from the plan, verified against upstream-base (2026-10-05).
+# Format: path under src/main/java/net/vulkanmod/ | line | regex that must match that line
+# Checked by tools/check-linerefs.ps1. After upstream changes, fix drifted entries (or run with -Report).
+vulkan/Vulkan.java | 44 | ENABLE_VALIDATION_LAYERS = false
+vulkan/Vulkan.java | 47 | DYNAMIC_RENDERING = true
+vulkan/Vulkan.java | 65 | getRequiredExtensionSet
+vulkan/framebuffer/RenderPass.java | 36 | DYNAMIC_RENDERING
+vulkan/framebuffer/RenderPass.java | 87 | attachmentRefs\.get\(1\)
+vulkan/framebuffer/RenderPass.java | 100 | colorAttachmentInfo\.finalLayout
+vulkan/framebuffer/RenderPass.java | 137 | TODO: Currently it does not support image views
+vulkan/framebuffer/RenderPass.java | 163 | VkClearValue\.malloc\(2
+vulkan/framebuffer/RenderPass.java | 175 | DYNAMIC_RENDERING
+vulkan/framebuffer/RenderPass.java | 272 | DYNAMIC_RENDERING
+vulkan/framebuffer/Framebuffer.java | 131 | DYNAMIC_RENDERING
+vulkan/framebuffer/Framebuffer.java | 141 | renderpassToFramebufferMap\.computeIfAbsent
+vulkan/framebuffer/SwapChain.java | 62 | DYNAMIC_RENDERING
+vulkan/framebuffer/SwapChain.java | 213 | DYNAMIC_RENDERING
+vulkan/shader/GraphicsPipeline.java | 196 | DYNAMIC_RENDERING
+vulkan/shader/GraphicsPipeline.java | 197 | state\.renderPass\.getId
+vulkan/shader/SPIRVUtils.java | 61 | shaderc_env_version_vulkan_1_2
+vulkan/device/DeviceManager.java | 178 | TODO: Disable indirect draw
+vulkan/device/DeviceManager.java | 194 | DYNAMIC_RENDERING
+vulkan/device/DeviceManager.java | 212 | REQUIRED_EXTENSION
+vulkan/device/DeviceManager.java | 257 | REQUIRED_EXTENSION
+vulkan/device/DeviceManager.java | 337 | REQUIRED_EXTENSION
+vulkan/memory/buffer/StagingBuffer.java | 62 | flushCmds
+render/engine/VkFbo.java | 29 | setLevel
+render/engine/VkCommandEncoder.java | 572 | copyTextureToTexture
+render/engine/VkCommandEncoder.java | 619 | createFence
+config/option/Options.java | 405 | indirectDraw
+config/option/Options.java | 428 | 2, 5, 1
+gl/VkGlFramebuffer.java | 241 | builder\.build\(\)
