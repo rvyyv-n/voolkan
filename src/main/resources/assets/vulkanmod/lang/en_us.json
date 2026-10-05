@@ -33,7 +33,14 @@
   "vulkanmod.options.entityCulling.tooltip": "Enables culling for entities on not visible sections.",
 
   "vulkanmod.options.frameQueue": "Render queue size",
-  "vulkanmod.options.frameQueue.tooltip": "Higher values might help stabilize frametime but will increase input lag.",
+  "vulkanmod.options.frameQueue.tooltip": "Higher values might help stabilize frametime but will increase input lag. 1 gives the lowest input lag but the CPU and GPU no longer overlap.",
+
+  "vulkanmod.options.lowLatency": "Low latency mode",
+  "vulkanmod.options.lowLatency.tooltip": "Waits for the GPU to finish the previous frame before reading input. Lower input lag, lower framerate when the GPU is the bottleneck.",
+
+  "vulkanmod.options.swapChainImages": "Swapchain images",
+  "vulkanmod.options.swapChainImages.auto": "Auto",
+  "vulkanmod.options.swapChainImages.tooltip": "Number of images the driver may queue for presentation. Fewer images mean less input lag, more images smooth out frametime. Clamped to what the display supports.",
 
   "vulkanmod.options.backfaceCulling": "Backface Culling",
   "vulkanmod.options.backfaceCulling.tooltip": "Culls not visible block faces on the CPU improving GPU performance. To prevent increased CPU overhead enable Indirect Draw.",

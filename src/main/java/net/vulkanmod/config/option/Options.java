@@ -3,7 +3,8 @@ package net.vulkanmod.config.option;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * disable the indirect draw option when the device does not support it.
+ * disable the indirect draw option when the device does not support it;
+ * frame queue of 1, low-latency and swapchain image-count options.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -432,13 +433,28 @@ public abstract class Options {
                                 ? Component.translatable("vulkanmod.options.builderThreads.auto")
                                 : Component.literal(String.valueOf(v))),
                         new RangeOption(Component.translatable("vulkanmod.options.frameQueue"),
-                                2, 5, 1,
+                                1, 5, 1,
                                 value -> {
                                     config.frameQueueSize = value;
                                     Renderer.scheduleSwapChainUpdate();
                                 },
                                 () -> config.frameQueueSize)
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.frameQueue.tooltip")),
+                        new SwitchOption(Component.translatable("vulkanmod.options.lowLatency"),
+                                v -> config.lowLatency = v,
+                                () -> config.lowLatency)
+                                .setTooltip(v -> Component.translatable("vulkanmod.options.lowLatency.tooltip")),
+                        new RangeOption(Component.translatable("vulkanmod.options.swapChainImages"),
+                                0, 6, 1,
+                                value -> {
+                                    config.swapChainImages = value;
+                                    Renderer.scheduleSwapChainUpdate();
+                                },
+                                () -> config.swapChainImages)
+                                .setTranslator(v -> v == 0
+                                ? Component.translatable("vulkanmod.options.swapChainImages.auto")
+                                : Component.literal(String.valueOf(v)))
+                                .setTooltip(v -> Component.translatable("vulkanmod.options.swapChainImages.tooltip")),
                         new SwitchOption(Component.translatable("vulkanmod.options.textureAnimations"),
                                 v -> config.textureAnimations = v,
                                 () -> config.textureAnimations)

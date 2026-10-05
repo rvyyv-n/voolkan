@@ -28,7 +28,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 2.3 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing
 
 ## Phase 3: Speed and input delay
-- [ ] 3.1 Frame queue 1, low-latency mode, swapchain image-count option
+- [x] 3.1 Frame queue 1, low-latency mode, swapchain image-count option (verified on lavapipe only; effect on the R7 needs PresentMon, see 3.3)
 - [ ] 3.2 Save pipeline cache to disk
 - [ ] 3.3 PresentMon captures on the R7 + summary
 

@@ -3,7 +3,8 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * bind guard: fall back to the main render target when a pipeline is bound with no render pass.
+ * bind guard: fall back to the main render target when a pipeline is bound with no render pass;
+ * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option.
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -95,6 +96,8 @@ public class Renderer {
     private ArrayList<Long> imageAvailableSemaphores;
     private ArrayList<Long> renderFinishedSemaphores;
     private ArrayList<Long> inFlightFences;
+    // Fence of the most recently submitted frame, VK_NULL_HANDLE when there is none to wait for
+    private long lastSubmittedFence = VK_NULL_HANDLE;
     private List<CommandPool.CommandBuffer> transferCbs;
 
     private Framebuffer boundFramebuffer;
@@ -114,7 +117,11 @@ public class Renderer {
 
     public Renderer() {
         device = Vulkan.getVkDevice();
-        framesNum = Initializer.CONFIG.frameQueueSize;
+        framesNum = clampFrameQueue(Initializer.CONFIG.frameQueueSize);
+    }
+
+    private static int clampFrameQueue(int size) {
+        return Math.max(1, Math.min(size, 5));
     }
 
     public static void setLineWidth(float width) {
@@ -343,6 +350,20 @@ public class Renderer {
         p.push("Post_rendering");
     }
 
+    /**
+     * Low-latency mode: block until the GPU has finished the frame that was just submitted.
+     * Called right before the game polls input for the next frame, so the input that the next
+     * frame is built from is never older than one finished frame, instead of up to
+     * (frame queue size) frames. The cost is that CPU and GPU no longer overlap.
+     */
+    public void waitForLastFrame() {
+        if (!Initializer.CONFIG.lowLatency || lastSubmittedFence == VK_NULL_HANDLE) {
+            return;
+        }
+
+        vkWaitForFences(device, lastSubmittedFence, true, VUtil.UINT64_MAX);
+    }
+
     private void submitFrame() {
         try (MemoryStack stack = stackPush()) {
             int vkResult;
@@ -392,6 +413,8 @@ public class Renderer {
                 vkResetFences(device, inFlightFences.get(currentFrame));
                 throw new RuntimeException("Failed to submit draw command buffer: %s".formatted(VkResult.decode(vkResult)));
             }
+
+            lastSubmittedFence = inFlightFences.get(currentFrame);
 
             // Semaphore waited command buffers will be reset right after waiting this command buffer's fence
             Synchronization.INSTANCE.scheduleCbReset();
@@ -586,7 +609,7 @@ public class Renderer {
         //Semaphores need to be recreated in order to make them unsignaled
         destroySyncObjects();
 
-        int newFramesNum = Initializer.CONFIG.frameQueueSize;
+        int newFramesNum = clampFrameQueue(Initializer.CONFIG.frameQueueSize);
 
         if (framesNum != newFramesNum) {
             UploadManager.INSTANCE.submitUploads();
@@ -624,6 +647,8 @@ public class Renderer {
     }
 
     private void destroySyncObjects() {
+        lastSubmittedFence = VK_NULL_HANDLE;
+
         for (int i = 0; i < framesNum; ++i) {
             vkDestroyFence(device, inFlightFences.get(i), null);
             vkDestroySemaphore(device, imageAvailableSemaphores.get(i), null);
