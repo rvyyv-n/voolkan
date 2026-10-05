@@ -15,7 +15,7 @@ Branches are short-lived and merged into `main`. `upstream/*` remote branches ar
 
 ## Tags and versions
 
-- Release tags: `v<modver>+<mc>`, e.g. `v0.6.8-voolkan.1+1.21.11`. The mod version is `<upstream version>-voolkan.<n>` until we diverge enough to number independently.
+- Release tags: `v<modver>+<mc>`, e.g. `v1.0.0-beta.1+1.21.11`. voolkan numbers its own versions from 1.0 (first public build: 1.0.0-beta.1, published as a GitHub pre-release).
 - Don't reuse or move release tags. `upstream-base` is the only tag that moves (see `upstream.md`).
 
 ## Commits
