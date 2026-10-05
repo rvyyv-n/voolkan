@@ -260,6 +260,14 @@ public class Framebuffer {
         return colorAttachment.getLevelImageView(level);
     }
 
+    /**
+     * True when the colour image has several mip levels. VulkanImage tracks one layout for the whole
+     * image, so passes rendering into one level must keep every level in the same layout.
+     */
+    boolean hasMultiLevelColorAttachment() {
+        return this.colorAttachment != null && this.colorAttachment.mipLevels > 1;
+    }
+
     public int getLevel() {
         return this.level;
     }

@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * pipelines are keyed by render pass compatibility (attachment formats) instead of RenderPass identity.
+ * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity.
  */
 
 import net.vulkanmod.vulkan.VRenderSystem;
@@ -69,12 +69,13 @@ public class PipelineState {
 
     /**
      * Only used to create a pipeline (legacy path); not part of equals/hashCode. Pipelines are
-     * compatible with any render pass that has the same attachment formats, so they are keyed by those.
+     * compatible with any render pass that has the same attachment formats and subpass dependencies, so they are keyed by those.
      * May be null: the main render pass is used then.
      */
     final RenderPass renderPass;
     final int colorFormat;
     final int depthFormat;
+    final int dependencyKind;
 
     int assemblyRasterState;
     int blendState_i;
@@ -86,14 +87,16 @@ public class PipelineState {
                          RenderPass renderPass) {
         this(assemblyRasterState, blendState, depthState, logicOp, colorMask, renderPass,
              renderPass != null ? renderPass.getColorFormat() : 0,
-             renderPass != null ? renderPass.getDepthFormat() : 0);
+             renderPass != null ? renderPass.getDepthFormat() : 0,
+             renderPass != null ? renderPass.getDependencyKind() : 0);
     }
 
     private PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
-                          RenderPass renderPass, int colorFormat, int depthFormat) {
+                          RenderPass renderPass, int colorFormat, int depthFormat, int dependencyKind) {
         this.renderPass = renderPass;
         this.colorFormat = colorFormat;
         this.depthFormat = depthFormat;
+        this.dependencyKind = dependencyKind;
 
         this.assemblyRasterState = assemblyRasterState;
         this.blendState_i = blendState;
@@ -113,7 +116,7 @@ public class PipelineState {
     /** Copy without the RenderPass reference, so cached keys don't keep destroyed passes alive. */
     PipelineState withoutRenderPass() {
         return new PipelineState(assemblyRasterState, blendState_i, depthState_i, logicOp_i, colorMask_i,
-                                 null, colorFormat, depthFormat);
+                                 null, colorFormat, depthFormat, dependencyKind);
     }
 
     @Override
@@ -126,6 +129,7 @@ public class PipelineState {
         PipelineState that = (PipelineState) o;
         return (blendState_i == that.blendState_i) && (depthState_i == that.depthState_i)
                && this.colorFormat == that.colorFormat && this.depthFormat == that.depthFormat
+               && this.dependencyKind == that.dependencyKind
                && logicOp_i == that.logicOp_i
                && this.assemblyRasterState == that.assemblyRasterState
                && this.colorMask_i == that.colorMask_i;
@@ -133,7 +137,7 @@ public class PipelineState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(blendState_i, depthState_i, logicOp_i, assemblyRasterState, colorMask_i, colorFormat, depthFormat);
+        return Objects.hash(blendState_i, depthState_i, logicOp_i, assemblyRasterState, colorMask_i, colorFormat, depthFormat, dependencyKind);
     }
 
     public static BlendInfo defaultBlendInfo() {

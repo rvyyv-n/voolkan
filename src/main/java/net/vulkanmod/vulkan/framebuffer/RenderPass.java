@@ -3,13 +3,14 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats.
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; keep all mip levels in one layout for multi-level colour targets.
  */
 
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
+import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
@@ -23,6 +24,13 @@ public class RenderPass {
     long id;
 
     final int attachmentCount;
+
+    /**
+     * Legacy path, colour image with several mip levels: the render pass ends in COLOR_ATTACHMENT_OPTIMAL
+     * (a render pass final layout only applies to the single level in the framebuffer view) and the whole
+     * image is transitioned to the requested final layout after vkCmdEndRenderPass, like the dynamic path does.
+     */
+    final boolean explicitColorFinalLayout;
     AttachmentInfo colorAttachmentInfo;
     AttachmentInfo depthAttachmentInfo;
 
@@ -38,6 +46,9 @@ public class RenderPass {
             count++;
 
         this.attachmentCount = count;
+
+        this.explicitColorFinalLayout = !Vulkan.DYNAMIC_RENDERING && colorAttachmentInfo != null
+                                        && framebuffer.hasMultiLevelColorAttachment();
 
         if (!Vulkan.DYNAMIC_RENDERING) {
             createRenderPass();
@@ -56,6 +67,10 @@ public class RenderPass {
 
             int i = 0;
 
+            final int colorFinalLayout = explicitColorFinalLayout
+                    ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                    : (colorAttachmentInfo != null ? colorAttachmentInfo.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED);
+
             // Color attachment
             if (colorAttachmentInfo != null) {
                 VkAttachmentDescription colorAttachment = attachments.get(i);
@@ -66,7 +81,7 @@ public class RenderPass {
                                .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
                                .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
                                .initialLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-                               .finalLayout(colorAttachmentInfo.finalLayout);
+                               .finalLayout(colorFinalLayout);
 
                 VkAttachmentReference colorAttachmentRef = attachmentRefs.get(i)
                                                                          .attachment(i)
@@ -103,7 +118,7 @@ public class RenderPass {
                           .pSubpasses(subpass);
 
             // Layout transition subpass dependency (depth-only passes rely on the implicit external dependencies)
-            int dependencyLayout = colorAttachmentInfo != null ? colorAttachmentInfo.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+            int dependencyLayout = colorFinalLayout;
             switch (dependencyLayout) {
                 case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                     VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
@@ -207,8 +222,21 @@ public class RenderPass {
         else {
             vkCmdEndRenderPass(commandBuffer);
 
-            if (colorAttachmentInfo != null)
-                framebuffer.getColorAttachment().setCurrentLayout(colorAttachmentInfo.finalLayout);
+            if (colorAttachmentInfo != null) {
+                VulkanImage colorImage = framebuffer.getColorAttachment();
+
+                if (explicitColorFinalLayout) {
+                    // Every level is in COLOR_ATTACHMENT_OPTIMAL here; move the whole image in one barrier
+                    colorImage.setCurrentLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+                    try (MemoryStack stack = MemoryStack.stackPush()) {
+                        colorImage.transitionImageLayout(stack, commandBuffer, colorAttachmentInfo.finalLayout);
+                    }
+                }
+                else {
+                    colorImage.setCurrentLayout(colorAttachmentInfo.finalLayout);
+                }
+            }
 
             if (depthAttachmentInfo != null)
                 framebuffer.getDepthAttachment().setCurrentLayout(depthAttachmentInfo.finalLayout);
@@ -291,6 +319,24 @@ public class RenderPass {
 
     public long getId() {
         return id;
+    }
+
+    /**
+     * Render pass compatibility also compares the subpass dependencies (the validation layers check
+     * dependencyCount), which depend on the colour final layout. Returns 0 for none, 1 for the
+     * present-source dependency, 2 for the shader-read dependency.
+     */
+    public int getDependencyKind() {
+        if (colorAttachmentInfo == null) {
+            return 0;
+        }
+
+        int layout = explicitColorFinalLayout ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : colorAttachmentInfo.finalLayout;
+        return switch (layout) {
+            case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> 1;
+            case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> 2;
+            default -> 0;
+        };
     }
 
     /** Colour attachment format, or 0 when the pass has no colour attachment. */
