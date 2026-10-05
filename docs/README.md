@@ -11,9 +11,8 @@
 | `presentmon.md` | how to capture and compare frame times on the R7 |
 | `settings-ui-proposal.md` | scope proposal for the settings UI overhaul (4.5, skipped) |
 | `line-refs.txt` | plan file:line references checked by `tools\check-linerefs.ps1` |
-| `26-1-port-plan.md` | research, measured size and plan for the 26.1 port (6.1, no port done) |
-| `release-checklist.md` | steps for a release, including the Modrinth listing |
-| `mc-26-2-research.md` | notes on 26.2 Vulkan requirements and OpenGL + Sodium (6.2) |
+| `checklist.md` | steps for a release, including the Modrinth listing |
+| `mc-26-plus.md` | notes on Minecraft 26.x (26.1 port facts, 26.2 Vulkan, OpenGL + Sodium) and the owner decisions |
 | `modrinth.md` | draft Modrinth listing (not published) |
 | `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task 0.6) |
 

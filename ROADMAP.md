@@ -44,8 +44,9 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 5.2 Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
 
 ## Phase 6: Other Minecraft versions
-- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research, plan and a compile probe done in `docs/26-1-port-plan.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2; no port started, waits for owner decisions (section 5 of that file)
-- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (desk research and web checks done in `docs/mc-26-2-research.md`; the R7 checks remain)
+- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
+- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
 
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
+Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
 - [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
