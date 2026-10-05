@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * bind guard: fall back to the main render target when a pipeline is bound with no render pass.
+ */
+
 import com.mojang.blaze3d.opengl.GlStateManager;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -93,6 +99,7 @@ public class Renderer {
 
     private Framebuffer boundFramebuffer;
     private RenderPass boundRenderPass;
+    private boolean warnedNoRenderPass = false;
 
     private static int currentFrame = 0;
     private static int imageIndex;
@@ -633,6 +640,24 @@ public class Renderer {
 
     public void bindGraphicsPipeline(GraphicsPipeline pipeline) {
         VkCommandBuffer commandBuffer = currentCmdBuffer;
+
+        // Like GL's default framebuffer: with no pass bound, draw into the main target
+        if (this.boundRenderPass == null) {
+            if (!this.recordingCmds) {
+                return;
+            }
+
+            if (!warnedNoRenderPass) {
+                warnedNoRenderPass = true;
+                Initializer.LOGGER.warn("Graphics pipeline bound with no render pass: rebinding the main target");
+            }
+
+            this.mainPass.rebindMainTarget();
+
+            if (this.boundRenderPass == null) {
+                return;
+            }
+        }
 
         PipelineState currentState = PipelineState.getCurrentPipelineState(boundRenderPass);
         final long handle = pipeline.getHandle(currentState);

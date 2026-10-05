@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.pass;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * expose the main render pass for pipeline creation fallback.
+ */
+
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
@@ -156,6 +162,11 @@ public class DefaultMainPass implements MainPass {
     @Override
     public Framebuffer getMainFramebuffer() {
         return mainFramebuffer;
+    }
+
+    @Override
+    public RenderPass getMainRenderPass() {
+        return this.mainRenderPass;
     }
 
     @Override

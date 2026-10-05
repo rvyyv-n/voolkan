@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area.
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats.
  */
 
 import net.vulkanmod.vulkan.Renderer;
@@ -291,6 +291,16 @@ public class RenderPass {
 
     public long getId() {
         return id;
+    }
+
+    /** Colour attachment format, or 0 when the pass has no colour attachment. */
+    public int getColorFormat() {
+        return colorAttachmentInfo != null ? colorAttachmentInfo.format : 0;
+    }
+
+    /** Depth attachment format, or 0 when the pass has no depth attachment. */
+    public int getDepthFormat() {
+        return depthAttachmentInfo != null ? depthAttachmentInfo.format : 0;
     }
 
     public static class AttachmentInfo {

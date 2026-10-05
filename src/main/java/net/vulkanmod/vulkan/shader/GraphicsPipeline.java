@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.shader;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes.
+ */
+
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
@@ -10,6 +16,7 @@ import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.Framebuffer;
+import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
@@ -45,8 +52,7 @@ public class GraphicsPipeline extends Pipeline {
         createShaderModules(builder);
 
         if (builder.renderPass != null)
-            graphicsPipelines.computeIfAbsent(PipelineState.DEFAULT,
-                    this::createGraphicsPipeline);
+            getHandle(PipelineState.DEFAULT);
 
         createDescriptorSets(Renderer.getFramesNum());
 
@@ -54,7 +60,15 @@ public class GraphicsPipeline extends Pipeline {
     }
 
     public long getHandle(PipelineState state) {
-        return graphicsPipelines.computeIfAbsent(state, this::createGraphicsPipeline);
+        // 0 is VK_NULL_HANDLE, which is also the map's default return value
+        long handle = graphicsPipelines.getLong(state);
+        if (handle == VK_NULL_HANDLE) {
+            handle = createGraphicsPipeline(state);
+            // Store a key without the RenderPass reference: the pipeline stays valid for any compatible pass
+            graphicsPipelines.put(state.withoutRenderPass(), handle);
+        }
+
+        return handle;
     }
 
     private long createGraphicsPipeline(PipelineState state) {
@@ -140,6 +154,18 @@ public class GraphicsPipeline extends Pipeline {
 
             // ===> COLOR BLENDING <===
 
+            // Legacy path: the pass used to create the pipeline (the main pass if none is bound)
+            RenderPass legacyPass = null;
+            if (!Vulkan.DYNAMIC_RENDERING) {
+                legacyPass = state.renderPass != null ? state.renderPass : Renderer.getInstance().getMainPass().getMainRenderPass();
+                if (legacyPass == null) {
+                    throw new IllegalStateException("Cannot create pipeline " + this.name + ": no render pass is bound and the main pass is not ready");
+                }
+            }
+
+            // A depth-only pass has no colour attachment, so the blend state must have no attachments either
+            final boolean hasColorAttachment = legacyPass == null || legacyPass.getColorFormat() != 0;
+
             VkPipelineColorBlendAttachmentState.Buffer colorBlendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack);
             colorBlendAttachment.colorWriteMask(state.colorMask_i);
 
@@ -160,7 +186,9 @@ public class GraphicsPipeline extends Pipeline {
             colorBlending.sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
             colorBlending.logicOpEnable(PipelineState.LogicOpState.enable(state.logicOp_i));
             colorBlending.logicOp(PipelineState.LogicOpState.decodeFun(state.logicOp_i));
-            colorBlending.pAttachments(colorBlendAttachment);
+            if (hasColorAttachment) {
+                colorBlending.pAttachments(colorBlendAttachment);
+            }
             colorBlending.blendConstants(stack.floats(0.0f, 0.0f, 0.0f, 0.0f));
 
             // ===> DYNAMIC STATES <===
@@ -194,7 +222,7 @@ public class GraphicsPipeline extends Pipeline {
             pipelineInfo.basePipelineIndex(-1);
 
             if (!Vulkan.DYNAMIC_RENDERING) {
-                pipelineInfo.renderPass(state.renderPass.getId());
+                pipelineInfo.renderPass(legacyPass.getId());
                 pipelineInfo.subpass(0);
             }
             else {
