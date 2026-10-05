@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.framebuffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * configurable swapchain image count.
+ */
+
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.util.MathUtil;
@@ -90,7 +96,10 @@ public class SwapChain extends Framebuffer {
                 return;
             }
 
-            int requestedImages = surfaceProperties.capabilities.minImageCount() + 1;
+            int configuredImages = Initializer.CONFIG.swapChainImages;
+            int requestedImages = configuredImages > 0
+                    ? Math.max(configuredImages, surfaceProperties.capabilities.minImageCount())
+                    : surfaceProperties.capabilities.minImageCount() + 1;
             if (surfaceProperties.capabilities.maxImageCount() > 0 && requestedImages > surfaceProperties.capabilities.maxImageCount()) {
                 requestedImages = surfaceProperties.capabilities.maxImageCount();
             }
@@ -144,6 +153,8 @@ public class SwapChain extends Framebuffer {
             LongBuffer pSwapchainImages = stack.mallocLong(imageCount.get(0));
 
             vkGetSwapchainImagesKHR(device, this.swapChainId, imageCount, pSwapchainImages);
+
+            Initializer.LOGGER.info("Swapchain: {} images (requested {}, surface min {}), present mode {}", imageCount.get(0), requestedImages, surfaceProperties.capabilities.minImageCount(), presentMode);
 
             this.swapChainImages = new ArrayList<>(imageCount.get(0));
             this.hasImages = true;

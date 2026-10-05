@@ -27,9 +27,9 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 2.2 Per-mip image layout tracking; implement `copyTextureToTexture` and real fences
 
 ## Phase 3: Speed and input delay
-- [ ] 3.1 Frame queue 1, low-latency mode, swapchain image-count option
-- [ ] 3.2 Save pipeline cache to disk
-- [ ] 3.3 PresentMon captures on the R7 + summary
+- [x] 3.1 Frame queue 1, low-latency mode, swapchain image-count option (verified on lavapipe only; effect on the R7 needs PresentMon, see 3.3)
+- [x] 3.2 Save pipeline cache to disk (`run/voolkan/pipeline_cache.bin`; header + checksum validated; lavapipe returns a header-only blob so the load path is covered by a jshell check, real load needs the R7)
+- [ ] 3.3 PresentMon captures on the R7 + summary: capture script and `docs/presentmon.md` done; **the R7 captures are for the owner**
 
 ## Phase 4: Minimal GUI
 - [ ] 4.1 "Compatibility" block on the Video page

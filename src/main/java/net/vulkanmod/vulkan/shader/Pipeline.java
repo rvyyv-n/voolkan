@@ -1,6 +1,15 @@
 package net.vulkanmod.vulkan.shader;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * pipeline cache is loaded from and saved to disk.
+ */
+
 import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.voolkan.cache.PipelineCacheStore;
+import net.fabricmc.loader.api.FabricLoader;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
@@ -15,10 +24,12 @@ import net.vulkanmod.vulkan.shader.layout.PushConstants;
 import net.vulkanmod.vulkan.shader.layout.Uniform;
 import net.vulkanmod.vulkan.util.MappedBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.*;
 
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -35,23 +46,135 @@ public abstract class Pipeline {
     protected static final long PIPELINE_CACHE = createPipelineCache();
     protected static final List<Pipeline> PIPELINES = new ArrayList<>();
 
-    private static long createPipelineCache() {
-        try (MemoryStack stack = stackPush()) {
+    // Size of the blob loaded from disk (0 = none; no initializer: it runs after createPipelineCache); if the blob is still this size at exit, nothing new was compiled
+    private static int loadedCacheSize;
+    private static final int VK_HEADER_ONLY_SIZE = 16 + VK_UUID_SIZE;
 
+    private static boolean isDiskCacheEnabled() {
+        String property = System.getProperty("voolkan.pipelineCache");
+        if (property != null) {
+            return Boolean.parseBoolean(property);
+        }
+
+        return Initializer.CONFIG.pipelineCache;
+    }
+
+    private static Path getDiskCachePath() {
+        return FabricLoader.getInstance().getGameDir().resolve("voolkan").resolve("pipeline_cache.bin");
+    }
+
+    private static PipelineCacheStore.DeviceKey getDeviceKey() {
+        VkPhysicalDeviceProperties properties = DeviceManager.deviceProperties;
+        byte[] uuid = new byte[VK_UUID_SIZE];
+        properties.pipelineCacheUUID().get(0, uuid);
+
+        return new PipelineCacheStore.DeviceKey(properties.vendorID(), properties.deviceID(), uuid);
+    }
+
+    private static long createPipelineCache() {
+        byte[] initialData = null;
+
+        if (isDiskCacheEnabled()) {
+            Path path = getDiskCachePath();
+            initialData = PipelineCacheStore.load(path, getDeviceKey(),
+                    reason -> Initializer.LOGGER.warn("Ignoring pipeline cache {}: {}", path, reason));
+
+            if (initialData != null) {
+                Initializer.LOGGER.info("Loaded pipeline cache: {} bytes", initialData.length);
+            }
+        }
+
+        long cache = createPipelineCache(initialData);
+
+        // The driver can still reject the data (VK_SUCCESS with an empty cache, or an error): fall back to empty
+        if (cache == VK_NULL_HANDLE) {
+            Initializer.LOGGER.warn("Driver rejected the saved pipeline cache, starting with an empty one");
+            initialData = null;
+            cache = createPipelineCache(null);
+        }
+
+        loadedCacheSize = initialData != null ? initialData.length : 0;
+
+        return cache;
+    }
+
+    /** @return the cache handle, or VK_NULL_HANDLE if creation with initialData failed (never for null data). */
+    private static long createPipelineCache(byte[] initialData) {
+        ByteBuffer data = null;
+
+        try (MemoryStack stack = stackPush()) {
             VkPipelineCacheCreateInfo cacheCreateInfo = VkPipelineCacheCreateInfo.calloc(stack);
             cacheCreateInfo.sType(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
 
+            if (initialData != null) {
+                data = MemoryUtil.memAlloc(initialData.length);
+                data.put(initialData).flip();
+                cacheCreateInfo.pInitialData(data);
+            }
+
             LongBuffer pPipelineCache = stack.mallocLong(1);
 
-            if (vkCreatePipelineCache(DEVICE, cacheCreateInfo, null, pPipelineCache) != VK_SUCCESS) {
+            int result = vkCreatePipelineCache(DEVICE, cacheCreateInfo, null, pPipelineCache);
+            if (result != VK_SUCCESS) {
+                if (initialData != null) {
+                    return VK_NULL_HANDLE;
+                }
+
                 throw new RuntimeException("Failed to create graphics pipeline");
             }
 
             return pPipelineCache.get(0);
+        } finally {
+            if (data != null) {
+                MemoryUtil.memFree(data);
+            }
+        }
+    }
+
+    /** Writes the pipeline cache to disk. Must be called before the cache is destroyed. Never throws. */
+    public static void savePipelineCache() {
+        if (!isDiskCacheEnabled()) {
+            return;
+        }
+
+        try (MemoryStack stack = stackPush()) {
+            org.lwjgl.PointerBuffer pSize = stack.mallocPointer(1);
+            if (vkGetPipelineCacheData(DEVICE, PIPELINE_CACHE, pSize, null) != VK_SUCCESS) {
+                return;
+            }
+
+            int size = (int) pSize.get(0);
+            if (size <= VK_HEADER_ONLY_SIZE || size == loadedCacheSize) {
+                // Header only (nothing compiled, or a driver without cache data), or the size we loaded: keep the file as is
+                return;
+            }
+
+            ByteBuffer data = MemoryUtil.memAlloc(size);
+            try {
+                pSize.put(0, size);
+                int result = vkGetPipelineCacheData(DEVICE, PIPELINE_CACHE, pSize, data);
+                if (result != VK_SUCCESS) {
+                    Initializer.LOGGER.warn("Could not read the pipeline cache from the driver (result {})", result);
+                    return;
+                }
+
+                byte[] bytes = new byte[(int) pSize.get(0)];
+                data.get(0, bytes);
+
+                Path path = getDiskCachePath();
+                if (PipelineCacheStore.save(path, bytes, error -> Initializer.LOGGER.warn("Pipeline cache {}: {}", path, error))) {
+                    Initializer.LOGGER.info("Saved pipeline cache: {} bytes", bytes.length);
+                }
+            } finally {
+                MemoryUtil.memFree(data);
+            }
+        } catch (RuntimeException e) {
+            Initializer.LOGGER.warn("Could not save the pipeline cache", e);
         }
     }
 
     public static void destroyPipelineCache() {
+        savePipelineCache();
         vkDestroyPipelineCache(DEVICE, PIPELINE_CACHE, null);
     }
 
