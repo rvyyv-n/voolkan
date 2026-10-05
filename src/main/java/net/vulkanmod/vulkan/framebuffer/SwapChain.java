@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * configurable swapchain image count.
+ * configurable swapchain image count; BGRA swapchain format preferred over RGBA.
  */
 
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
@@ -154,7 +154,7 @@ public class SwapChain extends Framebuffer {
 
             vkGetSwapchainImagesKHR(device, this.swapChainId, imageCount, pSwapchainImages);
 
-            Initializer.LOGGER.info("Swapchain: {} images (requested {}, surface min {}), present mode {}", imageCount.get(0), requestedImages, surfaceProperties.capabilities.minImageCount(), presentMode);
+            Initializer.LOGGER.info("Swapchain: {} images (requested {}, surface min {}), present mode {}, format {}", imageCount.get(0), requestedImages, surfaceProperties.capabilities.minImageCount(), presentMode, this.format);
 
             this.swapChainImages = new ArrayList<>(imageCount.get(0));
             this.hasImages = true;
@@ -235,16 +235,28 @@ public class SwapChain extends Framebuffer {
     private VkSurfaceFormatKHR getFormat(VkSurfaceFormatKHR.Buffer availableFormats) {
         List<VkSurfaceFormatKHR> list = availableFormats.stream().toList();
 
-        VkSurfaceFormatKHR format = list.get(0);
+        // BGRA first: it is what desktop drivers present natively, and Mesa lavapipe on Windows shows an
+        // R8G8B8A8 swapchain with red and blue swapped.
+        VkSurfaceFormatKHR format = null;
 
         for (VkSurfaceFormatKHR availableFormat : list) {
-            if (availableFormat.format() == VK_FORMAT_R8G8B8A8_UNORM && availableFormat.colorSpace() == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-                return availableFormat;
-
             if (availableFormat.format() == VK_FORMAT_B8G8R8A8_UNORM && availableFormat.colorSpace() == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 format = availableFormat;
+                break;
             }
         }
+
+        if (format == null) {
+            for (VkSurfaceFormatKHR availableFormat : list) {
+                if (availableFormat.format() == VK_FORMAT_R8G8B8A8_UNORM && availableFormat.colorSpace() == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+                    format = availableFormat;
+                    break;
+                }
+            }
+        }
+
+        if (format == null)
+            format = list.get(0);
 
         if (format.format() == VK_FORMAT_B8G8R8A8_UNORM)
             isBGRAformat = true;
