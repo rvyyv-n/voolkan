@@ -1,4 +1,4 @@
-# Settings presets (task 4.3): owner-reviewed, to be adjusted on the real PC
+# Settings presets (task 4.3)
 
 The Video page has a **Preset** row (Custom / Performance / Balanced / Quality). Choosing one only *stages* values in the options below; nothing changes until the user presses Apply, and Undo drops them. The row always shows Custom when the screen opens. Values live in `dev.voolkan.gui.Preset`.
 
@@ -6,6 +6,7 @@ Not touched by any preset: window mode, resolution, refresh rate, GUI scale, bri
 
 | Option | Performance | Balanced | Quality |
 |---|---|---|---|
+| Refresh rate (exclusive fullscreen) | highest offered | unchanged | unchanged |
 | Max framerate | unlimited (260) | 120 | 144 |
 | VSync | off | on | on |
 | Render distance | 2 (min) | 12 | 16 |
@@ -31,6 +32,6 @@ Not touched by any preset: window mode, resolution, refresh rate, GUI scale, bri
 
 Notes:
 
-- Performance is the absolute minimum of every option it covers (render distance 2, entity distance 0.5x, etc.), chosen by the owner; Balanced and Quality were set by judgement. The owner will adjust them later on the real PC.
+- Performance is the absolute minimum of every option it covers (render distance 2, entity distance 0.5x, etc.), chosen by the owner; Balanced and Quality were set by judgement.
 - Performance also sets render queue 1, low latency on, VSync off and uncapped framerate. Check queue size 1 on the R7.
 - Quality is sized for a 2 GB card (render distance 16, 4x anisotropy).

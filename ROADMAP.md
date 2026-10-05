@@ -19,7 +19,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
 - [x] 1.5 Startup capability log, readable errors, validation via system property
 - [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
-- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: it does not appear in the GPU selector, so a run on it has not happened yet (find out why first)
+- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: the GPU selector problem was the lavapipe scripts hiding the real GPU via `VK_DRIVER_FILES`; on a normal run the R7 is listed and picked, and the game reaches the menu on it (legacy path). The world/F3/fullscreen/post-effect checklist on the R7 is still open
 - [ ] **M1** 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
 
 ## Phase 2: Stability
@@ -34,12 +34,13 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 4: Minimal GUI
 - [x] 4.1 "Compatibility" block on the Video page
 - [x] 4.2 Language-file completeness check
-- [x] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; exact values per preset to be decided. Preset row done; values in `docs/presets.md` (owner will tweak on the real PC)
+- [x] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; Preset row done (Performance also maxes the refresh rate); values in `docs/presets.md`
 - [x] 4.4 Branding: replace the VulkanMod logo and name in the UI (settings screen header, window and mod list text) with the voolkan logo and name; keep upstream credit in the About text and README
 - [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
 
-## Phase 5: Release (private first)
-- [ ] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
+## Phase 5: Release
+- [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
+- [ ] 5.1 LGPL pass (`COPYING` added with the beta): `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
 - [ ] 5.2 Later: upstream PR with render-path detection + bug fixes
 
 ## Phase 6: Other Minecraft versions

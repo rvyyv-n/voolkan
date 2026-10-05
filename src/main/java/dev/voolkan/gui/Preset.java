@@ -22,14 +22,17 @@ import java.util.Map;
  * Settings presets for the Video page. A preset only stages new values in the options
  * (the user still presses Apply, or Undo to drop them).
  * <p>
- * Values: see docs/presets.md. The owner will adjust them later; Performance is the absolute minimum
- * of each option.
+ * Values: see docs/presets.md. Performance is the absolute minimum of each option, with the
+ * highest refresh rate; a null entry leaves that option unchanged.
  */
 public enum Preset {
     CUSTOM("voolkan.options.preset.custom"),
     PERFORMANCE("voolkan.options.preset.performance"),
     BALANCED("voolkan.options.preset.balanced"),
     QUALITY("voolkan.options.preset.quality");
+
+    /** Marker value: the highest value the option offers. */
+    private static final Object MAX = new Object();
 
     /** Option name key -> {performance, balanced, quality}. */
     private static final Map<String, Object[]> VALUES = new LinkedHashMap<>();
@@ -38,6 +41,7 @@ public enum Preset {
         // Video
         put("options.framerateLimit", 260, 120, 144);
         put("options.vsync", false, true, true);
+        put("vulkanmod.options.refreshRate", MAX, null, null);
         // Graphics
         put("options.renderDistance", 2, 12, 16);
         put("options.simulationDistance", 5, 8, 10);
@@ -95,8 +99,17 @@ public enum Preset {
                     }
 
                     Object value = values[index];
-                    if (option instanceof CyclingOption cycling && !Arrays.asList(cycling.getValues()).contains(value)) {
+                    if (value == null) {
                         continue;
+                    }
+
+                    if (option instanceof CyclingOption cycling) {
+                        if (value == MAX) {
+                            Object[] offered = cycling.getValues();
+                            value = offered[offered.length - 1];
+                        } else if (!Arrays.asList(cycling.getValues()).contains(value)) {
+                            continue;
+                        }
                     }
 
                     option.setNewValue(value);
