@@ -34,9 +34,9 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 4: Minimal GUI
 - [x] 4.1 "Compatibility" block on the Video page
 - [x] 4.2 Language-file completeness check
-- [ ] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; exact values per preset to be decided
+- [ ] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; exact values per preset to be decided. **Done:** Preset row with proposed values (`docs/presets.md`); **still open:** owner sign-off on the values
 - [x] 4.4 Branding: replace the VulkanMod logo and name in the UI (settings screen header, window and mod list text) with the voolkan logo and name; keep upstream credit in the About text and README
-- [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner
+- [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Scope proposal written (`docs/settings-ui-proposal.md`), awaiting owner
 
 ## Phase 5: Release (private first)
 - [ ] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
