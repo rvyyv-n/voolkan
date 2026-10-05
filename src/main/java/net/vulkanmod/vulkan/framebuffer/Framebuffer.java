@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.framebuffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * mip-level aware framebuffers for the legacy render pass path.
+ */
+
 import it.unimi.dsi.fastutil.objects.Reference2LongArrayMap;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -211,6 +217,20 @@ public class Framebuffer {
 
     public long getColorAttachmentView() {
         return colorAttachment.getLevelImageView(level);
+    }
+
+    public int getLevel() {
+        return this.level;
+    }
+
+    /** Width of the mip level currently targeted by this framebuffer. */
+    public int getLevelWidth() {
+        return Math.max(1, this.width >> this.level);
+    }
+
+    /** Height of the mip level currently targeted by this framebuffer. */
+    public int getLevelHeight() {
+        return Math.max(1, this.height >> this.level);
     }
 
     public int getWidth() {

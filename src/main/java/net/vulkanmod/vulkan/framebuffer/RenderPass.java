@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.framebuffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area.
+ */
+
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
@@ -62,8 +68,8 @@ public class RenderPass {
                                .initialLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                                .finalLayout(colorAttachmentInfo.finalLayout);
 
-                VkAttachmentReference colorAttachmentRef = attachmentRefs.get(0)
-                                                                         .attachment(0)
+                VkAttachmentReference colorAttachmentRef = attachmentRefs.get(i)
+                                                                         .attachment(i)
                                                                          .layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
                 subpass.colorAttachmentCount(1);
@@ -84,8 +90,8 @@ public class RenderPass {
                                .initialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                                .finalLayout(depthAttachmentInfo.finalLayout);
 
-                VkAttachmentReference depthAttachmentRef = attachmentRefs.get(1)
-                                                                         .attachment(1)
+                VkAttachmentReference depthAttachmentRef = attachmentRefs.get(i)
+                                                                         .attachment(i)
                                                                          .layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
                 subpass.pDepthStencilAttachment(depthAttachmentRef);
@@ -96,8 +102,9 @@ public class RenderPass {
                           .pAttachments(attachments)
                           .pSubpasses(subpass);
 
-            //Layout transition subpass depency
-            switch (colorAttachmentInfo.finalLayout) {
+            // Layout transition subpass dependency (depth-only passes rely on the implicit external dependencies)
+            int dependencyLayout = colorAttachmentInfo != null ? colorAttachmentInfo.finalLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+            switch (dependencyLayout) {
                 case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                     VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
                     subpassDependencies.get(0)
@@ -134,7 +141,6 @@ public class RenderPass {
         }
     }
 
-    // TODO: Currently it does not support image views of levels above the main
     public void beginRenderPass(VkCommandBuffer commandBuffer, long framebufferId, MemoryStack stack) {
 
         if (colorAttachmentInfo != null
@@ -155,14 +161,21 @@ public class RenderPass {
         renderPassInfo.renderPass(this.id);
         renderPassInfo.framebuffer(framebufferId);
 
+        // The framebuffer is built from the level image view, so the render area is the level extent
         VkRect2D renderArea = VkRect2D.malloc(stack);
         renderArea.offset().set(0, 0);
-        renderArea.extent().set(framebuffer.getWidth(), framebuffer.getHeight());
+        renderArea.extent().set(framebuffer.getLevelWidth(), framebuffer.getLevelHeight());
         renderPassInfo.renderArea(renderArea);
 
-        VkClearValue.Buffer clearValues = VkClearValue.malloc(2, stack);
-        clearValues.get(0).color().float32(VRenderSystem.clearColor);
-        clearValues.get(1).depthStencil().set(1.0f, 0);
+        // Clear values are indexed by attachment index: colour (if any) first, then depth
+        VkClearValue.Buffer clearValues = VkClearValue.calloc(attachmentCount, stack);
+        int clearIdx = 0;
+        if (colorAttachmentInfo != null) {
+            clearValues.get(clearIdx++).color().float32(VRenderSystem.clearColor);
+        }
+        if (depthAttachmentInfo != null) {
+            clearValues.get(clearIdx).depthStencil().set(1.0f, 0);
+        }
 
         renderPassInfo.pClearValues(clearValues);
 

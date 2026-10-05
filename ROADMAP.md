@@ -32,7 +32,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [ ] 3.2 Save pipeline cache to disk
 - [ ] 3.3 PresentMon captures on the R7 + summary
 
-## Phase 4: Minimal GUI
+## Phase 4: Minimal GUI (SKIP FOR NOW)
 - [ ] 4.1 "Compatibility" block on the Video page
 - [ ] 4.2 Language-file completeness check
 
