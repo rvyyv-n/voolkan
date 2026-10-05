@@ -1,0 +1,2 @@
+VUID-VkRenderingInfo-pNext-06079
+VUID-VkRenderingInfo-pNext-06080

@@ -7,7 +7,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 0.2 Repo setup: `upstream` remote, tag `upstream-base`, base history rebuilt on `setup/phase-0` (moving `main` waits for the owner)
 - [x] 0.3 Baseline: `gradlew build` passes; `runClient` runs on lavapipe, and fails on the R7 as expected (`Unsupported extension: [VK_KHR_dynamic_rendering]`)
 - [x] 0.4 Re-verify line refs (corrections reported; plan file not edited)
-- [ ] 0.5 Test harness: scripts, profile, summariser and docs done; **test world not yet generated** (needs `make-test-world.ps1 -AcceptEula`); profile is provisional until 0.6
+- [ ] 0.5 Test harness: scripts, profile, summariser and docs done; the owner made a world by hand (`run/saves`), `make-test-world.ps1` not used; profile is provisional until 0.6
 - [ ] 0.6 Owner: run `vulkaninfo` on the R7 and commit it to `docs/gpu/r7-350/`
 - [x] 0.7 CI workflow (`.github/workflows/build.yml`; not yet run, repo not on GitHub Actions)
 - [x] 0.8 Project docs: `AGENTS.md`, `docs/upstream.md`, `docs/conventions.md`
@@ -19,7 +19,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
 - [x] 1.5 Startup capability log, readable errors, validation via system property
 - [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
-- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. **Still open:** test world (owner runs `make-test-world.ps1 -AcceptEula`), world/F3/fullscreen/post-effect checklist, real R7
+- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: it does not appear in the GPU selector, so a run on it has not happened yet (find out why first)
 - [ ] **M1** 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
 
 ## Phase 2: Stability

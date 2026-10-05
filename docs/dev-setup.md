@@ -38,11 +38,16 @@ gh release download 1.12.0 -R Vineflower/vineflower -p 'vineflower-1.12.0.jar' -
 Lavapipe is **never** registered as a system Vulkan driver. The scripts select it only for their own process:
 `VK_DRIVER_FILES=tools\mesa\x64\lvp_icd.x86_64.json`. Do not run Mesa's `systemwidedeploy.cmd`.
 
+On this PC Mesa lives at `D:\Code\Tools\voolkan\mesa` (`VOOLKAN_MESA`, a user environment variable), vineflower in `D:\Code\Tools\voolkan\bin`, and the Gradle home is `D:\Code\Tools\gradle` (`GRADLE_USER_HOME`). A shell opened before those variables were set needs them set by hand.
+
 Paths used by the scripts can be overridden in a git-ignored `tools\local.env.ps1`:
 `$env:VOOLKAN_JAVA21`, `$env:VOOLKAN_MESA`, `$env:VULKAN_SDK`.
 
 ## Notes
 
+- Lavapipe is a CPU renderer (`GPU: llvmpipe`): low frame rates are expected and say nothing about the R7. On Windows it shows an RGBA swapchain with red and blue swapped, so the swapchain prefers BGRA (`SwapChain.getFormat`).
+- Smoke runs default to 45 s (`tools\smoke-run.ps1 -Seconds N`). `tools\capture-window.ps1` saves a picture of just the game window to `logs\window.png`.
+- `tools\baselines\*.txt` hold the accepted validation IDs per mode (validation mode: two dynamic-rendering IDs on lavapipe; R7 profile: none). Refresh with `-SaveBaseline`.
 - `C:\Windows\System32\vulkaninfo.exe` (from the AMD driver) ignores `VK_DRIVER_FILES`/layers set by us; use the SDK's `C:\VulkanSDK\1.4.363.0\Bin\vulkaninfoSDK.exe` when testing layers or lavapipe.
 - Other software on this PC (OBS, Medal) injects Vulkan layers; harmless but they add loader warnings.
 - Optional: IntelliJ IDEA Community + the "Minecraft Development" plugin for debugging `runClient`. Not installed.

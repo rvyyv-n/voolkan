@@ -4,7 +4,7 @@
 .PARAMETER SaveBaseline    Store this run's VUID set as tools\baselines\<mode>.txt.
 .PARAMETER Modes           Subset of: validation, r7-profile, lavapipe.
 #>
-param([int]$Seconds = 120, [switch]$SaveBaseline, [string[]]$Modes = @('validation', 'r7-profile', 'lavapipe'), [string]$World)
+param([int]$Seconds = 45, [switch]$SaveBaseline, [string[]]$Modes = @('validation', 'r7-profile', 'lavapipe'), [string]$World)
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $baseDir = Join-Path $PSScriptRoot 'baselines'
 New-Item -ItemType Directory -Force $baseDir | Out-Null
@@ -12,6 +12,7 @@ $extra = @(); if ($World) { $extra = @('-World', $World) }
 $fail = 0
 foreach ($m in $Modes) {
     "=== $m"
+    $started = Get-Date
     switch ($m) {
         'validation' { $script = 'run-validation.ps1'; $args2 = @('-Lavapipe') }
         'r7-profile' { $script = 'run-r7-profile.ps1'; $args2 = @() }
@@ -19,6 +20,7 @@ foreach ($m in $Modes) {
     }
     & powershell -NoProfile -File (Join-Path $PSScriptRoot $script) @args2 @extra -AutoQuitSeconds $Seconds | Out-Host
     $dir = Get-ChildItem (Join-Path $repo 'logs') -Directory | Where-Object Name -like "*-$m" | Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $dir -or $dir.LastWriteTime -lt $started) { "RUN FAILED: no new log directory (see the error above)"; $fail++; continue }
     $game = Get-Content (Join-Path $dir.FullName 'game.log') -Raw -ErrorAction SilentlyContinue
     $crashed = $game -match 'Game crashed|Unsupported extension'
     $ids = @()
