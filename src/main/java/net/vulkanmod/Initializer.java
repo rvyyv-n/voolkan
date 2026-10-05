@@ -1,5 +1,11 @@
 package net.vulkanmod;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * mod id lookup renamed to voolkan; update check disabled.
+ */
+
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.renderer.v1.Renderer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -21,12 +27,12 @@ public class Initializer implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		VERSION = FabricLoader.getInstance()
-				.getModContainer("vulkanmod")
+				.getModContainer("voolkan")
 				.get()
 				.getMetadata()
 				.getVersion().getFriendlyString();
 
-		LOGGER.info("== VulkanMod ==");
+		LOGGER.info("== voolkan (unofficial VulkanMod fork) ==");
 
 		var configPath = FabricLoader.getInstance()
 				.getConfigDir()
@@ -37,6 +43,7 @@ public class Initializer implements ClientModInitializer {
 
 		Renderer.register(VulkanModRenderer.INSTANCE);
 
+		// Update check disabled in voolkan: upstream releases do not run on the target GPUs
 		UpdateChecker.checkForUpdates();
 	}
 

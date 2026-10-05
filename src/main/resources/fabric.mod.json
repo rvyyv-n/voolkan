@@ -1,19 +1,21 @@
 {
   "schemaVersion": 1,
-  "id": "vulkanmod",
+  "id": "voolkan",
+  "provides": ["vulkanmod"],
   "version": "${version}",
 
-  "name": "VulkanMod",
-  "description": "Bring Vulkan to Minecraft!",
+  "name": "voolkan",
+  "description": "Unofficial fork of VulkanMod: Vulkan renderer for Minecraft, with a legacy render pass path for GPUs without VK_KHR_dynamic_rendering.",
   "authors": [
-    "Collateral"
+    "Collateral",
+    "voolkan project"
   ],
   "contact": {
     "homepage": "",
-    "sources": "https://github.com/xCollateral/VulkanMod"
+    "sources": "https://github.com/rvyyv-n/voolkan"
   },
 
-  "icon": "assets/vulkanmod/vlogo.png",
+  "icon": "assets/vulkanmod/voolkan_icon.png",
 
   "environment": "client",
   "entrypoints": {
