@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * voolkan branding: the support button is labelled as supporting upstream VulkanMod and carries an About tooltip.
+ */
+
 import com.google.common.collect.Lists;
 import net.minecraft.ChatFormatting;
 import net.minecraft.util.Util;
@@ -292,7 +298,12 @@ public class VOptionScreen extends Screen {
         int kofiX = this.width - kofiWidth - rightMargin;
         VButtonWidget supportButton = new VButtonWidget(kofiX, 4, kofiWidth, VGuiConstants.WIDGET_HEIGHT,
                 Component.translatable("vulkanmod.options.buttons.kofi"),
-                button -> Util.getPlatform().openUri("https://ko-fi.com/xcollateral"));
+                button -> Util.getPlatform().openUri("https://ko-fi.com/xcollateral")) {
+            @Override
+            public Component getTooltip() {
+                return Component.translatable("voolkan.options.about");
+            }
+        };
 
         this.buttons.add(this.applyButton);
         this.buttons.add(doneButton);

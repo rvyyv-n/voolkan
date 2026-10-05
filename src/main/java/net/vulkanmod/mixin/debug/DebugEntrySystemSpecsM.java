@@ -1,5 +1,11 @@
 package net.vulkanmod.mixin.debug;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * show the voolkan name in the F3 overlay.
+ */
+
 import com.mojang.blaze3d.platform.GLX;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -39,7 +45,7 @@ public class DebugEntrySystemSpecsM {
                         ),
                         gpuDevice.getRenderer(),
                         String.format(Locale.ROOT, "%s %s", gpuDevice.getBackendName(), gpuDevice.getVersion()),
-                        String.format(Locale.ROOT, "VulkanMod %s", Initializer.getVersion())
+                        String.format(Locale.ROOT, "voolkan %s", Initializer.getVersion())
                 )
         );
 

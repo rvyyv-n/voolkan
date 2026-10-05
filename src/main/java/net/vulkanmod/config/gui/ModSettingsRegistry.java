@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * voolkan name and logo in the settings screen header.
+ */
+
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.ChatFormatting;
@@ -17,8 +23,8 @@ public class ModSettingsRegistry {
     private final Set<ModSettingsEntry> modEntries = new ObjectArraySet<>();
 
     ModSettingsRegistry() {
-        ModSettingsEntry vulkanModSettings = new ModSettingsEntry(Component.literal("VulkanMod").withStyle(ChatFormatting.DARK_RED),
-                                                                  () -> Identifier.fromNamespaceAndPath("vulkanmod", "vlogo_transparent.png"),
+        ModSettingsEntry vulkanModSettings = new ModSettingsEntry(Component.literal("voolkan").withStyle(ChatFormatting.DARK_RED),
+                                                                  () -> Identifier.fromNamespaceAndPath("vulkanmod", "voolkan_icon.png"),
                                                                   Options::getOptionPages,
                                                                   () -> Initializer.CONFIG.write());
         this.addModEntry(vulkanModSettings);
