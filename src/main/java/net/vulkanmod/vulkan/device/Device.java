@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.device;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * detect dynamic rendering support and keep the extension list.
+ */
+
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
@@ -14,6 +20,7 @@ import static java.util.stream.Collectors.toSet;
 import static org.lwjgl.glfw.GLFW.GLFW_PLATFORM_WIN32;
 import static org.lwjgl.glfw.GLFW.glfwGetPlatform;
 import static org.lwjgl.system.MemoryStack.stackPush;
+import static org.lwjgl.vulkan.KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.vkEnumerateInstanceVersion;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2;
@@ -35,6 +42,8 @@ public class Device {
 //    public final boolean vulkan13Support;
 
     private boolean drawIndirectSupported;
+    private boolean dynamicRenderingSupported;
+    private Set<String> extensionNames = Set.of();
 
     public Device(VkPhysicalDevice device) {
         this.physicalDevice = device;
@@ -67,6 +76,42 @@ public class Device {
         if (this.availableFeatures.features().multiDrawIndirect() && this.availableFeatures11.shaderDrawParameters())
             this.drawIndirectSupported = true;
 
+        this.extensionNames = queryExtensionNames();
+
+        // The feature struct may only be chained when the extension is exposed.
+        if (this.extensionNames.contains(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
+            try (MemoryStack stack = stackPush()) {
+                VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRendering = VkPhysicalDeviceDynamicRenderingFeaturesKHR.calloc(stack);
+                dynamicRendering.sType$Default();
+
+                VkPhysicalDeviceFeatures2 features2 = VkPhysicalDeviceFeatures2.calloc(stack);
+                features2.sType$Default();
+                features2.pNext(dynamicRendering);
+
+                vkGetPhysicalDeviceFeatures2(this.physicalDevice, features2);
+                this.dynamicRenderingSupported = dynamicRendering.dynamicRendering();
+            }
+        }
+    }
+
+    private Set<String> queryExtensionNames() {
+        try (MemoryStack stack = stackPush()) {
+            IntBuffer extensionCount = stack.ints(0);
+            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
+
+            VkExtensionProperties.Buffer available = VkExtensionProperties.malloc(extensionCount.get(0), stack);
+            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, available);
+
+            return available.stream().map(VkExtensionProperties::extensionNameString).collect(toSet());
+        }
+    }
+
+    public Set<String> getExtensionNames() {
+        return extensionNames;
+    }
+
+    public boolean isDynamicRenderingSupported() {
+        return dynamicRenderingSupported;
     }
 
     private static String decodeVendor(int i) {

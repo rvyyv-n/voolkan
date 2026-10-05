@@ -1,5 +1,12 @@
 package net.vulkanmod.vulkan.device;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * choose the render path after device pick; enable dynamic rendering only when used.
+ */
+
+import dev.voolkan.compat.RenderPath;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.VRenderSystem;
@@ -11,7 +18,9 @@ import org.lwjgl.vulkan.*;
 
 import java.nio.IntBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static java.util.stream.Collectors.toSet;
 import static net.vulkanmod.vulkan.queue.Queue.findQueueFamilies;
@@ -20,6 +29,7 @@ import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.system.MemoryStack.stackGet;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSurface.*;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
@@ -108,6 +118,8 @@ public abstract class DeviceManager {
 
             physicalDevice = DeviceManager.device.physicalDevice;
 
+            chooseRenderPath();
+
             // Get device properties
             deviceProperties = device.properties;
 
@@ -116,6 +128,16 @@ public abstract class DeviceManager {
 
             surfaceProperties = querySurfaceProperties(physicalDevice, stack);
         }
+    }
+
+    private static void chooseRenderPath() {
+        RenderPath.Choice choice = RenderPath.resolve(
+                Initializer.CONFIG.renderPath,
+                System.getProperty("voolkan.renderPath"),
+                device.isDynamicRenderingSupported());
+
+        Vulkan.DYNAMIC_RENDERING = choice.path() == RenderPath.DYNAMIC;
+        Initializer.LOGGER.info("Render path: {} ({})", choice.path(), choice.reason());
     }
 
     static Device autoPickDevice() {
@@ -175,7 +197,7 @@ public abstract class DeviceManager {
             deviceFeatures.sType$Default();
             deviceFeatures.features().samplerAnisotropy(device.availableFeatures.features().samplerAnisotropy());
             deviceFeatures.features().logicOp(device.availableFeatures.features().logicOp());
-            // TODO: Disable indirect draw option if unsupported.
+            // Indirect draw is gated on support in WorldRenderer and the options screen.
             deviceFeatures.features().multiDrawIndirect(device.isDrawIndirectSupported());
 
             // Must not set line width to anything other than 1.0 if this is not supported
@@ -209,7 +231,11 @@ public abstract class DeviceManager {
 //                deviceVulkan13Features.pNext(deviceVulkan11Features.address());
             }
 
-            createInfo.ppEnabledExtensionNames(asPointerBuffer(Vulkan.REQUIRED_EXTENSION));
+            Set<String> enabledExtensions = new HashSet<>(Vulkan.REQUIRED_EXTENSION);
+            if (Vulkan.DYNAMIC_RENDERING) {
+                enabledExtensions.add(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+            }
+            createInfo.ppEnabledExtensionNames(asPointerBuffer(enabledExtensions));
 
 //            Configuration.DEBUG_FUNCTIONS.set(true);
 

@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * gate indirect draw on device support.
+ */
+
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -42,6 +48,7 @@ import net.vulkanmod.render.profiling.BuildTimeProfiler;
 import net.vulkanmod.render.profiling.Profiler;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.Renderer;
+import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.memory.buffer.Buffer;
 import net.vulkanmod.vulkan.memory.buffer.IndexBuffer;
@@ -325,7 +332,7 @@ public class WorldRenderer {
         Zone zone = mcProfiler.zone(() -> "render_" + renderType);
 
         final boolean isTranslucent = renderType == TerrainRenderType.TRANSLUCENT;
-        final boolean indirectDraw = Initializer.CONFIG.indirectDraw;
+        final boolean indirectDraw = Initializer.CONFIG.indirectDraw && DeviceManager.device.isDrawIndirectSupported();
 
         if (!isTranslucent) {
             GlStateManager._disableBlend();

@@ -1,5 +1,11 @@
 package net.vulkanmod.config;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add the renderPath option.
+ */
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.vulkanmod.config.video.VideoModeSet;
@@ -17,6 +23,9 @@ public class Config {
 
     public int advCulling = 2;
     public boolean indirectDraw = true;
+
+    /** "auto", "dynamic" or "legacy". See dev.voolkan.compat.RenderPath. */
+    public String renderPath = "auto";
 
     public boolean uniqueOpaqueLayer = true;
     public boolean entityCulling = true;

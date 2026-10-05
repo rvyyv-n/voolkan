@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime.
+ */
+
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -34,7 +40,6 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
 import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
 import static org.lwjgl.vulkan.KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK12.VK_API_VERSION_1_2;
@@ -44,7 +49,11 @@ public class Vulkan {
         public static final boolean ENABLE_VALIDATION_LAYERS = false;
 //    public static final boolean ENABLE_VALIDATION_LAYERS = true;
 
-    public static final boolean DYNAMIC_RENDERING = true;
+    /**
+     * Set once by {@link DeviceManager} after the physical device is picked; read-only afterwards.
+     * True = dynamic rendering, false = legacy VkRenderPass path.
+     */
+    public static boolean DYNAMIC_RENDERING = false;
 
     public static final Set<String> VALIDATION_LAYERS;
 
@@ -63,13 +72,8 @@ public class Vulkan {
     public static final Set<String> REQUIRED_EXTENSION = getRequiredExtensionSet();
 
     private static Set<String> getRequiredExtensionSet() {
-        ArrayList<String> extensions = new ArrayList<>(List.of(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
-
-        if (DYNAMIC_RENDERING) {
-            extensions.add(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-        }
-
-        return new HashSet<>(extensions);
+        // Dynamic rendering is optional: DeviceManager enables it when the chosen render path needs it.
+        return new HashSet<>(List.of(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
     }
 
     private static int debugCallback(int messageSeverity, int messageType, long pCallbackData, long pUserData) {

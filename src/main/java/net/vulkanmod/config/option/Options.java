@@ -1,5 +1,11 @@
 package net.vulkanmod.config.option;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * disable the indirect draw option when the device does not support it.
+ */
+
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
@@ -406,6 +412,7 @@ public abstract class Options {
                                 v -> config.indirectDraw = v,
                                 () -> config.indirectDraw)
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.indirectDraw.tooltip"))
+                                .setActivationFn(() -> DeviceManager.device.isDrawIndirectSupported())
                                 .setImpact(PerformanceImpact.HIGH)
                 })
         };
