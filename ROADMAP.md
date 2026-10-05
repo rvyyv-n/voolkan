@@ -29,7 +29,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 
 ## Phase 3: Speed and input delay
 - [x] 3.1 Frame queue 1, low-latency mode, swapchain image-count option (verified on lavapipe only; effect on the R7 needs PresentMon, see 3.3)
-- [ ] 3.2 Save pipeline cache to disk
+- [x] 3.2 Save pipeline cache to disk (`run/voolkan/pipeline_cache.bin`; header + checksum validated; lavapipe returns a header-only blob so the load path is covered by a jshell check, real load needs the R7)
 - [ ] 3.3 PresentMon captures on the R7 + summary
 
 ## Phase 4: Minimal GUI (SKIP FOR NOW)

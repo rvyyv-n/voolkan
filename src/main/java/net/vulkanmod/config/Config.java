@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency and swapChainImages options.
+ * add the renderPath, lowLatency, swapChainImages and pipelineCache options.
  */
 
 import com.google.gson.Gson;
@@ -26,6 +26,9 @@ public class Config {
 
     /** "auto", "dynamic" or "legacy". See dev.voolkan.compat.RenderPath. */
     public String renderPath = "auto";
+
+    /** Save the Vulkan pipeline cache to disk and reload it at startup. */
+    public boolean pipelineCache = true;
 
     public boolean uniqueOpaqueLayer = true;
     public boolean entityCulling = true;
