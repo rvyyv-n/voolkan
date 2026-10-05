@@ -25,7 +25,6 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 2: Stability
 - [ ] 2.1 Port upstream fix PRs #827, #798, #872, #870
 - [ ] 2.2 Per-mip image layout tracking; implement `copyTextureToTexture` and real fences
-- [ ] 2.3 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing
 
 ## Phase 3: Speed and input delay
 - [ ] 3.1 Frame queue 1, low-latency mode, swapchain image-count option
@@ -35,6 +34,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 4: Minimal GUI (SKIP FOR NOW)
 - [ ] 4.1 "Compatibility" block on the Video page
 - [ ] 4.2 Language-file completeness check
+- [ ] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; exact values per preset to be decided
 
 ## Phase 5: Release (private first)
 - [ ] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices, third-party notices, README credit, Modrinth draft with source link
@@ -43,3 +43,6 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 6: Other Minecraft versions
 - [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25)
 - [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU
+
+## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
+- [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
