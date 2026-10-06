@@ -1,74 +1,35 @@
-﻿# voolkan
+# voolkan
 
 <img src="./icon.png" width="125" alt="voolkan logo"/>
 
-voolkan is an **unofficial fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral**, licensed under **LGPL-3.0** (see `LICENSE`). It is not affiliated with or endorsed by the VulkanMod project.
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-brightgreen.svg)](https://minecraft.net/)
+[![Fabric](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
+[![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-red.svg)](https://www.vulkan.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-informational.svg)](https://www.microsoft.com/windows)
+[![License](https://img.shields.io/badge/License-LGPL_3.0-orange.svg)](./LICENSE)
 
-Goal: a legacy-hardware-friendly build for Minecraft 1.21.11 (aimed at GPUs without `VK_KHR_dynamic_rendering`, e.g. AMD Radeon R7 350), with stability and low-latency work, for a clean competitive sword PvP setup. Windows only. Private until stable.
+**voolkan** is a high-performance Vulkan-based rendering engine for Minecraft 1.21.11.
 
-All original code is copyright its VulkanMod authors; modified files carry a modification notice (see `docs/conventions.md`). Project docs live in `docs/` (start at `docs/README.md`); the plan is in `ROADMAP.md`.
+It replaces the default OpenGL pipeline with Vulkan to reduce CPU overhead, improve GPU utilization, and deliver smoother frame pacing and lower input latency. Built with broad hardware compatibility in mind, voolkan provides an automatic fallback render pass pipeline for older GPUs lacking dynamic rendering support (`VK_KHR_dynamic_rendering`), such as AMD GCN 1 / Radeon R7 350 graphics cards.
 
-## Credits and licences
-
-voolkan is LGPL-3.0 (`LICENSE`, `COPYING`). It is built on **VulkanMod by xCollateral and contributors**, and bundles Fabric API modules and LWJGL. Full credits, third-party licences and the list of bundled libraries: `THIRD_PARTY_NOTICES.md` and `licenses/`.
+**Tags:** `minecraft`, `fabric-mod`, `vulkan`, `renderer`, `optimization`, `low-latency`, `legacy-gpu`, `windows`
 
 ---
-
-The text below is the upstream VulkanMod README, kept for reference.
-# <a href="https://github.com/xCollateral/VulkanMod"> <img src="./src/main/resources/assets/vulkanmod/vlogo.png" width="125"/> </a>
-
-# VulkanMod
-
-This is a Minecraft mod that introduces a brand new **Vulkan** based voxel rendering engine to **Minecraft** in order to both replace the default OpenGL renderer and bring performance improvements and new features.
-The Vulkan API allows for modern device capabilities that are not possible, or not widely supported, on the default OpenGL renderer.
-
-<p style="text-align: left;">
-    <a href="https://ko-fi.com/V7V7CHHJV"><img height="56" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/donate/kofi-singular-alt_vector.svg" alt='Support me on ko-fi.com' style="margin: 5px 5px;"></a>
-    <a href="https://discord.gg/FVXg7AYR2Q"><img height="56" src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/social/discord-plural_vector.svg" alt='Discord' style="margin: 5px 5px;"></a>
-</p>
 
 ## Features
 
-Some of the main VulkanMod's features are:
-- Reduced CPU and GPU Overhead
-- Terrain rendering optimizations, ranging from optimized draw loop to section culling
-- Chunk building optimizations
-- Entity rendering optimizations
-- Native Wayland support (Linux specific)
-- Windowed fullscreen mode
+- **Vulkan Rendering Pipeline:** Replaces OpenGL with Vulkan for reduced driver overhead, faster chunk meshing, and efficient draw calls.
+- **Legacy GPU Fallback:** Automatic detection and support for `VkRenderPass` pipelines on hardware without dynamic rendering.
+- **Latency & Frame Pacing:** Single-frame queue option, configurable swapchain buffers, and persistent disk-cached pipeline compilation.
+- **Preset Controls:** Built-in video settings presets (Performance, Balanced, Quality) with hardware capability logging.
 
-## Installation
+## Documentation
 
-### Download Links
+- **Build & Development Setup:** [`docs/dev-setup.md`](docs/dev-setup.md)
+- **Project Roadmap & Status:** [`ROADMAP.md`](ROADMAP.md)
+- **Documentation Index:** [`docs/README.md`](docs/README.md)
+- **Code Conventions & Contributing:** [`docs/conventions.md`](docs/conventions.md)
 
-<p style="text-align: left;">
-    <a href="https://modrinth.com/mod/vulkanmod/versions"><img src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/available/modrinth_vector.svg" alt="Modrinth" style="margin: 5px 5px;"></a>
-    <a href="https://www.curseforge.com/minecraft/mc-mods/vulkanmod"><img src="https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/available/curseforge_vector.svg" alt="Curseforge" style="margin: 5px 5px;"></a>
-</p>
+## License and Credits
 
-### Install guide:
-![fabric](https://cdn.jsdelivr.net/npm/@intergrav/devins-badges@3/assets/cozy/supported/fabric_vector.svg)
-
-- Install the [fabric modloader](https://fabricmc.net).
-- Download and put the `VulkanMod.jar` file into `.minecraft/mods`
-
-## What about shaders?
-
-### If you want to use shaders with VulkanMod, then check out [**Beryl**](https://modrinth.com/mod/beryl)
-
-<a href="https://modrinth.com/mod/beryl"> <img src="https://cdn.modrinth.com/data/rYeGeBaO/4095a8bee8b54b4f88692e63f0202b45a3106c6b_96.webp" width="56" alt="beryl" style="margin: 5px 5px;"/> </a>
-
-
-## Issues
-
-Remember to check the [Wiki](https://github.com/xCollateral/VulkanMod/wiki) we wrote before asking for support!
-
-If you found an issue that hasn't already been reported, then open a new instance in the [issue tab](https://github.com/xCollateral/VulkanMod/issues)
-
-
-
----
-
-Developing this mod requires huge amounts of time and effort. If you want to help me continue developing this project, consider buying me a coffee.
-
-<a href="https://ko-fi.com/V7V7CHHJV"><img src="https://storage.ko-fi.com/cdn/brandasset/v2/support_me_on_kofi_dark.png" width=260 alt='Support me on ko-fi.com'></a>
+voolkan is licensed under **LGPL-3.0** (see [`LICENSE`](LICENSE)). It is an independent fork based on [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral and contributors, and bundles Fabric API modules and LWJGL. Full third-party notices and licenses are documented in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/).
