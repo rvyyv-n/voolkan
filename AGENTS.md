@@ -24,7 +24,7 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's o
 ## Git rules
 - Commit locally with the repo's configured identity. One commit per logical step.
 - Push only your own work branch (never `main`). Changes reach `main` through a pull request: open it against `main` when the work is finished, with a short description and the test results, and let the owner merge it (or merge when told to). Don't create GitHub repos or releases, and don't push tags, unless the owner says so.
-- **No AI attribution** anywhere: no Co-Authored-By, no "generated with".
+- **No AI attribution** anywhere: no Co-Authored-By, no "generated with", no assistant badges or mentions in commits, PRs or files. Commits are authored by `rvyyv-n` only.
 - Never commit or push directly to `main`; work on `feat/*`, `fix/*`, `setup/*` branches (`pass-N` for build passes).
 - Ask before anything destructive outside your worktree.
 
@@ -32,9 +32,13 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's o
 Two chats must never change code in the same folder at once. Before the first edit, commit or branch switch, check `t3_worktree_status` / `t3_thread_list`; if another chat is active in the same folder, move to your own worktree (`t3_worktree_handoff`, `baseRef` = current branch, `startFromOrigin: false`). Dev servers/ports of other chats are not yours. Merge back into the branch you came from, then remove the worktree.
 
 ## Model guidance
-- **Opus**: rendering correctness, synchronization, memory, anything that decides what ships (versions, merges, tags).
-- **Sonnet 5.5** (medium effort or higher): scripts, docs, summaries, cherry-picks. Opus reviews before anything builds on them.
-- Don't use smaller models or lower effort than that for helpers.
+- **Opus**: rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags). 1-3 turns per task; no file reading or test-fix loops.
+- **Sonnet 5.5** (medium effort or higher): extended build passes, scripts, docs, summaries, cherry-picks. Opus reviews before anything builds on them.
+- **Gemini Flash**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), fast debug loops, CI.
+- Don't use smaller models or lower effort than Sonnet 5.5 medium for helpers.
+- Retire a thread at 8 turns or 150k tokens: commit, then fork from a checkpoint (`t3_thread_fork`) or start fresh. Build passes run in a worktree (`pass-N`).
+- Fork checkpoints replace auto-delegation loops. Don't chain `delegate_task` between models.
+- Never leave `runClient`, a Gradle daemon you started, or any watcher running at the end of a turn.
 
 ## Licence rules
 - voolkan is LGPL-3.0. Keep `LICENSE` and upstream copyright notices.
