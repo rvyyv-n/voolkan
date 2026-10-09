@@ -1,4 +1,4 @@
-# Settings UI overhaul (task 4.5): scope proposal, NOT started
+# Settings UI overhaul (task `settings-ui`): scope proposal, NOT started
 
 Waiting for the owner's decision. Nothing here is implemented.
 

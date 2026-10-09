@@ -43,4 +43,4 @@ Check first: does the new base still match an official release jar? Does it keep
 
 - Do not copy code from Sodium (licence not LGPL-compatible) or from repos without a licence (e.g. Roti-Poulet/VulkanExtended).
 - Do not copy Static-VulkanMod's `initialLayout=UNDEFINED` change: it wipes `LOAD` passes.
-- Do not push to upstream or open PRs without the owner's go-ahead (Phase 5.2 plans an upstream PR later).
+- Do not push to upstream or open PRs without the owner's go-ahead (`upstream-pr` plans an upstream PR later).

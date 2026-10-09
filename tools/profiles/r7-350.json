@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.khronos.org/vulkan/profiles-0.8.2-276.json#",
-  "_comment": "PROVISIONAL. Hand-written from the known R7 350 facts (Vulkan 1.2.178, no VK_KHR_dynamic_rendering, no VK_KHR_synchronization2). Rebuild from the owner's vulkaninfo (docs/gpu/r7-350/, task 0.6) before relying on feature/limit values. Extensions are hidden via khronos_profiles.exclude_device_extensions in the run scripts.",
+  "_comment": "PROVISIONAL. Hand-written from the known R7 350 facts (Vulkan 1.2.178, no VK_KHR_dynamic_rendering, no VK_KHR_synchronization2). Rebuild from the owner's vulkaninfo (docs/gpu/r7-350/, task `vulkaninfo`) before relying on feature/limit values. Extensions are hidden via khronos_profiles.exclude_device_extensions in the run scripts.",
   "capabilities": {
     "baseline": {
       "properties": {

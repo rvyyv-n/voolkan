@@ -1,4 +1,4 @@
-# Upstream PR plan (ROADMAP 5.2, plan only)
+# Upstream PR plan (ROADMAP `upstream-pr`, plan only)
 
 Nothing here has been opened or sent. Opening any PR needs the owner's go-ahead. Written against voolkan `pass-5` and upstream `dev` as fetched on 2026-10-05.
 
@@ -33,11 +33,11 @@ Upstream fix PRs we already reimplemented from their descriptions (#827, #798, #
 
 - **Upstream moved.** `upstream/dev` has 10 commits past our base, including "Refactor PipelineState", "Refactor instance e device classes" and "Implement multi image view formats". 13 Java files we changed were also changed upstream (`Device`, `DeviceManager`, `Vulkan`, `Renderer`, `PipelineState`, `GraphicsPipeline`, `Pipeline`, `SwapChain`, `VulkanImage`, `ImageUtil`, `VkCommandEncoder`, `WorldRenderer`, `ModSettingsRegistry`; `build.gradle` and `gradle.properties` too). Expect real conflicts in PRs 1, 3, 4 and 5. Run `tools\upstream-check.ps1 -TrialRebase` first to see the size of the problem.
 - **Upstream may already be fixing the same things.** Check `upstream/dev` and open issues/PRs before each PR, and do not duplicate.
-- **Hardware evidence is thin.** The legacy path is verified on lavapipe (forced legacy, R7 profile). The world, F3, fullscreen and post-effect checks on the real R7 (ROADMAP 1.7, M1) are still open. Do not send PRs 3-5 before M1; maintainers will ask whether it works on real hardware.
+- **Hardware evidence is thin.** The legacy path is verified on lavapipe (forced legacy, R7 profile). The world, F3, fullscreen and post-effect checks on the real R7 (ROADMAP `r7-checklist`, `first-world`) are still open. Do not send PRs 3-5 before `first-world`; maintainers will ask whether it works on real hardware.
 - **Maintainer appetite.** Upstream targets modern GPUs, and the legacy path adds code they must maintain. Open an issue or discussion first and offer the PR 4+5 split (detection, then legacy path), keeping the legacy path off by default on GPUs that support dynamic rendering.
 - **Attribution and licence.** Our commits stay under LGPL-3.0, compatible with upstream. Authorship follows the repo's configured identity; no AI attribution lines in commits (project rule).
 - **Maintenance cost for voolkan.** After upstream takes a PR, rebase the fork onto the new upstream so the code is not kept twice (see `docs/upstream.md`, "Move to a newer upstream base").
 
 ## Decision for the owner
 
-Whether to contact upstream at all, and whether PR 1-3 (small fixes) go first as goodwill before the render-path PRs. Suggested order: after M1, send PRs 1-2, then open an issue about PR 4+5.
+Whether to contact upstream at all, and whether PR 1-3 (small fixes) go first as goodwill before the render-path PRs. Suggested order: after `first-world`, send PRs 1-2, then open an issue about PR 4+5.

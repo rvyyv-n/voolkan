@@ -1,7 +1,10 @@
 # voolkan: agent rules
 
+## Start here
+Read `STATUS.md` (open work, one page) first. Do not read `ROADMAP.md` or `docs/` in full: grep ROADMAP.md by tag, and use the map in `docs/README.md` to open only the one doc you need. Keep `STATUS.md` current when an item opens, closes or changes owner.
+
 ## Goal
-voolkan is an unofficial, private (for now) **LGPL-3.0** fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral. It makes Minecraft **1.21.11** run on an **AMD Radeon R7 350** (GCN1, 2 GB VRAM, Windows driver 23.11.1, Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`) by repairing VulkanMod's legacy `VkRenderPass` path, then adds stability and low-latency work. Windows only. PvP features live in a separate mod, not here. The plan is `ROADMAP.md` (phases 0-6, milestone M1 = a world renders on the R7).
+voolkan is an unofficial, private (for now) **LGPL-3.0** fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral. It makes Minecraft **1.21.11** run on an **AMD Radeon R7 350** (GCN1, 2 GB VRAM, Windows driver 23.11.1, Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`) by repairing VulkanMod's legacy `VkRenderPass` path, then adds stability and low-latency work. Windows only. PvP features live in a separate mod, not here. The plan is `ROADMAP.md` (phases 0-6, milestone `first-world` = a world renders on the R7).
 
 ## Base and upstream
 - Base = upstream `7f69043` ("Fix typo", tag `upstream-base`) + the `gradle.properties` version bump. It matches the official VulkanMod 0.6.8+1.21.11 release.

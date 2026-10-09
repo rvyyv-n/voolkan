@@ -9,19 +9,20 @@
 | `upstream-pr-plan.md` | plan for sending fixes to upstream VulkanMod (nothing opened) |
 | `presets.md` | values of the Video page Presets row |
 | `presentmon.md` | how to capture and compare frame times on the R7 |
-| `settings-ui-proposal.md` | scope proposal for the settings UI overhaul (4.5, skipped) |
+| `settings-ui-proposal.md` | scope proposal for the settings UI overhaul (`settings-ui`, parked) |
 | `line-refs.txt` | plan file:line references checked by `tools\check-linerefs.ps1` |
 | `checklist.md` | steps for a release, including the Modrinth listing |
 | `mc-26-plus.md` | notes on Minecraft 26.x (26.1 port facts, 26.2 Vulkan, OpenGL + Sodium) and the owner decisions |
 | `modrinth.md` | draft Modrinth listing (not published) |
-| `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task 0.6) |
+| `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task `vulkaninfo`) |
 
 Elsewhere in the repo:
 
 | Path | What |
 |---|---|
 | `AGENTS.md` | rules for automated agents working here |
-| `ROADMAP.md` | phases 0-7 checklist |
+| `STATUS.md` | open work only; read this first |
+| `ROADMAP.md` | phases 0-7 checklist and history; grep by tag, do not read in full |
 | `tools/` | harness scripts (`run-*.ps1`, `summarise-vk-log.ps1`, `make-test-world.ps1`), `profiles/` |
 | `tools/mesa`, `tools/bin` | downloaded tools, git-ignored |
 | `test-world/` | test-world notes; the generated world is git-ignored |

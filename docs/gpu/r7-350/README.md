@@ -1,4 +1,4 @@
-# AMD Radeon R7 350: GPU snapshot (owner task 0.6)
+# AMD Radeon R7 350: GPU snapshot (owner task `vulkaninfo`)
 
 Capture the real device capabilities so the Profiles-layer config (`tools/profiles/r7-350.json`, currently provisional) can be rebuilt from facts.
 
