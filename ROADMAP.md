@@ -2,13 +2,15 @@
 
 Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGENTS.md`, `docs/`.
 
+**Naming:** finished items keep their phase.task numbers (0.1, 2.2, ...). Open items use short tags (`first-world`, `vulkaninfo`, ...), with the old number in brackets. Read `STATUS.md` first; it lists only what is open. Look up one item with `grep -n "tag" ROADMAP.md`, do not read this whole file.
+
 ## Phase 0: Tooling and setup
 - [x] 0.1 Install the dev toolchain, record versions (`docs/dev-setup.md`)
 - [x] 0.2 Repo setup: `upstream` remote, tag `upstream-base`, base history rebuilt on `setup/phase-0` (moving `main` waits for the owner)
 - [x] 0.3 Baseline: `gradlew build` passes; `runClient` runs on lavapipe, and fails on the R7 as expected (`Unsupported extension: [VK_KHR_dynamic_rendering]`)
 - [x] 0.4 Re-verify line refs (corrections reported; plan file not edited)
-- [ ] 0.5 Test harness: scripts, profile, summariser and docs done; the owner made a world by hand (`run/saves`), `make-test-world.ps1` not used; profile is provisional until 0.6
-- [ ] 0.6 Owner: run `vulkaninfo` on the R7 and commit it to `docs/gpu/r7-350/`
+- [ ] `harness-final` (was 0.5) Test harness: scripts, profile, summariser and docs done; the owner made a world by hand (`run/saves`), `make-test-world.ps1` not used; profile is provisional until 0.6
+- [ ] `vulkaninfo` (was 0.6) Owner: run `vulkaninfo` on the R7 and commit it to `docs/gpu/r7-350/`
 - [x] 0.7 CI workflow (`.github/workflows/build.yml`; not yet run, repo not on GitHub Actions)
 - [x] 0.8 Project docs: `AGENTS.md`, `docs/upstream.md`, `docs/conventions.md`
 
@@ -19,8 +21,8 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
 - [x] 1.5 Startup capability log, readable errors, validation via system property
 - [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
-- [ ] 1.7 Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: the GPU selector problem was the lavapipe scripts hiding the real GPU via `VK_DRIVER_FILES`; on a normal run the R7 is listed and picked, and the game reaches the menu on it (legacy path). The world/F3/fullscreen/post-effect checklist on the R7 is still open
-- [ ] **M1** 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
+- [ ] `r7-checklist` (was 1.7) Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: the GPU selector problem was the lavapipe scripts hiding the real GPU via `VK_DRIVER_FILES`; on a normal run the R7 is listed and picked, and the game reaches the menu on it (legacy path). The world/F3/fullscreen/post-effect checklist on the R7 is still open
+- [ ] **`first-world`** (was M1) 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
 
 ## Phase 2: Stability
 - [x] 2.1 Port upstream fix PRs #827, #798, #872, #870 (reimplemented from the PR descriptions)
@@ -29,7 +31,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 3: Speed and input delay
 - [x] 3.1 Frame queue 1, low-latency mode, swapchain image-count option (verified on lavapipe only; effect on the R7 needs PresentMon, see 3.3)
 - [x] 3.2 Save pipeline cache to disk (`run/voolkan/pipeline_cache.bin`; header + checksum validated; lavapipe returns a header-only blob so the load path is covered by a jshell check, real load needs the R7)
-- [ ] 3.3 PresentMon captures on the R7 + summary: capture script and `docs/presentmon.md` done; **the R7 captures are for the owner**
+- [ ] `presentmon` (was 3.3) PresentMon captures on the R7 + summary: capture script and `docs/presentmon.md` done; **the R7 captures are for the owner**
 
 ## Phase 4: Minimal GUI
 (4.5 is parked, see the Parked section.)
@@ -40,18 +42,18 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 
 ## Phase 5: Release
 - [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
-- [x] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices (`tools\check-notices.ps1` clean), third-party notices, README credit, Modrinth draft (`docs/modrinth.md`, not published). Sodium-derived light code checked: it was LGPL-3.0 when VulkanMod copied it (Feb 2024), see `THIRD_PARTY_NOTICES.md`. Open: the verbatim Apache-2.0 text stays out of `licenses/` because the commit hook rejects a phrase in its wording; the URL reference stays
-- [ ] 5.2 Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
+- [x] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices (`tools\check-notices.ps1` clean), third-party notices, README credit, Modrinth draft (`docs/modrinth.md`, not published). Sodium-derived light code checked: it was LGPL-3.0 when VulkanMod copied it (Feb 2024), see `THIRD_PARTY_NOTICES.md`. Open (`apache-text`): the verbatim Apache-2.0 text stays out of `licenses/` because the commit hook rejects a phrase in its wording; the URL reference stays
+- [ ] `upstream-pr` (was 5.2) Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
 
 ## Phase 6: Other Minecraft versions
-(6.1 and 6.2 are parked, see the Parked section.)
+(`port-26-1` and `port-26-2` are parked, see the Parked section.)
 
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
-(7.1 is parked, see the Parked section.)
+(`low-vram` is parked, see the Parked section.)
 Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
 
 ## Parked (owner decision, not being worked on)
-- [ ] 4.5 Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
-- [ ] 6.1 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
-- [ ] 6.2 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
-- [ ] 7.1 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
+- [ ] `settings-ui` (was 4.5) Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
+- [ ] `port-26-1` (was 6.1) 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
+- [ ] `port-26-2` (was 6.2) 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
+- [ ] `low-vram` (was 7.1) 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)

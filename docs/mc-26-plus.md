@@ -1,4 +1,4 @@
-# Minecraft 26.x notes (ROADMAP 6.1, 6.2)
+# Minecraft 26.x notes (ROADMAP `port-26-1`, `port-26-2`)
 
 Desk research from 2026-10-05, plus one throwaway compile probe. Nothing was tested on the R7. **Unverified** marks things that could not be checked on this PC. Plans for 26.2 and later are the owner's, to be written separately.
 
@@ -18,7 +18,7 @@ Desk research from 2026-10-05, plus one throwaway compile probe. Nothing was tes
 | Mojang's new minimum requirements (reported 2026-07-21): Vulkan 1.3 capable GPU with 2 GB VRAM. OpenGL removal date: none found. | [GamingOnLinux](https://www.gamingonlinux.com/2026/07/minecraft-java-edition-system-requirements-get-bumped-up-ahead-of-vulkan-support/) |
 | Fabric meta API today: stable game versions 26.3, 26.2, 26.1.2, 26.1.1, 26.1, 1.21.11. Loader 0.19.5. | Fabric meta |
 
-For the R7 350 (Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`, see ROADMAP 0.6): vanilla 26.2 should fall back to OpenGL (**unverified**, needs the card). If Mojang removes OpenGL, the card cannot run vanilla at all.
+For the R7 350 (Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`, see ROADMAP `vulkaninfo`): vanilla 26.2 should fall back to OpenGL (**unverified**, needs the card). If Mojang removes OpenGL, the card cannot run vanilla at all.
 
 ## 2. 26.1 port facts
 
@@ -37,7 +37,7 @@ For the R7 350 (Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`, see ROADMAP 0.6):
 
 ## 4. To check later (needs the R7 or the owner)
 
-1. `vulkaninfo` on the R7 (ROADMAP 0.6): API version, `VK_KHR_dynamic_rendering`, `VK_KHR_push_descriptor`.
+1. `vulkaninfo` on the R7 (ROADMAP `vulkaninfo`): API version, `VK_KHR_dynamic_rendering`, `VK_KHR_push_descriptor`.
 2. OpenGL version string on the R7 (F3 under 1.21.11).
 3. Which backend vanilla 26.2 picks on the R7.
 4. Whether Sodium keeps an OpenGL path on 26.2+.
