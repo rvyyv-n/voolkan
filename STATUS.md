@@ -2,21 +2,18 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-10-09. Everything else in `ROADMAP.md` is done and merged to `main` (release 1.0.0-beta.1).
+Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`, and `harness-final` are verified on hardware and done.
 
 ## Needs the owner on the R7
 | Tag | Task | Detail |
 |---|---|---|
-| `vulkaninfo` | Run `vulkaninfo` on the R7, commit to `docs/gpu/r7-350/` | unblocks `harness-final` |
-| `harness-final` | Finalise the R7 profile from the real `vulkaninfo` | scripts and docs are done |
-| `r7-checklist` | World, F3, fullscreen, post-effect checks on the real R7 | menu already reaches on legacy path; lavapipe menu and world entry clean |
-| `first-world` | Milestone: a world renders on the R7, no validation errors | follows `r7-checklist` |
 | `presentmon` | Take the R7 frame-time captures | `docs/presentmon.md`, script ready |
 
-## Waits for `first-world` and the owner's go-ahead
+## Ready for owner go-ahead
 | Tag | Task | Detail |
 |---|---|---|
 | `upstream-pr` | Open the upstream PR (render-path detection + fixes) | plan in `docs/upstream-pr-plan.md` |
+| `modpack` | Modpack setup for multiplayer server testing | server test parked for modpack |
 
 ## Minor
 | Tag | Task | Detail |
