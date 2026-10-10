@@ -32,15 +32,13 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's o
 - Ask before anything destructive outside your worktree.
 
 ## One folder, one chat
-Two chats must never change code in the same folder at once. Before the first edit, commit or branch switch, check `t3_worktree_status` / `t3_thread_list`; if another chat is active in the same folder, move to your own worktree (`t3_worktree_handoff`, `baseRef` = current branch, `startFromOrigin: false`). Dev servers/ports of other chats are not yours. Merge back into the branch you came from, then remove the worktree.
+Follow the global rule. Dev servers and ports of other chats are not yours.
 
 ## Model guidance
 - **Opus**: rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags). 1-3 turns per task; no file reading or test-fix loops.
 - **Sonnet 5.5** (medium effort or higher): extended build passes, scripts, docs, summaries, cherry-picks. Opus reviews before anything builds on them.
 - **Gemini Flash**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), fast debug loops, CI.
-- Don't use smaller models or lower effort than Sonnet 5.5 medium for helpers.
-- Retire a thread at 8 turns or 150k tokens: commit, then fork from a checkpoint (`t3_thread_fork`) or start fresh. Build passes run in a worktree (`pass-N`).
-- Fork checkpoints replace auto-delegation loops. Don't chain `delegate_task` between models.
+- Thread length, worktrees and delegation follow the global rules; build passes use a `pass-N` branch.
 - Never leave `runClient`, a Gradle daemon you started, or any watcher running at the end of a turn.
 
 ## Licence rules
@@ -51,3 +49,6 @@ Two chats must never change code in the same folder at once. Before the first ed
 
 ## Housekeeping
 Large downloads, logs and run folders are git-ignored (`logs/`, `run/`, `tools/mesa/`, `tools/bin/`, `test-world/*/`). Lavapipe is never registered system-wide; scripts use `VK_DRIVER_FILES` per process.
+
+## Verify
+For a test handoff, run `.\gradlew build` from the repo root with the JDK 21 `JAVA_HOME` above. Do not run the game or the validation scripts.
