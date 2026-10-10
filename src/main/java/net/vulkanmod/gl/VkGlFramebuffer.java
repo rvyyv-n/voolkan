@@ -29,8 +29,8 @@ public class VkGlFramebuffer {
 
         if (begunRendering) {
             Framebuffer framebuffer = glFramebuffer.framebuffer;
-            int viewWidth = framebuffer.getWidth();
-            int viewHeight = framebuffer.getHeight();
+            int viewWidth = framebuffer.getLevelWidth();
+            int viewHeight = framebuffer.getLevelHeight();
 
             Renderer.setInvertedViewport(0, 0, viewWidth, viewHeight);
             Renderer.setScissor(0, 0, viewWidth, viewHeight);

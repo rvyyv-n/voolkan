@@ -19,6 +19,7 @@ import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
@@ -142,7 +143,7 @@ public class VkCommandEncoder implements CommandEncoder {
 
                 GlStateManager._viewport(0, 0, colorAttachmentView.getWidth(0), colorAttachmentView.getHeight(0));
                 this.lastPipeline = null;
-                return new VkRenderPass(this, depthTexture != null, true);
+                return new VkRenderPass(this, depthTexture != null, false);
             }
         }
 
@@ -756,12 +757,14 @@ public class VkCommandEncoder implements CommandEncoder {
                     }
                 }
 
-                if (renderPass.vertexBuffers[0] == null) {
-                    throw new IllegalStateException("Missing vertex buffer at slot 0");
-                }
+                if (renderPass.pipeline.getVertexFormat() != DefaultVertexFormat.EMPTY) {
+                    if (renderPass.vertexBuffers[0] == null) {
+                        throw new IllegalStateException("Missing vertex buffer at slot 0");
+                    }
 
-                if (renderPass.vertexBuffers[0].isClosed()) {
-                    throw new IllegalStateException("Vertex buffer at slot 0 has been closed!");
+                    if (renderPass.vertexBuffers[0].isClosed()) {
+                        throw new IllegalStateException("Vertex buffer at slot 0 has been closed!");
+                    }
                 }
             }
 
@@ -964,6 +967,8 @@ public class VkCommandEncoder implements CommandEncoder {
             Renderer.getInstance().endRenderPass();
         }
 
+        this.lastPipeline = null;
+        this.lastProgram = null;
         this.inRenderPass = false;
     }
 

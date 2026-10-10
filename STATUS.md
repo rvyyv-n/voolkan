@@ -4,16 +4,16 @@ Read this file first. It is the short list; `ROADMAP.md` is the full history, so
 
 Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`, and `harness-final` are verified on hardware and done.
 
-## Needs the owner on the R7
+## In Progress
 | Tag | Task | Detail |
 |---|---|---|
-| `presentmon` | Take the R7 frame-time captures | `docs/presentmon.md`, script ready |
+| `modpack` | Modpack setup for multiplayer server testing | In progress in thread [Manual Testing](t3-thread://v1/mcp:fb53c916-7ccf-4952-9aae-ed1d03b11ed1:fork); populating 1.21.11 Modrinth profile with voolkan + compatible PvP & optimization mods |
 
-## Ready for owner go-ahead
+## Skipped for later
 | Tag | Task | Detail |
 |---|---|---|
-| `upstream-pr` | Open the upstream PR (render-path detection + fixes) | plan in `docs/upstream-pr-plan.md` |
-| `modpack` | Modpack setup for multiplayer server testing | server test parked for modpack |
+| `presentmon` | Take the R7 frame-time captures | `docs/presentmon.md`, script ready; skipped for later |
+| `upstream-pr` | Open the upstream PR (render-path detection + fixes) | plan in `docs/upstream-pr-plan.md`; skipped for later |
 
 ## Minor
 | Tag | Task | Detail |
