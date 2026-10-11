@@ -21,6 +21,10 @@ Save into this folder:
 
 Then commit them. Then rebuild the profile: `vkconfig` → Profiles, or `vulkaninfoSDK --json` → convert with the SDK's `vkprofiles.exe`.
 
-## Already observed (2026-10-05, partial)
+## Observed capabilities (2026-10-10)
 
-From `vulkaninfo --summary` on this machine: `AMD Radeon R7 200 Series`, apiVersion 1.2.178, driver 23.11.1 (AMD proprietary). `VK_KHR_dynamic_rendering` is absent (matches the crash on the base). Whether the device itself lacks `VK_KHR_synchronization2` is not yet confirmed: the SDK's `vulkaninfo` lists it only under the SDK's emulation layer, so check the "Device Extensions" section of the captured JSON.
+Captured on the physical AMD Radeon R7 350 (`AMD Radeon R7 200 Series`, deviceID `0x6610`, GCN 1) with AMD proprietary driver 23.11.1 (driverVersion `2.0.188`, apiVersion `1.2.178`):
+
+- `VK_KHR_dynamic_rendering`: **Absent** from device extensions. Confirms the legacy `VkRenderPass` path is required.
+- `VK_KHR_synchronization2`: **Present** (revision 1) directly in device extensions, confirmed by both SDK and driver tools.
+

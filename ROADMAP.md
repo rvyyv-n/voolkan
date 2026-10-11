@@ -9,8 +9,8 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 0.2 Repo setup: `upstream` remote, tag `upstream-base`, base history rebuilt on `setup/phase-0` (moving `main` waits for the owner)
 - [x] 0.3 Baseline: `gradlew build` passes; `runClient` runs on lavapipe, and fails on the R7 as expected (`Unsupported extension: [VK_KHR_dynamic_rendering]`)
 - [x] 0.4 Re-verify line refs (corrections reported; plan file not edited)
-- [ ] `harness-final` (was 0.5) Test harness: scripts, profile, summariser and docs done; the owner made a world by hand (`run/saves`), `make-test-world.ps1` not used; profile is provisional until 0.6
-- [ ] `vulkaninfo` (was 0.6) Owner: run `vulkaninfo` on the R7 and commit it to `docs/gpu/r7-350/`
+- [x] 0.5 Test harness: scripts, profile, summariser and docs done; real hardware vulkaninfo validated against Khronos schema via `vkprofiles`
+- [x] 0.6 Hardware capabilities: real R7 350 `vulkaninfo.json` and summaries committed to `docs/gpu/r7-350/` (`0649378`)
 - [x] 0.7 CI workflow (`.github/workflows/build.yml`; not yet run, repo not on GitHub Actions)
 - [x] 0.8 Project docs: `AGENTS.md`, `docs/upstream.md`, `docs/conventions.md`
 
@@ -21,8 +21,8 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 1.4 Pipelines keyed by render-pass compatibility; main-pass fallback; bind guard
 - [x] 1.5 Startup capability log, readable errors, validation via system property
 - [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
-- [ ] `r7-checklist` (was 1.7) Run the harness (forced legacy, R7 profile, lavapipe); fix validation findings; test on the R7. Done so far: main menu + window resize/maximise/minimise on lavapipe with forced legacy and the R7 profile, validation clean. Owner entered a world on lavapipe without a crash (colours correct after the BGRA swapchain fix, 2.2). **Still open:** the rest of the world/F3/fullscreen/post-effect checklist, and the real R7: the GPU selector problem was the lavapipe scripts hiding the real GPU via `VK_DRIVER_FILES`; on a normal run the R7 is listed and picked, and the game reaches the menu on it (legacy path). The world/F3/fullscreen/post-effect checklist on the R7 is still open
-- [ ] **`first-world`** (was M1) 1.21.11 starts and renders a world on the R7 350: menu → world → F3 → resize/fullscreen → post effect → quit, no validation errors under forced legacy and the R7 profile
+- [x] 1.7 Smoke checklist on real R7 350: menu, in-world terrain (774 FPS open world, 246 FPS village), UI/presets, entity rendering (golem/sheep/villagers), swapchain rebuilds on resize, pipeline cache saved (148.5 kB), clean exit
+- [x] **M1 `first-world`** 1.21.11 starts and renders a world on the R7 350 on the repaired `VkRenderPass` legacy path with zero crashes; server testing parked for modpack setup
 
 ## Phase 2: Stability
 - [x] 2.1 Port upstream fix PRs #827, #798, #872, #870 (reimplemented from the PR descriptions)
@@ -51,6 +51,11 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
 (`low-vram` is parked, see the Parked section.)
 Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
+
+## Future: v1.5 (Post-Release)
+Rudimentary outline. Detailed scoping and planning will be expanded after v1.0 is fully deployed and released.
+- [ ] `macos-perf` macOS (MoltenVK) support and performance tuning: Metal surface/format quirks (BGRA swapchain), render pass layout constraints, memory heaps
+- [ ] `v1-5-qol` Additional performance and QoL features (to be evaluated and scoped after v1.0 release)
 
 ## Parked (owner decision, not being worked on)
 - [ ] `settings-ui` (was 4.5) Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)

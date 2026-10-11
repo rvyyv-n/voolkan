@@ -2,21 +2,18 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-10-09. Everything else in `ROADMAP.md` is done and merged to `main` (release 1.0.0-beta.1).
+Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`, and `harness-final` are verified on hardware and done.
 
-## Needs the owner on the R7
+## In Progress
 | Tag | Task | Detail |
 |---|---|---|
-| `vulkaninfo` | Run `vulkaninfo` on the R7, commit to `docs/gpu/r7-350/` | unblocks `harness-final` |
-| `harness-final` | Finalise the R7 profile from the real `vulkaninfo` | scripts and docs are done |
-| `r7-checklist` | World, F3, fullscreen, post-effect checks on the real R7 | menu already reaches on legacy path; lavapipe menu and world entry clean |
-| `first-world` | Milestone: a world renders on the R7, no validation errors | follows `r7-checklist` |
-| `presentmon` | Take the R7 frame-time captures | `docs/presentmon.md`, script ready |
+| `modpack` | Modpack setup for multiplayer server testing | In progress in thread [Manual Testing](t3-thread://v1/mcp:fb53c916-7ccf-4952-9aae-ed1d03b11ed1:fork); populating 1.21.11 Modrinth profile with voolkan + compatible PvP & optimization mods |
 
-## Waits for `first-world` and the owner's go-ahead
+## Skipped for later
 | Tag | Task | Detail |
 |---|---|---|
-| `upstream-pr` | Open the upstream PR (render-path detection + fixes) | plan in `docs/upstream-pr-plan.md` |
+| `presentmon` | Take the R7 frame-time captures | `docs/presentmon.md`, script ready; skipped for later |
+| `upstream-pr` | Open the upstream PR (render-path detection + fixes) | plan in `docs/upstream-pr-plan.md`; skipped for later |
 
 ## Minor
 | Tag | Task | Detail |
@@ -30,6 +27,12 @@ Last updated: 2026-10-09. Everything else in `ROADMAP.md` is done and merged to 
 | `port-26-1` | 26.1 port, in the release after the first | `docs/mc-26-plus.md` |
 | `port-26-2` | 26.2 and later, waits for an owner plan | `docs/mc-26-plus.md` |
 | `low-vram` | 2 GB VRAM handling, only if the R7 shows memory problems | not started |
+
+## Future (v1.5)
+| Tag | Task | Detail |
+|---|---|---|
+| `macos-perf` | macOS (MoltenVK) support & tuning | Rudimentary outline in `ROADMAP.md`; plan after v1.0 release |
+| `v1-5-qol` | Candidate performance & QoL features | To be scoped and evaluated after v1.0 release |
 
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 5.2 `upstream-pr`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`, 7.1 `low-vram`.

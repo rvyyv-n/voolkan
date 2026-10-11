@@ -566,6 +566,8 @@ public class Renderer {
 
         this.boundRenderPass = null;
         this.boundFramebuffer = null;
+        this.boundPipelineHandle = 0;
+        this.boundPipeline = null;
 
         VkGlFramebuffer.resetBoundFramebuffer();
     }
@@ -586,9 +588,11 @@ public class Renderer {
 
             this.boundFramebuffer = framebuffer;
             this.boundRenderPass = renderPass;
+            this.boundPipelineHandle = 0;
+            this.boundPipeline = null;
 
-            Renderer.setViewportState(0, 0, framebuffer.getWidth(), framebuffer.getHeight());
-            Renderer.setScissor(0, 0, framebuffer.getWidth(), framebuffer.getHeight());
+            Renderer.setViewportState(0, 0, framebuffer.getLevelWidth(), framebuffer.getLevelHeight());
+            Renderer.setScissor(0, 0, framebuffer.getLevelWidth(), framebuffer.getLevelHeight());
         }
 
         return true;
@@ -725,6 +729,11 @@ public class Renderer {
 
         PipelineState currentState = PipelineState.getCurrentPipelineState(boundRenderPass);
         final long handle = pipeline.getHandle(currentState);
+
+        if (handle == 0) {
+            Initializer.LOGGER.error("Failed to get graphics pipeline handle for " + pipeline.name);
+            return;
+        }
 
         if (boundPipelineHandle == handle) {
             return;

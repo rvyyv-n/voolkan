@@ -323,6 +323,10 @@ public class WorldRenderer {
         this.onAllChangedCallbacks.clear();
     }
 
+    /**
+     * Renders a terrain section layer. When uniqueOpaqueLayer is disabled, LevelRendererMixin invokes
+     * SOLID before CUTOUT so solid blocks populate the depth buffer for early-Z fast reject.
+     */
     public void renderSectionLayer(TerrainRenderType renderType, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projection) {
         Renderer.getInstance().getMainPass().rebindMainTarget();
 
