@@ -22,7 +22,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 1.5 Startup capability log, readable errors, validation via system property
 - [x] 1.6 Disable/repoint `UpdateChecker`; minimal rename (mod id `voolkan`, `provides vulkanmod`, icon, sources)
 - [x] 1.7 Smoke checklist on real R7 350: menu, in-world terrain (774 FPS open world, 246 FPS village), UI/presets, entity rendering (golem/sheep/villagers), swapchain rebuilds on resize, pipeline cache saved (148.5 kB), clean exit
-- [x] **M1 `first-world`** 1.21.11 starts and renders a world on the R7 350 on the repaired `VkRenderPass` legacy path with zero crashes; server testing parked for modpack setup
+- [x] **M1 `first-world`** 1.21.11 starts and renders a world on the R7 350 on the repaired `VkRenderPass` legacy path with zero crashes; extended hour-long competitive multiplayer/PvP server session verified with smooth performance and consistent frame pacing
 
 ## Phase 2: Stability
 - [x] 2.1 Port upstream fix PRs #827, #798, #872, #870 (reimplemented from the PR descriptions)
@@ -35,7 +35,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 
 ## Phase 4: Minimal GUI
 (4.5 is parked, see the Parked section.)
-- [x] 4.1 "Compatibility" block on the Video page
+- [x] 4.1 \"Compatibility\" block on the Video page
 - [x] 4.2 Language-file completeness check
 - [x] 4.3 Presets button on the Video page: Performance (everything at the minimum, for PvP), Balanced, Quality; Preset row done (Performance also maxes the refresh rate); values in `docs/presets.md`
 - [x] 4.4 Branding: replace the VulkanMod logo and name in the UI (settings screen header, window and mod list text) with the voolkan logo and name; keep upstream credit in the About text and README
@@ -44,6 +44,7 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 - [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
 - [x] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices (`tools\check-notices.ps1` clean), third-party notices, README credit, Modrinth draft (`docs/modrinth.md`, not published). Sodium-derived light code checked: it was LGPL-3.0 when VulkanMod copied it (Feb 2024), see `THIRD_PARTY_NOTICES.md`. Open (`apache-text`): the verbatim Apache-2.0 text stays out of `licenses/` because the commit hook rejects a phrase in its wording; the URL reference stays
 - [ ] `upstream-pr` (was 5.2) Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
+- [x] 5.3 Full Release 1.0.0 (`1.0.0+1.21.11`): final distribution build, tag, modpack `.mrpack` export with zero saved credentials, and Modrinth listing ready
 
 ## Phase 6: Other Minecraft versions
 (`port-26-1` and `port-26-2` are parked, see the Parked section.)

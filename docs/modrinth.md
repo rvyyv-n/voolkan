@@ -18,7 +18,7 @@ Draft text for a Modrinth project page. Nothing has been uploaded. Publishing is
 | Issues | `https://github.com/rvyyv-n/voolkan/issues` |
 | Wiki / Discord / donations | leave empty (no voolkan Discord or donation page; do not link VulkanMod's) |
 | Icon | `icon.png` in the repo root (the voolkan logo) |
-| Release channel | Beta for `1.0.0-beta.1+1.21.11` |
+| Release channel | Release for `1.0.0+1.21.11` |
 
 ## Description (Markdown)
 
@@ -63,9 +63,9 @@ voolkan is licensed under the GNU LGPL-3.0. It is built on VulkanMod (LGPL-3.0).
 
 ## Before publishing (owner checks)
 
-- Confirm the GitHub repo is public and that `main` contains the release commit and the tag `v1.0.0-beta.1+1.21.11`.
-- Confirm the "Status" paragraph still matches the R7 test results (ROADMAP `r7-checklist` and `first-world` are open at the time of writing).
+- Confirm the GitHub repo is public and that `main` contains the release commit and the tag `v1.0.0+1.21.11`.
+- Confirm the "Status" paragraph matches the passed in-world and PvP test results.
 - Check Modrinth's current content rules for forks and for mods that use another mod's name, and use the text above ("unofficial fork", link to the original) as the disclosure.
 - Decide whether to mention VulkanMod's donation or Discord links (the draft omits them on purpose).
-- Version file name: `voolkan-1.0.0-beta.1+1.21.11.jar` (check the name in `build/libs/` after `gradlew build`).
+- Version file name: `voolkan-1.0.0+1.21.11.jar` (check the name in `build/libs/` after `gradlew build`).
 - Dependencies on the Modrinth version page: Fabric Loader only; mark VulkanMod as **incompatible**.
