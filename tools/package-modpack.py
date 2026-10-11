@@ -97,87 +97,167 @@ index_data = {
     }
 }
 
-# Sensitive blacklist check to ensure zero accounts/secrets are packaged
-BLOCKED_PATTERNS = [
-    "ias",
+# --- Strict Privacy & Sanitization Filters ---
+# Absolutely NO personal settings, servers, accounts, credentials, or multiplayer cache
+BLOCKED_DIRS = {
+    "minecraftcapes",
+    "voicechat",
+    "xaero",
+    "nochatreports",
+    "custom-hud"
+}
+
+BLOCKED_FILES = {
+    "options.txt",
+    "servers.dat",
+    "servers.dat_old",
+    "command_history.txt",
+    "rpc-data.json",
+    "ias.json",
+    "cwb.json",
+    "modelfix-client.json",
+    "borderless_windowed_vulkan.json",
+    "cape-provider.json5",
+    "capes.json5",
+    "mcca_state.json",
+    "xaerohud.txt",
+    "xaeropatreon.txt"
+}
+
+BLOCKED_NAME_SUBSTRINGS = [
+    "backup",
+    "bak",
+    "corrupt",
+    "legacy",
+    "old",
     "account",
+    "token",
+    "secret",
     "usercache",
     "username-cache",
-    "command_history",
-    "corrupt",
     "hs_err",
-    ".log"
+    ".log",
+    ".tmp",
+    "xaero",
+    "sodium",
+    "chloride",
+    "reeses"
 ]
 
-def is_safe_config(file_name, rel_path):
+def is_safe_config(file_name, rel_path, full_path):
     fn_lower = file_name.lower()
-    rel_lower = rel_path.lower()
-    for b in BLOCKED_PATTERNS:
-        if b in fn_lower or b in rel_lower:
+    rel_lower = rel_path.lower().replace("\\", "/")
+    
+    # Check blocked directories
+    parts = rel_lower.split("/")
+    for p in parts:
+        if p in BLOCKED_DIRS:
             return False
+
+    # Check blocked filenames
+    if fn_lower in BLOCKED_FILES:
+        return False
+
+    # Check blocked substrings in filename
+    for sub in BLOCKED_NAME_SUBSTRINGS:
+        if sub in fn_lower:
+            return False
+
+    # Inspect file content for personal info, local filesystem paths, or sensitive tokens
+    try:
+        with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read().lower()
+            sensitive_keywords = [
+                "rayyan",
+                "c:\\users\\",
+                "c:/users/",
+                "appdata",
+                "access_token",
+                "refreshtoken",
+                "client_token",
+                "msa_token",
+                "password",
+                "private_key",
+                "secret_key"
+            ]
+            for kw in sensitive_keywords:
+                if kw in content:
+                    return False
+    except Exception:
+        return False
+
     return True
 
 # 2. Build .mrpack
-print(f"\nBuilding {MRPACK_PATH}...")
+print(f"\nBuilding sanitized {MRPACK_PATH}...")
+packaged_configs = []
+
 with zipfile.ZipFile(MRPACK_PATH, "w", zipfile.ZIP_DEFLATED) as z:
     z.writestr("modrinth.index.json", json.dumps(index_data, indent=2))
     
-    # Add overrides/mods/ for non-Modrinth or voolkan jars
+    # Add overrides/mods/ for bundled jars (voolkan)
     for fname in overrides_mods:
         z.write(file_info[fname]["path"], f"overrides/mods/{fname}")
         
     # Add sanitized configs into overrides/config/
     for root, _, files in os.walk(CONFIG_DIR):
-        for f in files:
+        for f in sorted(files):
             full_p = os.path.join(root, f)
             rel_p = os.path.relpath(full_p, PROFILE_DIR)
-            if is_safe_config(f, rel_p):
-                z.write(full_p, f"overrides/{rel_p.replace(chr(92), '/')}")
+            if is_safe_config(f, rel_p, full_p):
+                clean_target = f"overrides/{rel_p.replace(chr(92), '/')}"
+                z.write(full_p, clean_target)
+                packaged_configs.append(rel_p)
 
-    # Add safe options.txt, servers.dat, icon.png
-    for extra in ["options.txt", "servers.dat", "icon.png"]:
-        p = os.path.join(PROFILE_DIR, extra)
-        if os.path.exists(p) and os.path.getsize(p) > 0:
-            z.write(p, f"overrides/{extra}")
+    # Add profile icon if present (NO options.txt, NO servers.dat)
+    icon_p = os.path.join(PROFILE_DIR, "icon.png")
+    if os.path.exists(icon_p) and os.path.getsize(icon_p) > 0:
+        z.write(icon_p, "overrides/icon.png")
 
+print(f"Included {len(packaged_configs)} sanitized mod configuration files.")
 print(f"Done. Size: {os.path.getsize(MRPACK_PATH) / (1024*1024):.2f} MB")
 
 # 3. Build full portable zip
-print(f"\nBuilding {FULL_ZIP_PATH}...")
+print(f"\nBuilding sanitized {FULL_ZIP_PATH}...")
 with zipfile.ZipFile(FULL_ZIP_PATH, "w", zipfile.ZIP_DEFLATED) as z:
     for fname, info in file_info.items():
         z.write(info["path"], f"mods/{fname}")
 
     for root, _, files in os.walk(CONFIG_DIR):
-        for f in files:
+        for f in sorted(files):
             full_p = os.path.join(root, f)
             rel_p = os.path.relpath(full_p, PROFILE_DIR)
-            if is_safe_config(f, rel_p):
+            if is_safe_config(f, rel_p, full_p):
                 z.write(full_p, rel_p.replace(chr(92), "/"))
 
-    for extra in ["options.txt", "servers.dat", "icon.png"]:
-        p = os.path.join(PROFILE_DIR, extra)
-        if os.path.exists(p) and os.path.getsize(p) > 0:
-            z.write(p, extra)
+    icon_p = os.path.join(PROFILE_DIR, "icon.png")
+    if os.path.exists(icon_p) and os.path.getsize(icon_p) > 0:
+        z.write(icon_p, "icon.png")
 
 print(f"Done. Size: {os.path.getsize(FULL_ZIP_PATH) / (1024*1024):.2f} MB")
 
-# 4. Strict Security Verification on generated .mrpack
-print("\n--- Security & Account Privacy Audit ---")
-with zipfile.ZipFile(MRPACK_PATH, "r") as z:
-    names = z.namelist()
-    for n in names:
-        nl = n.lower()
-        for b in ["account", "ias", "usercache", "token", "secret", "password"]:
-            if b in nl:
-                raise RuntimeError(f"SECURITY VIOLATION: Found blacklisted path in mrpack: {n}")
-        if nl.endswith((".txt", ".json", ".properties", ".cfg")):
-            content = z.read(n).decode("utf-8", errors="ignore").lower()
-            for kw in ["access_token", "refreshtoken", "client_token", "msa_token"]:
-                if kw in content:
-                    raise RuntimeError(f"SECURITY VIOLATION: Found sensitive token in {n}")
+# 4. Strict Security Verification on both generated packages
+print("\n--- Comprehensive Security & Privacy Audit ---")
+for pkg_name, pkg_path in [("mrpack", MRPACK_PATH), ("full_zip", FULL_ZIP_PATH)]:
+    with zipfile.ZipFile(pkg_path, "r") as z:
+        names = z.namelist()
+        for n in names:
+            nl = n.lower()
+            # Mods folder contains jar binaries, skip for config blacklist
+            if nl.startswith("mods/") or nl.startswith("overrides/mods/"):
+                continue
+            # Assert no personal files
+            for banned in ["options.txt", "servers.dat", "command_history", "account", "usercache", "voicechat", "xaero", "minecraftcapes", "ias"]:
+                if banned in nl:
+                    raise RuntimeError(f"CRITICAL PRIVACY VIOLATION in {pkg_name}: Found forbidden file {n}")
+            # Assert text files have no personal paths or tokens
+            if nl.endswith((".txt", ".json", ".json5", ".toml", ".properties", ".cfg")):
+                content = z.read(n).decode("utf-8", errors="ignore").lower()
+                for kw in ["rayyan", "c:\\users", "c:/users", "access_token", "msa_token", "password"]:
+                    if kw in content:
+                        raise RuntimeError(f"CRITICAL PRIVACY VIOLATION in {pkg_name}: Found sensitive data in {n}")
 
-print("Security Audit PASSED: 0 accounts, 0 tokens, 0 user credentials found in package.")
+print("AUDIT RESULT: PASSED! Zero personal info, zero servers, zero personal settings found.")
 
 # 5. Copy to user Downloads folder
 if os.path.exists(DOWNLOADS_DIR):
