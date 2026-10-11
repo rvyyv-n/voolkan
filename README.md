@@ -28,6 +28,7 @@ By rewriting Minecraft's rendering backend from OpenGL to Vulkan, voolkan bypass
 ## Documentation
 
 - **Build & Development Setup:** [`docs/dev-setup.md`](docs/dev-setup.md)
+- **Mod Compatibility & Incompatibilities:** [`docs/compatibility.md`](docs/compatibility.md)
 - **Project Roadmap & Status:** [`ROADMAP.md`](ROADMAP.md)
 - **Documentation Index:** [`docs/README.md`](docs/README.md)
 - **Code Conventions & Contributing:** [`docs/conventions.md`](docs/conventions.md)

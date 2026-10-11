@@ -2,12 +2,10 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, and `modpack` multiplayer/PvP testing verified on hardware and complete.
+Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
 
-## Ready for Release
-| Tag | Task | Detail |
-|---|---|---|
-| `release-1.0` | Release voolkan 1.0.0+1.21.11 | Release build, tag `v1.0.0+1.21.11`, GitHub release, and Modrinth listing |
+## Released
+- **voolkan 1.0.0+1.21.11**: Full release tag `v1.0.0+1.21.11` published with release jar, sources, and sanitized companion modpack (`.mrpack`).
 
 ## Skipped for later
 | Tag | Task | Detail |

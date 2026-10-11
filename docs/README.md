@@ -3,6 +3,7 @@
 | Path | What |
 |---|---|
 | `dev-setup.md` | toolchain, versions, install commands |
+| `compatibility.md` | mod compatibility, conflicts, and companion recommendations |
 | `smoke-test.md` | the manual/automated smoke checklist |
 | `upstream.md` | how to fetch/rebase/cherry-pick from upstream VulkanMod |
 | `conventions.md` | branches, tags, commits, packages, properties, LGPL notice |
