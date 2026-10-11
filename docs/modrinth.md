@@ -38,6 +38,7 @@ VulkanMod 0.6.8 for 1.21.11 needs `VK_KHR_dynamic_rendering`. Some older GPUs (t
 - **Legacy render path** (render passes and framebuffers) for GPUs without dynamic rendering. Chosen automatically, or forced with `-Dvoolkan.renderPath=legacy`.
 - **Stability:** per-mip image layout tracking, working texture copies and real fences, and fixes ported from upstream pull requests.
 - **Latency and speed:** frame queue of 1, optional low-latency mode, swapchain image count option, pipeline cache saved to disk.
+- **Pass 7 optimizations:** early-Z terrain shader pre-pass for fast depth rejection, 2.5 ms chunk upload time budgeting, and thread pool scaling.
 - **Compatibility block** on the Video settings page, a **Presets** row (Performance, Balanced, Quality) and voolkan branding.
 - Startup capability log and readable errors.
 
@@ -49,7 +50,7 @@ VulkanMod 0.6.8 for 1.21.11 needs `VK_KHR_dynamic_rendering`. Some older GPUs (t
 
 ## Status
 
-Beta. Tested on lavapipe (software Vulkan) and on the target AMD Radeon R7 350 as far as listed in the repository's `ROADMAP.md`. The full in-world checklist on the R7 is not finished yet. Expect bugs and please report them on the issue tracker with your `latest.log` and GPU model.
+Beta. Fully verified and tested in-world on real hardware (AMD Radeon R7 350, Vulkan 1.2.178 driver 23.11.1) and lavapipe. Milestone `first-world` and in-game smoke checks passed with clean validation, swapchain rebuilds, and stable entity/terrain rendering. Please report issues on the GitHub issue tracker with your `latest.log` and GPU model.
 
 ## Licences and credits
 
