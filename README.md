@@ -7,7 +7,7 @@
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-red.svg)](https://www.vulkan.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-informational.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-LGPL--3.0-orange.svg)](./LICENSE)
-[![Release](https://img.shields.io/github/v/release/rvyyv-n/voolkan?color=brightgreen)](https://github.com/rvyyv-n/voolkan/releases/tag/v1.0.0%2B1.21.11)
+[![Release](https://img.shields.io/badge/Release-v1.0.0+1.21.11-brightgreen.svg)](https://github.com/rvyyv-n/voolkan/releases/tag/v1.0.0%2B1.21.11)
 
 **voolkan** is a next-generation Vulkan renderer for Minecraft 1.21.11 (Fabric), built for high frame rates, low input latency and steady frame pacing, including on older GPUs and budget systems that other Vulkan renderers cannot run on.
 
