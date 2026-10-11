@@ -8,7 +8,7 @@ Draft text for a Modrinth project page. Nothing has been uploaded. Publishing is
 |---|---|
 | Name | voolkan |
 | Slug (suggested) | `voolkan` |
-| Summary (max 256 chars) | High-performance Vulkan renderer for Minecraft 1.21.11 delivering massive FPS boosts, ultra-low latency, and dedicated legacy GPU support (Radeon R7 350 / GCN 1 fallback). Windows only. |
+| Summary (max 256 chars) | High-performance Vulkan renderer delivering FPS gains, low latency for old and new systems alike. |
 | Categories | Optimization |
 | Environment | Client |
 | Loader | Fabric (Loader 0.14.14 or newer) |
