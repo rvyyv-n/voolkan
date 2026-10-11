@@ -8,20 +8,22 @@
 [![Platform](https://img.shields.io/badge/Platform-Windows-informational.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-LGPL_3.0-orange.svg)](./LICENSE)
 
-**voolkan** is a high-performance Vulkan-based rendering engine for Minecraft 1.21.11.
+**voolkan** is a next-generation high-performance Vulkan rendering engine for Minecraft 1.21.11, built for maximum frame rates, ultra-low input latency, and consistent frame pacing.
 
-It replaces the default OpenGL pipeline with Vulkan to reduce CPU overhead, improve GPU utilization, and deliver smoother frame pacing and lower input latency. Built with broad hardware compatibility in mind, voolkan provides an automatic fallback render pass pipeline for older GPUs lacking dynamic rendering support (`VK_KHR_dynamic_rendering`), such as AMD GCN 1 / Radeon R7 350 graphics cards.
+By rewriting Minecraft's rendering backend from OpenGL to Vulkan, voolkan bypasses driver overhead, slashes CPU draw-call bottlenecks, and unlocks substantial framerate improvements across both modern hardware and budget rigs. Crucially, voolkan delivers dedicated performance improvements and first-class support for older systems and legacy GPUs—featuring an automatic `VkRenderPass` fallback pipeline for devices lacking modern dynamic rendering (`VK_KHR_dynamic_rendering`), such as AMD GCN 1 / Radeon R7 350 GPUs and legacy Vulkan 1.2 hardware.
 
-**Tags:** `minecraft`, `fabric-mod`, `vulkan`, `renderer`, `optimization`, `low-latency`, `legacy-gpu`, `windows`
+**Tags:** `minecraft`, `fabric-mod`, `vulkan`, `renderer`, `optimization`, `low-latency`, `legacy-gpu`, `fps-boost`, `windows`
 
 ---
 
-## Features
+## Performance & Architecture
 
-- **Vulkan Rendering Pipeline:** Replaces OpenGL with Vulkan for reduced driver overhead, faster chunk meshing, and efficient draw calls.
-- **Legacy GPU Fallback:** Automatic detection and support for `VkRenderPass` pipelines on hardware without dynamic rendering.
-- **Latency & Frame Pacing:** Single-frame queue option, configurable swapchain buffers, and persistent disk-cached pipeline compilation.
-- **Preset Controls:** Built-in video settings presets (Performance, Balanced, Quality) with hardware capability logging.
+- **Vulkan Core Pipeline:** Replaces OpenGL to dramatically reduce CPU rendering bottlenecks, accelerate multi-threaded chunk meshing, and optimize GPU command submission.
+- **Dedicated Legacy GPU & System Support:** Automatic fallback pipeline providing complete Vulkan acceleration and stability on older GPUs and entry-level systems without dynamic rendering.
+- **Early-Z Depth Rejection:** Dedicated early-Z shader pre-pass for opaque geometry, drastically cutting pixel shader workload and overdraw on fillrate-limited older GPUs.
+- **Chunk Upload Budgeting:** Frame-time budgeting (2.5 ms cap) on chunk geometry uploads to eliminate chunk loading micro-stutter and frame drops.
+- **Ultra-Low Latency Mode:** Single-frame presentation queue (`Frame Queue: 1`), configurable swapchain images, and disk-cached pipeline compilation for instantaneous input response.
+- **Fast Video Presets:** In-game quick presets (Performance, Balanced, Quality) with hardware capability logging and compatibility diagnostics.
 
 ## Documentation
 
