@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.task;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * upload time budgeting, thread pool scaling, and leak prevention.
+ */
+
 import com.google.common.collect.Queues;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
