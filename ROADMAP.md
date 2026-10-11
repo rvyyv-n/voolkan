@@ -52,6 +52,11 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 (`low-vram` is parked, see the Parked section.)
 Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
 
+## Future: v1.5 (Post-Release)
+Rudimentary outline. Detailed scoping and planning will be expanded after v1.0 is fully deployed and released.
+- [ ] `macos-perf` macOS (MoltenVK) support and performance tuning: Metal surface/format quirks (BGRA swapchain), render pass layout constraints, memory heaps
+- [ ] `v1-5-qol` Additional performance and QoL features (to be evaluated and scoped after v1.0 release)
+
 ## Parked (owner decision, not being worked on)
 - [ ] `settings-ui` (was 4.5) Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
 - [ ] `port-26-1` (was 6.1) 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`

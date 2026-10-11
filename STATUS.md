@@ -28,5 +28,11 @@ Last updated: 2026-10-11. Milestone `first-world`, `r7-checklist`, `vulkaninfo`,
 | `port-26-2` | 26.2 and later, waits for an owner plan | `docs/mc-26-plus.md` |
 | `low-vram` | 2 GB VRAM handling, only if the R7 shows memory problems | not started |
 
+## Future (v1.5)
+| Tag | Task | Detail |
+|---|---|---|
+| `macos-perf` | macOS (MoltenVK) support & tuning | Rudimentary outline in `ROADMAP.md`; plan after v1.0 release |
+| `v1-5-qol` | Candidate performance & QoL features | To be scoped and evaluated after v1.0 release |
+
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 5.2 `upstream-pr`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`, 7.1 `low-vram`.
