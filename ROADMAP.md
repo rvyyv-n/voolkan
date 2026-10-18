@@ -54,9 +54,13 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
 
 ## Future: v1.5 (Post-Release)
-Rudimentary outline. Detailed scoping and planning will be expanded after v1.0 is fully deployed and released.
-- [ ] `macos-perf` macOS (MoltenVK) support and performance tuning: Metal surface/format quirks (BGRA swapchain), render pass layout constraints, memory heaps
-- [ ] `v1-5-qol` Additional performance and QoL features (to be evaluated and scoped after v1.0 release)
+Scoped 2026-10-18 in `docs/v1-5-plan.md` (decisions D1-D5, testing without a Mac, QoL ranking). One build pass per item, on a `pass-N` branch. macOS changes are gated on driver capability or macOS, so the R7 path must not change; every pass ends with `gradlew build`, an Apple-profile run and an R7 smoke run. Mac rounds go to the two testers (M4 and M5 MacBook Airs).
+- [ ] `mac-boot` (Pass 8) macOS starts: portability enumeration + `VK_KHR_portability_subset` when offered; fix `Platform.isWindows()`; depth format order (D32 S8 before D24 S8 on Apple); logic-op guard + text-highlight fallback; MoltenVK/portability block in the capability log; `tools/profiles/apple-m.json` + `tools/run-apple-profile.ps1`. Mac round 1: starts, reaches a world, sends `vulkaninfo`
+- [ ] `mac-window` (Pass 9) Mac window and input: restore needed macOS GLFW hints; Retina and cursor scaling; fullscreen option (borderless vs native, D2); present-mode and image-count clamps; low-latency defaults on macOS; tester checklist `docs/mac-test.md`. Mac round 2: resize, fullscreen, input feel
+- [ ] `mac-perf` (Pass 10) Mac speed: tile-friendly attachment load/store on tile GPUs; fewer render-pass restarts per frame; unified-memory direct writes instead of staging; MoltenVK settings via layer settings if they help. Opus review. Mac round 3: FPS and frame times, both render paths
+- [ ] `qol-upstream` (Pass 11) Cherry-pick upstream `0663824` (fullscreen-exclusive opt-out), `47ed9cc` (screenshot sync), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint). Independent of the Mac work; can run in parallel after Pass 8
+- [ ] `qol-small` (Pass 12) Memory use on F3; on-disk shader binary cache; hardware blit for texture copies where supported
+- Out of v1.5 (see the plan for reasons): skipping unchanged uniform uploads, transforms-buffer pre-growth, translucent sorting, batched section uploads (wait for upstream), occlusion culling. Chunk-renderer rewrites wait for the 26.x ports
 
 ## Parked (owner decision, not being worked on)
 - [ ] `settings-ui` (was 4.5) Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
