@@ -36,6 +36,10 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 | `mac-perf` | Pass 10: tile-GPU attachment handling, unified-memory writes, MoltenVK settings | Opus review; Mac round 3 |
 | `qol-upstream` | Pass 11: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | can run in parallel after Pass 8 |
 | `qol-small` | Pass 12: memory on F3, shader binary cache, hardware blit | |
+| `frame-caps` | Pass 13: precise limiter, background and battery caps, Battery preset | Mac round 4 |
+| `res-scale` | Pass 14: resolution scale for the world | Opus review; Mac round 4 |
+| `pipeline-warmup` | Pass 15: build pipelines during world load | needs Pass 12; Mac round 4 |
+| `qol-options` | Pass 16: block-entity distance, restore defaults per page | |
 
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 5.2 `upstream-pr`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`, 7.1 `low-vram`.

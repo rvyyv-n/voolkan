@@ -17,7 +17,7 @@ The R7 350 on Windows stays the main target. Every macOS change is switched on o
 |---|---|---|
 | D1 | Which Macs | Apple Silicon only (M1 and later). Intel Macs: "untested", not blocked. Our testers have M4 and M5 MacBook Airs |
 | D2 | Mac fullscreen | Keep our borderless fullscreen (instant switching), plus an option for native macOS fullscreen. Testers judge which is the better default |
-| D3 | Which QoL items | Four upstream cherry-picks and three small items (see "QoL ranking"). Large items wait |
+| D3 | Which QoL items | Four upstream cherry-picks, three small items, and the extras approved on 2026-10-18 (see "QoL ranking" and "Approved extras"). Large renderer items wait |
 | D4 | Render path on Mac | Dynamic rendering (the upstream path). The repaired legacy render-pass path stays available through the existing render-path option and is measured on Mac as a comparison |
 | D5 | Version | Decided by the owner at release time (likely `1.5.0+1.21.11`) |
 
@@ -59,7 +59,7 @@ The dev PC's only GPU is the R7 350. Validation happens in three layers:
 
 1. **Apple profile on this PC (every pass).** A new Vulkan Profiles file, `tools/profiles/apple-m.json`, caps lavapipe to an Apple M-series feature set: no logic op, no wide lines, no geometry shader, no D24S8, no MAILBOX, BGRA swapchain, portability subset reported (using the profiles layer's portability emulation). A run script, `tools/run-apple-profile.ps1`, works like `run-r7-profile.ps1`. The validation layer then reports portability-subset violations. Values come from Apple Silicon reports on gpuinfo.org; the file is marked provisional until a tester sends a real `vulkaninfo`.
 2. **R7 regression (every pass).** The usual `gradlew build` and an R7 smoke run, so Windows behaviour does not change. All macOS code is gated, so the R7 must take exactly the same paths as v1.0.
-3. **Mac tester rounds (after `mac-boot`, `mac-window` and `mac-perf`).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile.
+3. **Mac tester rounds (after `mac-boot`, `mac-window`, `mac-perf`, and one for Passes 13-15).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile.
 
 Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU display for running the game. CI keeps building only.
 
@@ -67,7 +67,7 @@ Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU displ
 
 - **Performance claims.** "Close to Windows" can only be measured by the testers. FPS and frame-time numbers come from their F3 and logs, not from us.
 - **Input feel and fullscreen.** These are subjective. Tester feedback decides D2 and the latency defaults.
-- **Slow turnaround.** Each Mac bug costs a tester round. Mitigation: keep Mac rounds to three, and make the startup log detailed enough to diagnose a failure from one run.
+- **Slow turnaround.** Each Mac bug costs a tester round. Mitigation: keep Mac rounds to four, and make the startup log detailed enough to diagnose a failure from one run.
 - **Profile accuracy.** The Apple profile approximates the hardware. Real driver bugs (shader translation, synchronisation) only show on a Mac.
 - **Tile-GPU tuning.** Changing load/store operations touches rendering correctness on the R7 too. These changes are gated to tile GPUs and reviewed by Opus.
 
@@ -79,17 +79,22 @@ Passes continue the existing numbering (Pass 7 was the last). Each pass gets its
 |---|---|---|---|
 | 8 | `mac-boot` | Portability enumeration and subset (enabled only when offered); fix `isWindows()`; depth format order; logic-op guard plus text-highlight fallback; capability log block for portability/MoltenVK; Apple profile file and run script | build, Apple profile run clean, R7 smoke; Mac round 1 (starts, reaches a world, `vulkaninfo`) |
 | 9 | `mac-window` | Restore needed macOS window hints; Retina and cursor scaling check; fullscreen option per D2; present-mode and image-count clamps (2-3 images, no MAILBOX); low-latency defaults on macOS; `docs/mac-test.md` | build, Apple profile, R7 smoke; Mac round 2 (resize, fullscreen, input feel) |
-| 10 | `mac-perf` | Tile-friendly attachment handling on tile GPUs (don't store depth, clear instead of load at frame start); audit render-pass restarts per frame; unified-memory fast path (write directly instead of staging when memory is host-visible and device-local); MoltenVK settings through layer settings if measured to help | build, Apple profile, R7 smoke; Mac round 3 (FPS and frame times vs. R7 numbers, both render paths) |
+| 10 | `mac-perf` | Tile-friendly attachment handling on tile GPUs (don't store depth, clear instead of load at frame start); audit render-pass restarts per frame; unified-memory fast path (write directly instead of staging when memory is host-visible and device-local); MoltenVK settings through layer settings if measured to help; indirect draw on Mac by default only if round 3 shows it is faster | build, Apple profile, R7 smoke; Mac round 3 (FPS and frame times vs. R7 numbers, both render paths, indirect draw on and off) |
 | 11 | `qol-upstream` | Cherry-pick (`-x`) upstream `0663824` (opt out of Windows fullscreen exclusive: fixes OBS/Discord capture and Alt-Tab freezes), `47ed9cc` (screenshot sync fix), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint for other mods) | build, R7 smoke |
 | 12 | `qol-small` | VRAM and memory use on the F3 screen; shader binary cache on disk (startup and first-load stutter, more so on Mac); hardware blit for texture copies where the format supports it | build, Apple profile, R7 smoke |
+| 13 | `frame-caps` | Precise frame limiter (sleep then short spin, timed to the present); lower frame cap when the window is unfocused, hidden or minimised; optional lower cap on battery on Mac; "Battery" entry in the Presets row | build, R7 smoke with frame times; Mac round 4 (battery and heat) |
+| 14 | `res-scale` | Resolution scale: draw the world below screen resolution and scale it up with a simple filter; GUI stays at full resolution; works with post effects | build, Apple profile, R7 smoke; Mac round 4 |
+| 15 | `pipeline-warmup` | Build pipelines for known states from the saved caches during world load instead of on first use | build, Apple profile, R7 smoke; Mac round 4 (first-load hitches) |
+| 16 | `qol-options` | Separate render distance for block entities (chests, signs, banners); restore-defaults button on each voolkan settings page | build, R7 smoke |
 
 Order and reasons:
 - `mac-boot` first, because nothing else can be tested on a Mac until it starts.
 - `qol-upstream` (Pass 11) is independent of the Mac work. It can run in parallel in its own worktree any time after Pass 8, and merging it early lowers conflict risk with later upstream changes.
 - `mac-perf` comes after `mac-window` because frame-time numbers mean little while windowing and present modes are still changing.
-- Release prep (version, changelog, tag) stays with the owner after Pass 12.
+- Passes 13-16 come after the Mac core and the planned QoL. `pipeline-warmup` needs the shader binary cache from Pass 12. `res-scale` is the largest of them and gets an Opus review. Mac round 4 covers 13-15 together.
+- Release prep (version, changelog, tag) stays with the owner after Pass 16.
 
-Model use: Opus reviews Passes 8 and 10 (instance and device setup, attachment and memory changes touch correctness). Sonnet builds. Gemini runs the profile runs, log summaries and first-pass reviews.
+Model use: Opus reviews Passes 8, 10 and 14 (instance and device setup, attachment and memory changes touch correctness). Sonnet builds. Gemini runs the profile runs, log summaries and first-pass reviews.
 
 ## QoL ranking
 
@@ -109,6 +114,12 @@ Model use: Opus reviews Passes 8 and 10 (instance and device setup, attachment a
 | 12 | Occlusion culling | large | fewer draws | **out**: too large for v1.5 |
 | - | GPU selector | - | - | already exists |
 | - | Raw mouse input | - | - | vanilla option already exists; only check it works on Mac |
+
+## Approved extras
+
+Chosen on 2026-10-18 from `v1-5-candidates.md`: resolution scale (P1, Pass 14), background and battery frame caps (P2, Pass 13), pipeline warm-up (P3, Pass 15), precise frame limiter (P5, Pass 13), block-entity distance (P6, Pass 16), indirect draw on Mac as a test item (P8, Pass 10), Mac battery preset (Q4, Pass 13), restore defaults per page (Q6, Pass 16). Ideas not chosen stay in the candidates file as backlog.
+
+Testers report frame rates with vanilla's F3 screen and its frame-time chart; a voolkan overlay was not chosen.
 
 Unchanged and still parked: `low-vram` (only if the R7 shows memory problems), `settings-ui`, `presentmon` and `upstream-pr` (skipped for later).
 

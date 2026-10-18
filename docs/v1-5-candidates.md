@@ -1,6 +1,6 @@
 # v1.5 extra candidates
 
-More performance and QoL ideas beyond the ranked list in `v1-5-plan.md`. Nothing here is approved. Approved items move into the plan and `ROADMAP.md`; the rest stay here as a backlog.
+More performance and QoL ideas beyond the ranked list in `v1-5-plan.md`. Approved on 2026-10-18 and moved into the plan: P1, P2, P3, P5, P6, P8, Q4, Q6. The rest (P4, P7, P9, Q1, Q2, Q3, Q5) stay here as a backlog.
 
 Already in voolkan, so not listed: GPU selector, builder threads, entity culling, advanced culling, indirect draw toggle, frame queue, low-latency mode, swapchain image count, presets.
 
