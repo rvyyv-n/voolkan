@@ -14,6 +14,7 @@
 | `line-refs.txt` | plan file:line references checked by `tools\check-linerefs.ps1` |
 | `checklist.md` | steps for a release, including the Modrinth listing |
 | `mc-26-plus.md` | notes on Minecraft 26.x (26.1 port facts, 26.2 Vulkan, OpenGL + Sodium) and the owner decisions |
+| `v1-5-plan.md` | v1.5 scope: macOS (MoltenVK) plan, testing without a Mac, QoL ranking, build passes 8-12 |
 | `modrinth.md` | draft Modrinth listing (not published) |
 | `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task `vulkaninfo`) |
 
