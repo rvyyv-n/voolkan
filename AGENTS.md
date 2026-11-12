@@ -12,7 +12,7 @@ voolkan is an unofficial, private (for now) **LGPL-3.0** fork of [VulkanMod](htt
 - Upstream code stays in `net.vulkanmod`; new voolkan-only code goes in `dev.voolkan`. Changed upstream files get the LGPL modification notice.
 
 ## Build, run, test
-Use JDK 21 and the Gradle wrapper only (no global Gradle). `JAVA_HOME` = `C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`.
+Use JDK 21 and the Gradle wrapper only (no global Gradle). `JAVA_HOME` = any JDK 21: `C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot` on the R7 PC, `jdk-21.0.9.10-hotspot` (already the user `JAVA_HOME`) on WAGAY.
 ```powershell
 .\gradlew build
 .\gradlew runClient
@@ -22,7 +22,7 @@ tools\run-lavapipe.ps1
 tools\summarise-vk-log.ps1 [path] # group validation messages by VUID
 tools\make-test-world.ps1 -AcceptEula   # owner accepts the Mojang EULA
 ```
-Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's only GPU is the R7, so on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1.
+Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. On the R7 PC (its only GPU), on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1. WAGAY has an RX 9070 XT, so reproduce the R7's limits there with `tools\run-r7-profile.ps1`.
 
 ## Git rules
 - Commit locally with the repo's configured identity. One commit per logical step.
@@ -35,9 +35,9 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's o
 Follow the global rule. Dev servers and ports of other chats are not yours.
 
 ## Model guidance
-- **Opus**: rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags). 1-3 turns per task; no file reading or test-fix loops.
-- **Sonnet 5.5** (medium effort or higher): extended build passes, scripts, docs, summaries, cherry-picks. Opus reviews before anything builds on them.
-- **Gemini Flash**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), fast debug loops, CI.
+- **Opus 5.5** (medium effort): the default. Rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags).
+- **Sonnet 5.5**: long coding tasks: extended build passes, scripts, cherry-picks, run-and-fix loops. Opus reviews before anything builds on them.
+- **Haiku or Sonnet at low effort**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), log and CI summaries.
 - Thread length, worktrees and delegation follow the global rules; build passes use a `pass-N` branch.
 - Never leave `runClient`, a Gradle daemon you started, or any watcher running at the end of a turn.
 
