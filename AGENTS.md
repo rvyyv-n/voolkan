@@ -24,6 +24,9 @@ tools\make-test-world.ps1 -AcceptEula   # owner accepts the Mojang EULA
 ```
 Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's only GPU is the R7, so on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1.
 
+### Headless builder runner policy
+Automated builder runners operating in headless or multi-project environments must NOT run `runClient`, interactive test worlds, or any scripts that spawn GLFW/GUI windows. Verification on headless builder runners is strictly non-GUI: `.\gradlew build` (and offline compiler/test checks). In-game testing on Windows (R7 350) is done manually by the owner; macOS in-game testing (Rounds 1-4) is done manually by the Mac tester with exported jars.
+
 ## Git rules
 - Commit locally with the repo's configured identity. One commit per logical step.
 - Push only your own work branch (never `main`). Changes reach `main` through a pull request: open it against `main` when the work is finished, with a short description and the test results, and let the owner merge it (or merge when told to). Don't create GitHub repos or releases, and don't push tags, unless the owner says so.

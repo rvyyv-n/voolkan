@@ -55,11 +55,12 @@ Not a problem, despite first impressions:
 
 ## How we validate without a Mac
 
-The dev PC's only GPU is the R7 350. Validation happens in three layers:
+The dev PC's only GPU is the R7 350. Validation happens in distinct layers:
 
-1. **Apple profile on this PC (every pass).** A new Vulkan Profiles file, `tools/profiles/apple-m.json`, caps lavapipe to an Apple M-series feature set: no logic op, no wide lines, no geometry shader, no D24S8, no MAILBOX, BGRA swapchain, portability subset reported (using the profiles layer's portability emulation). A run script, `tools/run-apple-profile.ps1`, works like `run-r7-profile.ps1`. The validation layer then reports portability-subset violations. Values come from Apple Silicon reports on gpuinfo.org; the file is marked provisional until a tester sends a real `vulkaninfo`.
-2. **R7 regression (every pass).** The usual `gradlew build` and an R7 smoke run, so Windows behaviour does not change. All macOS code is gated, so the R7 must take exactly the same paths as v1.0.
-3. **Mac tester rounds (after `mac-boot`, `mac-window`, `mac-perf`, and one for Passes 13-15).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile.
+0. **Headless builder runners (build passes).** Automated builder agents running in headless or multi-project environments must NOT run `runClient`, launch interactive worlds, or spawn GLFW/GUI windows. Verification on the builder machine is strictly non-GUI: `.\gradlew build` must pass cleanly with zero compiler warnings or errors.
+1. **Apple profile (offline/profile testing).** A new Vulkan Profiles file, `tools/profiles/apple-m.json`, caps lavapipe to an Apple M-series feature set: no logic op, no wide lines, no geometry shader, no D24S8, no MAILBOX, BGRA swapchain, portability subset reported (using the profiles layer's portability emulation). A run script, `tools/run-apple-profile.ps1`, works like `run-r7-profile.ps1`. The validation layer then reports portability-subset violations. Values come from Apple Silicon reports on gpuinfo.org; the file is marked provisional until a tester sends a real `vulkaninfo`.
+2. **R7 regression & in-game testing.** The usual `gradlew build` and in-game R7 smoke testing are conducted manually by the repo owner on the real R7 350 machine, ensuring Windows behaviour does not change. All macOS code is gated, so the R7 must take exactly the same paths as v1.0.
+3. **Mac tester rounds (after `mac-boot`, `mac-window`, `mac-perf`, and one for Passes 13-15).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile. Tested manually by sending exported mod jars to the Mac tester with Apple Silicon hardware.
 
 Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU display for running the game. CI keeps building only.
 
@@ -94,7 +95,7 @@ Order and reasons:
 - Passes 13-16 come after the Mac core and the planned QoL. `pipeline-warmup` needs the shader binary cache from Pass 12. `res-scale` is the largest of them and gets an Opus review. Mac round 4 covers 13-15 together.
 - Release prep (version, changelog, tag) stays with the owner after Pass 16.
 
-Model use: Opus reviews Passes 8, 10 and 14 (instance and device setup, attachment and memory changes touch correctness). Sonnet builds. Gemini runs the profile runs, log summaries and first-pass reviews.
+Model use: Opus 5.5 reviews Passes 8, 10 and 14 (instance and device setup, attachment and memory changes touch correctness). Sonnet 5.5 builds. Low-effort Sonnet or Haiku runs log summaries and first-pass reviews.
 
 ## QoL ranking
 

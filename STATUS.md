@@ -27,7 +27,7 @@ Last updated: 2026-10-18 (v1.5 scoped). Milestone `first-world`, `r7-checklist`,
 | `low-vram` | 2 GB VRAM handling, only if the R7 shows memory problems | not started |
 
 ## Future (v1.5)
-Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confirmed. Mac testing: two testers with M4 and M5 MacBook Airs.
+Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confirmed. Automated verification on headless builder runners is strictly `gradlew build` (no window/client execution). In-game validation on Windows is performed manually by the owner; Mac testing (Rounds 1-4) is performed manually on M4/M5 MacBook Airs by the Mac tester.
 
 | Tag | Task | Detail |
 |---|---|---|
