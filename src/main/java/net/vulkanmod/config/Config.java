@@ -47,6 +47,8 @@ public class Config {
     public int worldScale = 100;
     /** Maximum render distance for block entities (chests, signs, banners) in blocks (16..128); 64 = vanilla default. */
     public int blockEntityDistance = 64;
+    /** Opt out of Windows fullscreen exclusive / independent flip via VK_EXT_full_screen_exclusive (for capture compatibility). */
+    public boolean disallowFullscreenExclusive = false;
     /** Requested swapchain image count; 0 = driver minimum + 1. Clamped to the surface limits. */
     public int swapChainImages = 0;
     public int builderThreads = 0;

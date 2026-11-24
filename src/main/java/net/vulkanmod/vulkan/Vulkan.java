@@ -6,6 +6,7 @@ package net.vulkanmod.vulkan;
  * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active.
  */
 
+import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -367,8 +368,14 @@ public class Vulkan {
         }
     }
 
+    public static boolean shouldDisallowFullscreenExclusive() {
+        return Boolean.getBoolean("voolkan.disallowFullscreenExclusive")
+                || (Initializer.CONFIG != null && Initializer.CONFIG.disallowFullscreenExclusive);
+    }
+
     private static void checkSurfaceCapabilities2Support(MemoryStack stack) {
-        if (org.lwjgl.system.Platform.get() != org.lwjgl.system.Platform.WINDOWS) {
+        if (org.lwjgl.system.Platform.get() != org.lwjgl.system.Platform.WINDOWS
+                || !shouldDisallowFullscreenExclusive()) {
             return;
         }
 

@@ -24,7 +24,7 @@ public class FramerateLimitTrackerMixin {
     @Unique
     private static final int HIDDEN_FLOOR_FPS = 10;
     @Unique
-    private static final long WINDOW_STATE_CACHE_NS = 1_000_000L; // 1 ms: at most once per frame
+    private static final long WINDOW_STATE_CACHE_NS = 100_000_000L; // 100 ms: avoid per-frame GLFW/Win32 polling
 
     @Shadow
     @Final

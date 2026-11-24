@@ -45,8 +45,8 @@ public class BlockEntityRenderDispatcherMixin {
         }
 
         if (dist < VANILLA_DEFAULT_DISTANCE) {
-            return renderer.shouldRender(blockEntity, cameraPos)
-                    && blockEntity.getBlockPos().distToCenterSqr(cameraPos.x, cameraPos.y, cameraPos.z) < (double) dist * dist;
+            return blockEntity.getBlockPos().distToCenterSqr(cameraPos.x, cameraPos.y, cameraPos.z) < (double) dist * dist
+                    && renderer.shouldRender(blockEntity, cameraPos);
         }
 
         if (renderer.getViewDistance() < dist) {

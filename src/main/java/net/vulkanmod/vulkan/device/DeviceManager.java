@@ -259,6 +259,7 @@ public abstract class DeviceManager {
                     .collect(toSet());
 
             if (Vulkan.surfaceCapabilities2Supported
+                    && Vulkan.shouldDisallowFullscreenExclusive()
                     && availableExtensions.contains(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)) {
                 enabledExtensions.add(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
                 fullScreenExclusiveControl = true;

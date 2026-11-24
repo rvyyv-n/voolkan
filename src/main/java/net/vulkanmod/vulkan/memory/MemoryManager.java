@@ -51,6 +51,7 @@ public class MemoryManager {
     private static long nativeMemory = 0;
 
     private int currentFrame = 0;
+    private int vmaFrameIndex = 0;
 
     private final ObjectArrayList<Buffer.BufferInfo>[] freeableBuffers = new ObjectArrayList[Frames];
     private final ObjectArrayList<VulkanImage>[] freeableImages = new ObjectArrayList[Frames];
@@ -90,6 +91,7 @@ public class MemoryManager {
 
     public synchronized void initFrame(int frame) {
         this.setCurrentFrame(frame);
+        vmaSetCurrentFrameIndex(ALLOCATOR, this.vmaFrameIndex++);
         this.freeBuffers(frame);
         this.freeImages(frame);
         this.doFrameOps(frame);

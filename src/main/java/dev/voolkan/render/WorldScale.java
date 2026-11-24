@@ -243,8 +243,9 @@ public final class WorldScale {
 
         restoreState();
 
-        // Rebind the real swapchain (aux LOAD/STORE pass) and restore full-window viewport/scissor.
-        mainPass.rebindMainTarget();
+        // Rebind the real swapchain with LOAD_OP_DONT_CARE (non-UNDEFINED initial layout) because
+        // TRACY_BLIT immediately overwrites 100% of swapchain color and vanilla clears depth before GUI.
+        mainPass.rebindMainTargetDiscard();
 
         // Bilinear full-screen upscale into the swapchain; autoManaged=true leaves the swapchain bound
         // for vanilla's subsequent depth clear and GUI rendering.

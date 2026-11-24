@@ -191,6 +191,22 @@ public class DefaultMainPass implements MainPass {
         Renderer.getInstance().beginRenderPass(this.auxRenderPass, this.mainFramebuffer);
     }
 
+    /**
+     * Rebinds the swapchain using {@code mainRenderPass} (LOAD_OP_DONT_CARE) when the caller is
+     * about to overwrite 100% of swapchain color (e.g. fullscreen upscale blit) and vanilla will
+     * clear depth before GUI draws, avoiding a wasted full-resolution LOAD of color and depth.
+     */
+    public void rebindMainTargetDiscard() {
+        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+        RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
+
+        if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
+            return;
+
+        Renderer.getInstance().endRenderPass(commandBuffer);
+        Renderer.getInstance().beginRenderPass(this.mainRenderPass, this.mainFramebuffer);
+    }
+
     @Override
     public void bindAsTexture() {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
