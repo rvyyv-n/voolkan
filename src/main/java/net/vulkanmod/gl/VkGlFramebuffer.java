@@ -3,7 +3,7 @@ package net.vulkanmod.gl;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * repair legacy VkRenderPass framebuffer attachments, mips, and bound state.
+ * repair legacy VkRenderPass framebuffer attachments, mips, and bound state; implement glBlitFramebuffer from read to draw target.
  */
 
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
@@ -16,6 +16,8 @@ import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
+import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
+import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
 import static org.lwjgl.vulkan.VK11.VK_ATTACHMENT_LOAD_OP_LOAD;
 import static org.lwjgl.vulkan.VK11.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
@@ -57,6 +59,11 @@ public class VkGlFramebuffer {
 
     public static void bindFramebuffer(int target, int id) {
         if (id == 0) {
+            if (target == GL30.GL_READ_FRAMEBUFFER) {
+                readFramebuffer = null;
+                return;
+            }
+
             Renderer.getInstance().endRenderPass();
 
             if (Renderer.isRecording()) {
@@ -64,6 +71,9 @@ public class VkGlFramebuffer {
             }
 
             boundFramebuffer = null;
+            if (target == GL30.GL_FRAMEBUFFER) {
+                readFramebuffer = null;
+            }
             return;
         }
 
@@ -77,12 +87,20 @@ public class VkGlFramebuffer {
         }
 
         switch (target) {
-            case GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_FRAMEBUFFER -> {
+            case GL30.GL_DRAW_FRAMEBUFFER -> {
                 if (glFramebuffer.framebuffer != null) {
                     beginRendering(glFramebuffer);
                 }
 
                 boundFramebuffer = glFramebuffer;
+            }
+            case GL30.GL_FRAMEBUFFER -> {
+                if (glFramebuffer.framebuffer != null) {
+                    beginRendering(glFramebuffer);
+                }
+
+                boundFramebuffer = glFramebuffer;
+                readFramebuffer = glFramebuffer;
             }
             case GL30.GL_READ_FRAMEBUFFER -> {
                 readFramebuffer = glFramebuffer;
@@ -100,6 +118,10 @@ public class VkGlFramebuffer {
 
         if (boundFramebuffer == null)
             throw new NullPointerException("bound framebuffer is null");
+
+        if (readFramebuffer == boundFramebuffer) {
+            readFramebuffer = null;
+        }
 
         boundFramebuffer.cleanUp(true);
         boundFramebuffer = null;
@@ -132,8 +154,23 @@ public class VkGlFramebuffer {
 
     public static void glBlitFramebuffer(int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1,
                                          int dstY1, int mask, int filter) {
-        // TODO: add missing parameters
-        ImageUtil.blitFramebuffer(boundFramebuffer.colorAttachment, srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1);
+        if ((mask & GL11.GL_COLOR_BUFFER_BIT) == 0) {
+            return;
+        }
+
+        VulkanImage srcImage = readFramebuffer != null
+                ? readFramebuffer.colorAttachment
+                : Renderer.getInstance().getSwapChain().getColorAttachment();
+        VulkanImage dstImage = boundFramebuffer != null
+                ? boundFramebuffer.colorAttachment
+                : Renderer.getInstance().getSwapChain().getColorAttachment();
+
+        if (srcImage == null || dstImage == null || srcImage == dstImage) {
+            return;
+        }
+
+        int vkFilter = (filter == GL11.GL_LINEAR) ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+        ImageUtil.blitFramebuffer(srcImage, dstImage, srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, vkFilter);
     }
 
     public static int glCheckFramebufferStatus(int target) {

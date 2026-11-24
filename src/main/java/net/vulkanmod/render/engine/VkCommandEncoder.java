@@ -3,7 +3,7 @@ package net.vulkanmod.render.engine;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * oversized buffer writes fall back to a one-shot staging buffer; copyTextureToTexture and createFence are implemented.
+ * oversized buffer writes fall back to a one-shot staging buffer; copyTextureToTexture (with cross-format blit fallback) and createFence are implemented.
  */
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
@@ -636,7 +636,13 @@ public class VkCommandEncoder implements CommandEncoder {
                 Renderer.getInstance().endRenderPass(commandBuffer);
 
                 try (MemoryStack stack = stackPush()) {
-                    ImageUtil.copyImageToImageCmd(stack, commandBuffer, srcImage, dstImage, mipLevel, l, m, j, k, n, o);
+                    if (srcImage.format == dstImage.format) {
+                        ImageUtil.copyImageToImageCmd(stack, commandBuffer, srcImage, dstImage, mipLevel, l, m, j, k, n, o);
+                    } else if (dev.voolkan.compat.FormatCaps.canBlit(srcImage.format, dstImage.format)) {
+                        ImageUtil.blitImageToImageCmd(stack, commandBuffer, srcImage, dstImage, mipLevel, l, m, j, k, n, o, VK_FILTER_NEAREST);
+                    } else {
+                        ImageUtil.warnUnsupportedBlitOnce(srcImage.format, dstImage.format);
+                    }
                 }
             }
         } else {
