@@ -5,7 +5,7 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block and a Presets row on the Video page.
+ * read-only Compatibility block, Presets row, and background FPS cap on the Video page.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -184,7 +184,15 @@ public abstract class Options {
                                             InactivityFpsLimit.values(),
                                             value -> mcOptions.inactivityFpsLimit().set(value),
                                             () -> mcOptions.inactivityFpsLimit().get())
-                                .setTranslator(InactivityFpsLimit::caption)
+                                .setTranslator(InactivityFpsLimit::caption),
+                        new RangeOption(Component.translatable("voolkan.options.backgroundFps"),
+                                0, 60, 5,
+                                value -> value == 0
+                                        ? Component.translatable("options.off")
+                                        : Component.literal(String.valueOf(value)),
+                                value -> config.backgroundFps = value,
+                                () -> config.backgroundFps)
+                                .setTooltip(v -> Component.translatable("voolkan.options.backgroundFps.tooltip"))
                 }),
                 new OptionBlock("", new Option<?>[]{
                         new RangeOption(Component.translatable("options.guiScale"),

@@ -10,6 +10,7 @@
     "window.ScreenManagerMixin",
     "window.WindowMixin",
     "window.WindowAccessor",
+    "window.FramerateLimitTrackerMixin",
 
     "chunk.ClientPacketListenerM",
     "chunk.ClientChunkCacheM",
