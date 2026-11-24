@@ -3,10 +3,11 @@ package net.vulkanmod.config.gui;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * voolkan branding: the upstream Ko-fi support button is removed.
+ * voolkan branding (Ko-fi button removed) and per-page Restore Defaults button.
  */
 
 import com.google.common.collect.Lists;
+import dev.voolkan.gui.PageDefaults;
 import net.minecraft.ChatFormatting;
 import net.minecraft.util.Util;
 import net.minecraft.client.Minecraft;
@@ -53,6 +54,7 @@ public class VOptionScreen extends Screen {
 
     private VButtonWidget applyButton;
     private VButtonWidget undoButton;
+    private VButtonWidget restoreDefaultsButton;
 
     private VTextInputWidget searchField;
 
@@ -104,9 +106,6 @@ public class VOptionScreen extends Screen {
         this.tooltipWidth = tooltipWidth;
 
         this.buildPage();
-
-        this.applyButton.active = false;
-        this.undoButton.visible = false;
     }
 
     private void initOptionsPages() {
@@ -269,6 +268,8 @@ public class VOptionScreen extends Screen {
             this.searchField.setFocused(true);
             this.searchField.setSelected(savedSelected);
         }
+
+        this.updateState();
     }
 
     @SuppressWarnings("DuplicatedCode")
@@ -292,13 +293,21 @@ public class VOptionScreen extends Screen {
         this.undoButton = new VButtonWidget(x0, y0, buttonWidth, VGuiConstants.WIDGET_HEIGHT,
                 Component.translatable("vulkanmod.options.buttons.undo"), button -> undo());
 
+        Component restoreLabel = Component.translatable("voolkan.options.buttons.restoreDefaults");
+        int restoreWidth = Minecraft.getInstance().font.width(restoreLabel) + 2 * padding;
+        int restoreX = MARGIN + VGuiConstants.PAGE_BUTTON_WIDTH + 6;
+        this.restoreDefaultsButton = new VButtonWidget(restoreX, y0, restoreWidth, VGuiConstants.WIDGET_HEIGHT,
+                restoreLabel, button -> this.restoreCurrentPageDefaults());
+
         this.buttons.add(this.applyButton);
         this.buttons.add(doneButton);
         this.buttons.add(this.undoButton);
+        this.buttons.add(this.restoreDefaultsButton);
 
         this.addWidget(this.applyButton);
         this.addWidget(doneButton);
         this.addWidget(this.undoButton);
+        this.addWidget(this.restoreDefaultsButton);
         this.addWidget(this.searchField);
 
         if (UpdateChecker.isUpdateAvailable()) {
@@ -433,20 +442,34 @@ public class VOptionScreen extends Screen {
     }
 
     private void updateState() {
-        if (this.applyButton == null | this.undoButton == null) return;
+        if (this.applyButton == null || this.undoButton == null) return;
         boolean modified = false;
         for (var page : this.optionPages) {
             modified |= page.optionChanged();
         }
 
-        if (modified) {
-            for (var page : this.optionPages) {
-                page.optionChanged();
-            }
-        }
-
         this.applyButton.active = modified;
         this.undoButton.visible = modified;
+
+        if (this.restoreDefaultsButton != null) {
+            OptionPage currentPage = (!this.isSearchActive && this.currentListIdx >= 0 && this.currentListIdx < this.optionPages.size())
+                    ? this.optionPages.get(this.currentListIdx)
+                    : null;
+            boolean showRestore = currentPage != null && PageDefaults.hasDefaults(currentPage);
+            this.restoreDefaultsButton.visible = showRestore;
+            this.restoreDefaultsButton.active = showRestore && !PageDefaults.isAtDefaults(currentPage);
+        }
+    }
+
+    private void restoreCurrentPageDefaults() {
+        if (this.isSearchActive || this.currentListIdx < 0 || this.currentListIdx >= this.optionPages.size()) {
+            return;
+        }
+
+        OptionPage currentPage = this.optionPages.get(this.currentListIdx);
+        PageDefaults.restore(currentPage);
+        currentPage.updateOptionStates();
+        this.buildPage();
     }
 
     private void setOptionList(int i) {

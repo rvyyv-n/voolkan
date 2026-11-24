@@ -3,7 +3,7 @@ package net.vulkanmod.config.option;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add getNameKey() so presets can find options by translation key.
+ * add getNameKey() and isActive() for presets and per-page default restoration.
  */
 
 import net.minecraft.network.chat.Component;
@@ -107,6 +107,10 @@ public abstract class Option<T> {
         this.active = active;
         this.widget.active = active;
         return this;
+    }
+
+    public boolean isActive() {
+        return this.active;
     }
 
     protected abstract OptionWidget<?> createWidget();

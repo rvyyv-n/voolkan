@@ -14,6 +14,7 @@
   "vulkanmod.options.buttons.apply": "Apply",
   "vulkanmod.options.buttons.undo": "Undo",
   "vulkanmod.options.buttons.update_available": "Update available!",
+  "voolkan.options.buttons.restoreDefaults": "Restore Defaults",
 
   "vulkanmod.options.advCulling": "Advanced Chunk Culling",
   "vulkanmod.options.advCulling.aggressive": "Aggressive",
