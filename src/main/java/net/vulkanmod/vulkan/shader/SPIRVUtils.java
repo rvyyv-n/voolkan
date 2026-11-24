@@ -39,8 +39,8 @@ import static org.lwjgl.system.MemoryUtil.memASCII;
 import static org.lwjgl.util.shaderc.Shaderc.*;
 
 public class SPIRVUtils {
-    private static final boolean DEBUG = true;
-    private static final boolean OPTIMIZATIONS = false;
+    private static final boolean DEBUG = Boolean.getBoolean("voolkan.shaderDebug");
+    private static final boolean OPTIMIZATIONS = !Boolean.getBoolean("voolkan.disableShaderOptimizations");
 
     private static long compiler;
     private static long options;
