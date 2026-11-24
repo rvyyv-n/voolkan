@@ -27,19 +27,19 @@ Last updated: 2026-10-18 (v1.5 scoped). Milestone `first-world`, `r7-checklist`,
 | `low-vram` | 2 GB VRAM handling, only if the R7 shows memory problems | not started |
 
 ## Future (v1.5)
-Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confirmed. Automated verification on headless builder runners is strictly `gradlew build` (no window/client execution). In-game validation on Windows is performed manually by the owner; Mac testing (Rounds 1-4) is performed manually on M4/M5 MacBook Airs by the Mac tester.
+Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confirmed. All v1.5 passes land on the `plan/v1-5` branch (Windows/base passes first, then macOS). Automated verification on headless builder runners is strictly `gradlew build` (no window/client execution). In-game validation on Windows is performed manually by the owner; Mac testing (Rounds 1-3) is performed manually on M4/M5 MacBook Airs by the Mac tester.
 
 | Tag | Task | Detail |
 |---|---|---|
-| `mac-boot` | Pass 8: macOS starts (portability, depth format, logic-op guard, Apple profile) | Mac round 1 |
-| `mac-window` | Pass 9: Mac window, Retina, fullscreen, present modes, latency defaults, tester checklist | Mac round 2 |
-| `mac-perf` | Pass 10: tile-GPU attachment handling, unified-memory writes, MoltenVK settings | deep review; Mac round 3 |
-| `qol-upstream` | Pass 11: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | can run in parallel after Pass 8 |
-| `qol-small` | Pass 12: memory on F3, shader binary cache, hardware blit | |
-| `frame-caps` | Pass 13: precise limiter, background and battery caps, Battery preset | Mac round 4 |
-| `res-scale` | Pass 14: resolution scale for the world | deep review; Mac round 4 |
-| `pipeline-warmup` | Pass 15: build pipelines during world load | needs Pass 12; Mac round 4 |
-| `qol-options` | Pass 16: block-entity distance, restore defaults per page | |
+| `qol-upstream` | Pass 8: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | Windows/base first |
+| `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | |
+| `frame-caps` | Pass 10: precise limiter, background cap, battery-cap hook, Battery preset | |
+| `res-scale` | Pass 11: resolution scale for the world | deep review |
+| `pipeline-warmup` | Pass 12: build pipelines during world load | needs Pass 9 |
+| `qol-options` | Pass 13: block-entity distance, restore defaults per page | |
+| `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | deep review; Mac round 1 |
+| `mac-window` | Pass 15: Mac window, Retina, fullscreen, present modes, latency defaults, Mac battery probe, tester checklist | Mac round 2 |
+| `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK settings | deep review; Mac round 3 |
 
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 5.2 `upstream-pr`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`, 7.1 `low-vram`.

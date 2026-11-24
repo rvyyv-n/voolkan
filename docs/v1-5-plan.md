@@ -60,7 +60,7 @@ The dev PC's only GPU is the R7 350. Validation happens in distinct layers:
 0. **Headless builder runners (build passes).** Automated builder agents running in headless or multi-project environments must NOT run `runClient`, launch interactive worlds, or spawn GLFW/GUI windows. Verification on the builder machine is strictly non-GUI: `.\gradlew build` must pass cleanly with zero compiler warnings or errors.
 1. **Apple profile (offline/profile testing).** A new Vulkan Profiles file, `tools/profiles/apple-m.json`, caps lavapipe to an Apple M-series feature set: no logic op, no wide lines, no geometry shader, no D24S8, no MAILBOX, BGRA swapchain, portability subset reported (using the profiles layer's portability emulation). A run script, `tools/run-apple-profile.ps1`, works like `run-r7-profile.ps1`. The validation layer then reports portability-subset violations. Values come from Apple Silicon reports on gpuinfo.org; the file is marked provisional until a tester sends a real `vulkaninfo`.
 2. **R7 regression & in-game testing.** The usual `gradlew build` and in-game R7 smoke testing are conducted manually by the repo owner on the real R7 350 machine, ensuring Windows behaviour does not change. All macOS code is gated, so the R7 must take exactly the same paths as v1.0.
-3. **Mac tester rounds (after `mac-boot`, `mac-window`, `mac-perf`, and one for Passes 13-15).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile. Tested manually by sending exported mod jars to the Mac tester with Apple Silicon hardware.
+3. **Mac tester rounds (after `mac-boot`, `mac-window`, and `mac-perf`).** A one-page checklist, `docs/mac-test.md`, written for non-developers: install with Prism Launcher or the official launcher plus Fabric, drop in the jar, run through menu, world, resize, fullscreen, F3 and a few minutes of play, then zip the log folder and send it back. The jar prints a capability block (MoltenVK version, portability features, memory heaps, chosen formats and present mode) so one log answers most questions. The first round also asks for `vulkaninfo` output to fix the profile. Because Passes 8-13 land before macOS work, Mac testers get all QoL/perf features baked in from Round 1. Tested manually by sending exported mod jars to the Mac tester with Apple Silicon hardware.
 
 Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU display for running the game. CI keeps building only.
 
@@ -74,40 +74,38 @@ Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU displ
 
 ## Build passes
 
-Passes continue the existing numbering (Pass 7 was the last). Each pass gets its own `pass-N` branch and pull request.
+Passes continue the existing numbering (Pass 7 was the last). All v1.5 passes land on the `plan/v1-5` branch (Windows/base passes first, then macOS).
 
 | Pass | Tag | Content | Tested by |
 |---|---|---|---|
-| 8 | `mac-boot` | Portability enumeration and subset (enabled only when offered); fix `isWindows()`; depth format order; logic-op guard plus text-highlight fallback; capability log block for portability/MoltenVK; Apple profile file and run script | build, Apple profile run clean, R7 smoke; Mac round 1 (starts, reaches a world, `vulkaninfo`) |
-| 9 | `mac-window` | Restore needed macOS window hints; Retina and cursor scaling check; fullscreen option per D2; present-mode and image-count clamps (2-3 images, no MAILBOX); low-latency defaults on macOS; `docs/mac-test.md` | build, Apple profile, R7 smoke; Mac round 2 (resize, fullscreen, input feel) |
-| 10 | `mac-perf` | Tile-friendly attachment handling on tile GPUs (don't store depth, clear instead of load at frame start); audit render-pass restarts per frame; unified-memory fast path (write directly instead of staging when memory is host-visible and device-local); MoltenVK settings through layer settings if measured to help; indirect draw on Mac by default only if round 3 shows it is faster | build, Apple profile, R7 smoke; Mac round 3 (FPS and frame times vs. R7 numbers, both render paths, indirect draw on and off) |
-| 11 | `qol-upstream` | Cherry-pick (`-x`) upstream `0663824` (opt out of Windows fullscreen exclusive: fixes OBS/Discord capture and Alt-Tab freezes), `47ed9cc` (screenshot sync fix), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint for other mods) | build, R7 smoke |
-| 12 | `qol-small` | VRAM and memory use on the F3 screen; shader binary cache on disk (startup and first-load stutter, more so on Mac); hardware blit for texture copies where the format supports it | build, Apple profile, R7 smoke |
-| 13 | `frame-caps` | Precise frame limiter (sleep then short spin, timed to the present); lower frame cap when the window is unfocused, hidden or minimised; optional lower cap on battery on Mac; "Battery" entry in the Presets row | build, R7 smoke with frame times; Mac round 4 (battery and heat) |
-| 14 | `res-scale` | Resolution scale: draw the world below screen resolution and scale it up with a simple filter; GUI stays at full resolution; works with post effects | build, Apple profile, R7 smoke; Mac round 4 |
-| 15 | `pipeline-warmup` | Build pipelines for known states from the saved caches during world load instead of on first use | build, Apple profile, R7 smoke; Mac round 4 (first-load hitches) |
-| 16 | `qol-options` | Separate render distance for block entities (chests, signs, banners); restore-defaults button on each voolkan settings page | build, R7 smoke |
+| 8 | `qol-upstream` | Cherry-pick (`-x`) upstream `0663824` (opt out of Windows fullscreen exclusive: fixes OBS/Discord capture and Alt-Tab freezes), `47ed9cc` (screenshot sync fix), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint for other mods) | build, R7 smoke |
+| 9 | `qol-small` | VRAM and memory use on the F3 screen; shader binary cache on disk (startup and first-load stutter, more so on Mac); hardware blit for texture copies where the format supports it | build, R7 smoke |
+| 10 | `frame-caps` | Precise frame limiter (sleep then short spin, timed to the present); lower frame cap when the window is unfocused, hidden or minimised; platform hook for optional battery cap (macOS probe wired in Pass 15); "Battery" entry in the Presets row | build, R7 smoke with frame times |
+| 11 | `res-scale` | Resolution scale: draw the world below screen resolution and scale it up with a simple filter; GUI stays at full resolution; works with post effects | build, R7 smoke |
+| 12 | `pipeline-warmup` | Build pipelines for known states from the saved caches during world load instead of on first use (needs Pass 9) | build, R7 smoke |
+| 13 | `qol-options` | Separate render distance for block entities (chests, signs, banners); restore-defaults button on each voolkan settings page | build, R7 smoke |
+| 14 | `mac-boot` | Portability enumeration and subset (enabled only when offered); fix `isWindows()`; depth format order; logic-op guard plus text-highlight fallback; capability log block for portability/MoltenVK; Apple profile file and run script | build, Apple profile run clean, R7 smoke; Mac round 1 (starts, reaches a world, `vulkaninfo`) |
+| 15 | `mac-window` | Restore needed macOS window hints; Retina and cursor scaling check; fullscreen option per D2; present-mode and image-count clamps (2-3 images, no MAILBOX); low-latency defaults on macOS; wire macOS battery-cap probe from Pass 10; `docs/mac-test.md` | build, Apple profile, R7 smoke; Mac round 2 (resize, fullscreen, input feel, battery cap) |
+| 16 | `mac-perf` | Tile-friendly attachment handling on tile GPUs (don't store depth, clear instead of load at frame start); audit render-pass restarts per frame; unified-memory fast path (write directly instead of staging when memory is host-visible and device-local); MoltenVK settings through layer settings if measured to help; indirect draw on Mac by default only if round 3 shows it is faster | build, Apple profile, R7 smoke; Mac round 3 (FPS and frame times vs. R7 numbers, both render paths, indirect draw on and off) |
 
 Order and reasons:
-- `mac-boot` first, because nothing else can be tested on a Mac until it starts.
-- `qol-upstream` (Pass 11) is independent of the Mac work. It can run in parallel in its own worktree any time after Pass 8, and merging it early lowers conflict risk with later upstream changes.
-- `mac-perf` comes after `mac-window` because frame-time numbers mean little while windowing and present modes are still changing.
-- Passes 13-16 come after the Mac core and the planned QoL. `pipeline-warmup` needs the shader binary cache from Pass 12. `res-scale` is the largest of them and gets an Opus review. Mac round 4 covers 13-15 together.
+- **Windows/base first (Passes 8-13):** `qol-upstream` (Pass 8) goes first so cherry-picks land cleanly before later edits. `qol-small` (Pass 9) through `qol-options` (Pass 13) can all be verified directly on the R7 350 without waiting on Mac tester turnarounds. `pipeline-warmup` (Pass 12) depends on the shader binary cache from Pass 9. `res-scale` (Pass 11) is the largest base pass and gets a deep review.
+- **macOS second (Passes 14-16):** `mac-boot` (Pass 14) gets macOS starting with all base QoL/perf features already included. `mac-window` (Pass 15) handles windowing, present modes, input, and the macOS battery probe. `mac-perf` (Pass 16) comes last so frame-time measurements happen on settled windowing and present modes.
 - Release prep (version, changelog, tag) stays with the owner after Pass 16.
 
-Model use: Opus 5.5 reviews Passes 8, 10 and 14 (instance and device setup, attachment and memory changes touch correctness). Sonnet 5.5 builds. Low-effort Sonnet or Haiku runs log summaries and first-pass reviews.
+Review gates: Passes 11, 14, and 16 (resolution scaling, instance/device setup, and tile-GPU attachment/memory changes) get a deep correctness review before moving on.
 
 ## QoL ranking
 
 | Rank | Candidate | Size | Benefit | Verdict |
 |---|---|---|---|---|
-| 1 | Upstream fullscreen-exclusive opt-out (`0663824`) | small | fixes capture and Alt-Tab on the R7 | **in** (Pass 11) |
-| 2 | Upstream screenshot sync fix (`47ed9cc`) | small | removes sync errors on screenshots | **in** (Pass 11) |
-| 3 | Upstream multi image view formats (`c84950a`) | small | format flexibility, helps MoltenVK | **in** (Pass 11) |
-| 4 | Upstream settings registry entrypoint (`796aef1`) | small | other mods can add settings pages | **in** (Pass 11); may conflict with our Video page, resolve by hand |
-| 5 | Memory use on F3 | small | watch the 2 GB ceiling and Mac unified memory | **in** (Pass 12) |
-| 6 | Shader binary cache on disk | small | faster loads, fewer first-use stutters | **in** (Pass 12) |
-| 7 | Hardware blit for texture copies | small | faster mipmaps and copies | **in** (Pass 12), only where the format supports blits |
+| 1 | Upstream fullscreen-exclusive opt-out (`0663824`) | small | fixes capture and Alt-Tab on the R7 | **in** (Pass 8) |
+| 2 | Upstream screenshot sync fix (`47ed9cc`) | small | removes sync errors on screenshots | **in** (Pass 8) |
+| 3 | Upstream multi image view formats (`c84950a`) | small | format flexibility, helps MoltenVK | **in** (Pass 8) |
+| 4 | Upstream settings registry entrypoint (`796aef1`) | small | other mods can add settings pages | **in** (Pass 8); may conflict with our Video page, resolve by hand |
+| 5 | Memory use on F3 | small | watch the 2 GB ceiling and Mac unified memory | **in** (Pass 9) |
+| 6 | Shader binary cache on disk | small | faster loads, fewer first-use stutters | **in** (Pass 9) |
+| 7 | Hardware blit for texture copies | small | faster mipmaps and copies | **in** (Pass 9), only where the format supports blits |
 | 8 | Skip unchanged uniform uploads | small | less CPU per draw | **out for now**: easy to break silently; revisit with frame-time data |
 | 9 | Grow the transforms buffer ahead of time (upstream issue 721) | small | removes mid-frame reallocation stutter | **out for now**: needs a reproduction first |
 | 10 | Translucent block sorting (water, glass) | medium | visual fix | **out**: meshing cost on weak CPUs; later release |
@@ -118,7 +116,7 @@ Model use: Opus 5.5 reviews Passes 8, 10 and 14 (instance and device setup, atta
 
 ## Approved extras
 
-Chosen on 2026-10-18 from `v1-5-candidates.md`: resolution scale (P1, Pass 14), background and battery frame caps (P2, Pass 13), pipeline warm-up (P3, Pass 15), precise frame limiter (P5, Pass 13), block-entity distance (P6, Pass 16), indirect draw on Mac as a test item (P8, Pass 10), Mac battery preset (Q4, Pass 13), restore defaults per page (Q6, Pass 16). Ideas not chosen stay in the candidates file as backlog.
+Chosen on 2026-10-18 from `v1-5-candidates.md`: resolution scale (P1, Pass 11), background and battery frame caps (P2, Pass 10), pipeline warm-up (P3, Pass 12), precise frame limiter (P5, Pass 10), block-entity distance (P6, Pass 13), indirect draw on Mac as a test item (P8, Pass 16), Mac battery preset (Q4, Pass 10), restore defaults per page (Q6, Pass 13). Ideas not chosen stay in the candidates file as backlog.
 
 Testers report frame rates with vanilla's F3 screen and its frame-time chart; a voolkan overlay was not chosen.
 
