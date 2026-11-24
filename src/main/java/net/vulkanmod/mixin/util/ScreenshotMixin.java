@@ -1,5 +1,11 @@
 package net.vulkanmod.mixin.util;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * carries upstream fixes cherry-picked for v1.5 (screenshot sync).
+ */
+
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Screenshot;

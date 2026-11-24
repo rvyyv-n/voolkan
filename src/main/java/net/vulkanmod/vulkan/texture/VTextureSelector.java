@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.texture;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * carries upstream fixes cherry-picked for v1.5 (multi image view formats).
+ */
+
 import net.vulkanmod.Initializer;
 import net.vulkanmod.gl.VkGlTexture;
 import net.vulkanmod.render.engine.VkGpuTexture;
