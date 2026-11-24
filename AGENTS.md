@@ -37,11 +37,8 @@ Automated builder runners operating in headless or multi-project environments mu
 ## One folder, one chat
 Follow the global rule. Dev servers and ports of other chats are not yours.
 
-## Model guidance
-- **Opus**: rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags). 1-3 turns per task; no file reading or test-fix loops.
-- **Sonnet 5.5** (medium effort or higher): extended build passes, scripts, docs, summaries, cherry-picks. Opus reviews before anything builds on them.
-- **Gemini Flash**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), fast debug loops, CI.
-- Thread length, worktrees and delegation follow the global rules; build passes use a `pass-N` branch.
+## Workflow
+- Build passes use a `pass-N` branch; anything that decides what ships (versions, merges, tags) requires the owner's approval.
 - Never leave `runClient`, a Gradle daemon you started, or any watcher running at the end of a turn.
 
 ## Licence rules
@@ -54,4 +51,4 @@ Follow the global rule. Dev servers and ports of other chats are not yours.
 Large downloads, logs and run folders are git-ignored (`logs/`, `run/`, `tools/mesa/`, `tools/bin/`, `test-world/*/`). Lavapipe is never registered system-wide; scripts use `VK_DRIVER_FILES` per process.
 
 ## Verify
-For a test handoff, run `.\gradlew build` from the repo root with the JDK 21 `JAVA_HOME` above. Do not run the game or the validation scripts.
+For a test handoff, run `.\gradlew build` from the repo root with the JDK 21 `JAVA_HOME` above, along with `powershell -File .\tools\check-notices.ps1` and `powershell -File .\tools\check-linerefs.ps1`. Do not run the game or the validation scripts.

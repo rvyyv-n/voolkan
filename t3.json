@@ -1,0 +1,22 @@
+{
+  "$schema": "https://t3.codes/schema/t3.json",
+  "iconPath": "src/main/resources/assets/vulkanmod/voolkan_icon.png",
+  "scripts": [
+    {
+      "name": "Build",
+      "command": "powershell -NoProfile -Command \"$env:JAVA_HOME='C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.101-hotspot'; .\\gradlew.bat build\"",
+      "icon": "build"
+    },
+    {
+      "name": "Check Notices",
+      "command": "powershell -File .\\tools\\check-notices.ps1",
+      "icon": "lint"
+    },
+    {
+      "name": "Run Client",
+      "command": "powershell -NoProfile -Command \"$env:JAVA_HOME='C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.12.101-hotspot'; .\\gradlew.bat runClient\"",
+      "icon": "play",
+      "stopOnSettle": true
+    }
+  ]
+}
