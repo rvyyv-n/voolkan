@@ -3,11 +3,13 @@ package net.vulkanmod.vulkan.pass;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * expose the main render pass for pipeline creation fallback.
+ * expose the main render pass for pipeline creation fallback; add world-resolution scaling hooks and depth attachment view.
  */
 
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
 import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import org.lwjgl.system.MemoryStack;
@@ -31,6 +33,12 @@ public interface MainPass {
 
     default void bindAsTexture() {}
 
+    default void beginWorld(DeltaTracker deltaTracker, Camera camera) {}
+
+    default void endWorld() {}
+
+    default void resetWorld() {}
+
     default Framebuffer getMainFramebuffer() {
         return null;
     }
@@ -48,6 +56,10 @@ public interface MainPass {
     }
 
     default GpuTexture getDepthAttachment() {
+        return null;
+    }
+
+    default GpuTextureView getDepthAttachmentView() {
         return null;
     }
 

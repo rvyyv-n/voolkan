@@ -4,7 +4,7 @@ package net.vulkanmod.vulkan.texture;
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * GL_UNPACK_ROW_LENGTH of 0 means tightly packed, and the staged upload size covers only the region read;
- * image layouts are tracked per mip level.
+ * image layouts are tracked per mip level; support BGRA and additional depth formats in formatSize.
  */
 
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
@@ -640,12 +640,14 @@ public class VulkanImage {
         private static int formatSize(int format) {
             return switch (format) {
                 case VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB,
+                     VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB,
                      VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT,
+                     VK_FORMAT_X8_D24_UNORM_PACK32,
                      VK_FORMAT_R8G8B8A8_UINT, VK_FORMAT_R8G8B8A8_SINT,
                      VK_FORMAT_R32_SFLOAT, VK_FORMAT_B10G11R11_UFLOAT_PACK32 -> 4;
                 case VK_FORMAT_R16_SFLOAT -> 2;
                 case VK_FORMAT_R8_UNORM -> 1;
-                case VK_FORMAT_R16G16B16A16_SFLOAT -> 8;
+                case VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT -> 8;
 
                 default -> throw new IllegalArgumentException(String.format("Unxepcted format: %s", format));
             };

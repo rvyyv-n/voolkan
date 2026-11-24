@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * report the active main framebuffer dimensions in updateScreenSize for scaled world rendering.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.platform.Window;
 
@@ -8,6 +14,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.fog.FogData;
 import net.vulkanmod.render.engine.VkGpuBuffer;
 import net.vulkanmod.vulkan.device.DeviceManager;
+import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.shader.PipelineState;
 import net.vulkanmod.vulkan.util.ColorUtil;
 import net.vulkanmod.vulkan.util.MappedBuffer;
@@ -97,6 +104,16 @@ public abstract class VRenderSystem {
     }
 
     public static void updateScreenSize() {
+        Renderer renderer = Renderer.getInstance();
+        Framebuffer framebuffer = renderer != null && renderer.getMainPass() != null
+                ? renderer.getMainPass().getMainFramebuffer()
+                : null;
+        if (framebuffer != null && framebuffer.getWidth() > 0 && framebuffer.getHeight() > 0) {
+            screenSize.putFloat(0, (float) framebuffer.getWidth());
+            screenSize.putFloat(4, (float) framebuffer.getHeight());
+            return;
+        }
+
         Window window = Minecraft.getInstance().getWindow();
 
         screenSize.putFloat(0, (float) window.getWidth());

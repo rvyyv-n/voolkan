@@ -1,5 +1,11 @@
 package net.vulkanmod.render.engine;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * map VK_FORMAT_B8G8R8A8_SRGB to TextureFormat.RGBA8.
+ */
+
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.opengl.GlTexture;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -96,7 +102,8 @@ public class VkGpuTexture extends GlTexture {
 
     public static TextureFormat textureFormat(int format) {
         return switch (format) {
-            case VK10.VK_FORMAT_R8G8B8A8_UNORM, VK10.VK_FORMAT_B8G8R8A8_UNORM, VK10.VK_FORMAT_R8G8B8A8_SRGB -> TextureFormat.RGBA8;
+            case VK10.VK_FORMAT_R8G8B8A8_UNORM, VK10.VK_FORMAT_B8G8R8A8_UNORM,
+                 VK10.VK_FORMAT_R8G8B8A8_SRGB, VK10.VK_FORMAT_B8G8R8A8_SRGB -> TextureFormat.RGBA8;
             case VK10.VK_FORMAT_R8_UNORM -> TextureFormat.RED8;
             case VK10.VK_FORMAT_D32_SFLOAT -> TextureFormat.DEPTH32;
             default -> null;

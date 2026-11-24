@@ -3,12 +3,15 @@ package net.vulkanmod.vulkan.pass;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * expose the main render pass for pipeline creation fallback.
+ * expose the main render pass for pipeline creation fallback; integrate scaled world rendering mode and depth attachment view.
  */
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.voolkan.render.WorldScale;
+import net.minecraft.client.Camera;
+import net.minecraft.client.DeltaTracker;
 import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.engine.VkGpuTexture;
 import net.vulkanmod.vulkan.Renderer;
@@ -41,6 +44,9 @@ public class DefaultMainPass implements MainPass {
     private GpuTextureView[] colorAttachmentTextureViews;
     IntSupplier imageIdxSupplier;
     private GpuTexture depthAttachmentTexture;
+    private GpuTextureView depthAttachmentTextureView;
+
+    private final WorldScale worldScale = new WorldScale();
 
     DefaultMainPass() {
         createResources();
@@ -91,6 +97,17 @@ public class DefaultMainPass implements MainPass {
 
     @Override
     public void begin(VkCommandBuffer commandBuffer, MemoryStack stack) {
+        if (this.worldScale.isActive()) {
+            // Re-entering mid-world (e.g. Renderer.flushCmds): resume the scaled world pass preserving its contents
+            Framebuffer worldFramebuffer = this.worldScale.getFramebuffer();
+            Renderer.getInstance().beginRenderPass(this.worldScale.getAuxPass(), worldFramebuffer);
+            Renderer.setViewport(0, 0, worldFramebuffer.getWidth(), worldFramebuffer.getHeight(), stack);
+            vkCmdSetScissor(commandBuffer, 0, worldFramebuffer.scissor(stack));
+            return;
+        }
+
+        this.worldScale.syncDisabled();
+
         Framebuffer framebuffer = this.mainFramebuffer;
 
         VulkanImage colorAttachment = framebuffer.getColorAttachment();
@@ -107,6 +124,7 @@ public class DefaultMainPass implements MainPass {
     @Override
     public void end(VkCommandBuffer commandBuffer) {
         Renderer.getInstance().endRenderPass(commandBuffer);
+        this.worldScale.reset();
 
         if (this.mainFramebuffer == Renderer.getInstance().getSwapChain()) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -122,20 +140,51 @@ public class DefaultMainPass implements MainPass {
 
     @Override
     public void cleanUp() {
+        this.worldScale.release();
         this.mainRenderPass.cleanUp();
         this.auxRenderPass.cleanUp();
     }
 
     @Override
     public void onResize() {
+        this.worldScale.release();
         createResources();
     }
 
+    @Override
+    public void beginWorld(DeltaTracker deltaTracker, Camera camera) {
+        if (this.mainFramebuffer != Renderer.getInstance().getSwapChain()) {
+            return;
+        }
+
+        this.worldScale.begin(Renderer.getInstance().getSwapChain(), deltaTracker, camera);
+    }
+
+    @Override
+    public void endWorld() {
+        this.worldScale.end(this);
+    }
+
+    @Override
+    public void resetWorld() {
+        this.worldScale.reset();
+    }
+
+    @Override
     public void rebindMainTarget() {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+        RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
+
+        if (this.worldScale.isActive()) {
+            if (boundRenderPass == this.worldScale.getClearPass() || boundRenderPass == this.worldScale.getAuxPass())
+                return;
+
+            Renderer.getInstance().endRenderPass(commandBuffer);
+            Renderer.getInstance().beginRenderPass(this.worldScale.getAuxPass(), this.worldScale.getFramebuffer());
+            return;
+        }
 
         // Do not rebind if the framebuffer is already bound
-        RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
         if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
             return;
 
@@ -147,41 +196,59 @@ public class DefaultMainPass implements MainPass {
     public void bindAsTexture() {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
 
-        // Check if render pass is using the framebuffer
+        // Check if render pass is using the active main framebuffer
         RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
-        if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
-            Renderer.getInstance().endRenderPass(commandBuffer);
-
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            this.mainFramebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        Framebuffer activeFramebuffer;
+        if (this.worldScale.isActive()) {
+            if (boundRenderPass == this.worldScale.getClearPass() || boundRenderPass == this.worldScale.getAuxPass())
+                Renderer.getInstance().endRenderPass(commandBuffer);
+            activeFramebuffer = this.worldScale.getFramebuffer();
+        }
+        else {
+            if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
+                Renderer.getInstance().endRenderPass(commandBuffer);
+            activeFramebuffer = this.mainFramebuffer;
         }
 
-        VTextureSelector.bindTexture(this.mainFramebuffer.getColorAttachment());
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            activeFramebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
+        VTextureSelector.bindTexture(activeFramebuffer.getColorAttachment());
     }
 
     @Override
     public Framebuffer getMainFramebuffer() {
-        return mainFramebuffer;
+        return this.worldScale.isActive() ? this.worldScale.getFramebuffer() : this.mainFramebuffer;
     }
 
     @Override
     public RenderPass getMainRenderPass() {
-        return this.mainRenderPass;
+        return this.worldScale.isActive() ? this.worldScale.getClearPass() : this.mainRenderPass;
     }
 
     @Override
     public GpuTexture getColorAttachment() {
-        return this.colorAttachmentTextures[this.imageIdxSupplier.getAsInt()];
+        return this.worldScale.isActive()
+                ? this.worldScale.getColorAttachment()
+                : this.colorAttachmentTextures[this.imageIdxSupplier.getAsInt()];
     }
 
     @Override
     public GpuTextureView getColorAttachmentView() {
-        return this.colorAttachmentTextureViews[this.imageIdxSupplier.getAsInt()];
+        return this.worldScale.isActive()
+                ? this.worldScale.getColorAttachmentView()
+                : this.colorAttachmentTextureViews[this.imageIdxSupplier.getAsInt()];
     }
 
     @Override
     public GpuTexture getDepthAttachment() {
-        return this.depthAttachmentTexture;
+        return this.worldScale.isActive() ? this.worldScale.getDepthAttachment() : this.depthAttachmentTexture;
+    }
+
+    @Override
+    public GpuTextureView getDepthAttachmentView() {
+        return this.worldScale.isActive() ? this.worldScale.getDepthAttachmentView() : this.depthAttachmentTextureView;
     }
 
     private void createAttachmentTextures() {
@@ -218,5 +285,6 @@ public class DefaultMainPass implements MainPass {
         }
 
         this.depthAttachmentTexture = device.gpuTextureFromVulkanImage(this.mainFramebuffer.getDepthAttachment());
+        this.depthAttachmentTextureView = device.createTextureView(this.depthAttachmentTexture);
     }
 }

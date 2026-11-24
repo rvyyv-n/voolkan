@@ -1,5 +1,11 @@
 package net.vulkanmod.mixin.render.target;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * forward getDepthTextureView to the active main pass so scaled world rendering stays consistent.
+ */
+
 import com.mojang.blaze3d.pipeline.MainTarget;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.GpuDevice;
@@ -59,5 +65,10 @@ public class MainTargetMixin extends RenderTarget {
     @Override
     public GpuTexture getDepthTexture() {
         return Renderer.getInstance().getMainPass().getDepthAttachment();
+    }
+
+    @Override
+    public GpuTextureView getDepthTextureView() {
+        return Renderer.getInstance().getMainPass().getDepthAttachmentView();
     }
 }

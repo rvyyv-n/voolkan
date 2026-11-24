@@ -5,7 +5,8 @@ package net.vulkanmod.vulkan;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * bind guard: fall back to the main render target when a pipeline is bound with no render pass;
  * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option;
- * submission serials so GPU fences can wait for the frame that holds the work recorded when they were created.
+ * submission serials so GPU fences can wait for the frame that holds the work recorded when they were created;
+ * reset world-scale mode at frame start.
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -275,6 +276,7 @@ public class Renderer {
         submitUploads();
 
         MemoryManager.getInstance().initFrame(currentFrame);
+        mainPass.resetWorld();
         drawer.setCurrentFrame(currentFrame);
         Vulkan.getStagingBuffers().beginFrame(currentFrame);
 
