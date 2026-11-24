@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.TextureFilteringMethod;
 import net.minecraft.client.renderer.GlobalSettingsUniform;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.engine.VkGpuTexture;
 import net.vulkanmod.vulkan.Renderer;
@@ -109,7 +110,7 @@ public final class WorldScale {
     }
 
     public static int configuredScale() {
-        return MAX_SCALE;
+        return Initializer.CONFIG != null ? clampScale(Initializer.CONFIG.worldScale) : MAX_SCALE;
     }
 
     public static boolean isEnabled() {

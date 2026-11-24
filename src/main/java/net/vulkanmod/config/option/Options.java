@@ -5,7 +5,7 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block, Presets row, and background/battery FPS caps on the Video page.
+ * read-only Compatibility block, Presets row, World Resolution, and background/battery FPS caps on the Video page.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -13,6 +13,7 @@ import dev.voolkan.compat.CompatInfo;
 import dev.voolkan.gui.InfoOption;
 import dev.voolkan.gui.Preset;
 import dev.voolkan.power.PowerSources;
+import dev.voolkan.render.WorldScale;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
@@ -161,6 +162,13 @@ public abstract class Options {
         displayOptions.add(windowModeOption);
         displayOptions.add(resolutionOption);
         displayOptions.add(refreshRateOption);
+        displayOptions.add(new RangeOption(Component.translatable("voolkan.options.worldScale"),
+                WorldScale.MIN_SCALE, WorldScale.MAX_SCALE, WorldScale.STEP,
+                value -> Component.literal(value + "%"),
+                value -> config.worldScale = value,
+                () -> WorldScale.clampScale(config.worldScale))
+                .setTooltip(v -> Component.translatable("voolkan.options.worldScale.tooltip"))
+                .setImpact(PerformanceImpact.HIGH));
         displayOptions.add(new RangeOption(Component.translatable("options.framerateLimit"),
                 10, 260, 10,
                 value -> Component.nullToEmpty(value == 260

@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps and batteryFps options.
+ * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps and worldScale options.
  */
 
 import com.google.gson.Gson;
@@ -43,6 +43,8 @@ public class Config {
     public int backgroundFps = 30;
     /** Frame-rate cap while running on battery power; 0 = off. */
     public int batteryFps = 0;
+    /** World render resolution as a percentage (50..100, step 5); 100 = native (off). */
+    public int worldScale = 100;
     /** Requested swapchain image count; 0 = driver minimum + 1. Clamped to the surface limits. */
     public int swapChainImages = 0;
     public int builderThreads = 0;

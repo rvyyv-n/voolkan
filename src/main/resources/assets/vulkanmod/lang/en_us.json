@@ -78,6 +78,8 @@
   "voolkan.options.backgroundFps.tooltip": "Caps the framerate when the window is unfocused (and further when hidden or minimised). Set to Off to disable.",
   "voolkan.options.batteryFps": "Battery FPS Cap",
   "voolkan.options.batteryFps.tooltip": "Caps the framerate while running on battery power. Set to Off to disable.",
+  "voolkan.options.worldScale": "World Resolution",
+  "voolkan.options.worldScale.tooltip": "Renders the 3D world at a lower resolution and upscales it, while keeping the HUD and menus sharp. Lower values raise FPS when the GPU is the bottleneck.",
 
   "voolkan.options.compat": "Compatibility",
   "voolkan.options.compat.renderPath": "Render Path",
