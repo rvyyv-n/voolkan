@@ -1,14 +1,19 @@
 package net.vulkanmod.vulkan.shader.layout;
 
-import net.vulkanmod.vulkan.shader.Uniforms;
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use primitive IntSupplier to avoid per-draw integer boxing.
+ */
+
 import net.vulkanmod.vulkan.util.MappedBuffer;
-import org.apache.commons.lang3.Validate;
 import org.lwjgl.system.MemoryUtil;
 
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public class Vec1i extends Uniform {
-    private Supplier<Integer> intSupplier;
+    private IntSupplier intSupplier;
 
     public Vec1i(Info info) {
         super(info);
@@ -33,7 +38,7 @@ public class Vec1i extends Uniform {
             return;
         }
 
-        int i = this.intSupplier.get();
+        int i = this.intSupplier.getAsInt();
         MemoryUtil.memPutInt(ptr + this.offset, i);
     }
 }

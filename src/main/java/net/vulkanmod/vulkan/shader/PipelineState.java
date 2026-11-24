@@ -90,6 +90,7 @@ public class PipelineState {
     int depthState_i;
     int colorMask_i;
     int logicOp_i;
+    private final int cachedHash;
 
     public PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
                          RenderPass renderPass) {
@@ -111,6 +112,16 @@ public class PipelineState {
         this.depthState_i = depthState;
         this.colorMask_i = colorMask;
         this.logicOp_i = logicOp;
+
+        int h = blendState;
+        h = 31 * h + depthState;
+        h = 31 * h + logicOp;
+        h = 31 * h + assemblyRasterState;
+        h = 31 * h + colorMask;
+        h = 31 * h + colorFormat;
+        h = 31 * h + depthFormat;
+        h = 31 * h + dependencyKind;
+        this.cachedHash = h;
     }
 
     private boolean checkEquals(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
@@ -177,7 +188,7 @@ public class PipelineState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(blendState_i, depthState_i, logicOp_i, assemblyRasterState, colorMask_i, colorFormat, depthFormat, dependencyKind);
+        return this.cachedHash;
     }
 
     public static BlendInfo defaultBlendInfo() {

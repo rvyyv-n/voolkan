@@ -147,6 +147,9 @@ public abstract class VRenderSystem {
         return DeviceManager.deviceProperties.limits().maxImageDimension2D();
     }
 
+    private static final Matrix4f scratchMV = new Matrix4f();
+    private static final Matrix4f scratchP = new Matrix4f();
+
     public static void applyMVP(Matrix4f MV, Matrix4f P) {
         applyModelViewMatrix(MV);
         applyProjectionMatrix(P);
@@ -154,30 +157,27 @@ public abstract class VRenderSystem {
     }
 
     public static void applyModelViewMatrix(Matrix4f mat) {
-        mat.get(modelViewMatrix.buffer.asFloatBuffer());
+        mat.get(0, modelViewMatrix.buffer);
     }
 
     public static void applyProjectionMatrix(Matrix4f mat) {
-        mat.get(projectionMatrix.buffer.asFloatBuffer());
+        mat.get(0, projectionMatrix.buffer);
     }
 
     public static void applyProjectionMatrix(GpuBufferSlice bufferSlice) {
         long ptr = ((VkGpuBuffer) bufferSlice.buffer()).getBuffer().getDataPtr();
-        ByteBuffer byteBuffer = MemoryUtil.memByteBuffer(ptr + bufferSlice.offset(), (int) bufferSlice.length());
-        Matrix4f matrix4f = new Matrix4f().set(byteBuffer);
-
-        matrix4f.get(projectionMatrix.buffer.asFloatBuffer());
+        MemoryUtil.memCopy(ptr + bufferSlice.offset(), projectionMatrix.ptr, 64L);
     }
 
     public static void calculateMVP() {
-        org.joml.Matrix4f MV = new org.joml.Matrix4f(modelViewMatrix.buffer.asFloatBuffer());
-        org.joml.Matrix4f P = new org.joml.Matrix4f(projectionMatrix.buffer.asFloatBuffer());
+        scratchMV.set(0, modelViewMatrix.buffer);
+        scratchP.set(0, projectionMatrix.buffer);
 
-        P.mul(MV).get(MVP.buffer);
+        scratchP.mul(scratchMV).get(0, MVP.buffer);
     }
 
     public static void setTextureMatrix(Matrix4f mat) {
-        mat.get(TextureMatrix.buffer.asFloatBuffer());
+        mat.get(0, TextureMatrix.buffer);
     }
 
     public static MappedBuffer getTextureMatrix() {

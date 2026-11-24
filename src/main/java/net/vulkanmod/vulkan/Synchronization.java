@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * skip empty command-buffer reset scheduling in scheduleCbReset.
+ */
+
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -88,6 +94,9 @@ public class Synchronization {
     }
 
     public void scheduleCbReset() {
+        if (this.semaphoreCbs.isEmpty()) {
+            return;
+        }
         final var frameSemaphoreCbs = this.semaphoreCbs.clone();
         MemoryManager.getInstance().addFrameOp(
                 () -> {

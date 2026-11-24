@@ -101,7 +101,7 @@ public class DefaultMainPass implements MainPass {
             Framebuffer worldFramebuffer = this.worldScale.getFramebuffer();
             Renderer.getInstance().beginRenderPass(this.worldScale.getAuxPass(), worldFramebuffer);
             Renderer.setViewport(0, 0, worldFramebuffer.getWidth(), worldFramebuffer.getHeight(), stack);
-            vkCmdSetScissor(commandBuffer, 0, worldFramebuffer.scissor(stack));
+            Renderer.resetScissor();
             return;
         }
 
@@ -116,8 +116,7 @@ public class DefaultMainPass implements MainPass {
 
         Renderer.setViewport(0, 0, framebuffer.getWidth(), framebuffer.getHeight(), stack);
 
-        VkRect2D.Buffer pScissor = framebuffer.scissor(stack);
-        vkCmdSetScissor(commandBuffer, 0, pScissor);
+        Renderer.resetScissor();
     }
 
     @Override

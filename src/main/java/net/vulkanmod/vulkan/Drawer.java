@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * route vertex and index buffer binds through Renderer state caching.
+ */
+
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.render.engine.VkGpuBuffer;
 import net.vulkanmod.vulkan.memory.*;
@@ -133,27 +139,22 @@ public class Drawer {
 
     public void drawIndexed(Buffer vertexBuffer, Buffer indexBuffer, int indexCount, int indexType) {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+        Renderer renderer = Renderer.getInstance();
 
-        VUtil.UNSAFE.putLong(pBuffers, vertexBuffer.getId());
-        VUtil.UNSAFE.putLong(pOffsets, vertexBuffer.getOffset());
-        nvkCmdBindVertexBuffers(commandBuffer, 0, 1, pBuffers, pOffsets);
-
-        bindIndexBuffer(commandBuffer, indexBuffer, indexType);
+        renderer.bindVertexBuffer(commandBuffer, vertexBuffer.getId(), vertexBuffer.getOffset());
+        renderer.bindIndexBuffer(commandBuffer, indexBuffer.getId(), indexBuffer.getOffset(), indexType);
         vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
     }
 
     public void draw(VertexBuffer vertexBuffer, int vertexCount) {
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
 
-        VUtil.UNSAFE.putLong(pBuffers, vertexBuffer.getId());
-        VUtil.UNSAFE.putLong(pOffsets, vertexBuffer.getOffset());
-        nvkCmdBindVertexBuffers(commandBuffer, 0, 1, pBuffers, pOffsets);
-
+        Renderer.getInstance().bindVertexBuffer(commandBuffer, vertexBuffer.getId(), vertexBuffer.getOffset());
         vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
     }
 
     public void bindIndexBuffer(VkCommandBuffer commandBuffer, Buffer indexBuffer, int indexType) {
-        vkCmdBindIndexBuffer(commandBuffer, indexBuffer.getId(), indexBuffer.getOffset(), indexType);
+        Renderer.getInstance().bindIndexBuffer(commandBuffer, indexBuffer.getId(), indexBuffer.getOffset(), indexType);
     }
 
     public void cleanUpResources() {

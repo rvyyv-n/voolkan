@@ -700,7 +700,25 @@ public class VkCommandEncoder implements CommandEncoder {
                 indexType = VertexFormat.IndexType.SHORT;
             }
 
-            Pipeline pipeline = ExtendedRenderPipeline.of(renderPass.getPipeline()).getPipeline();
+            ExtendedRenderPipeline extPipeline = ExtendedRenderPipeline.of(renderPass.getPipeline());
+            Pipeline pipeline = extPipeline.getPipeline();
+            EGlProgram glProgram = extPipeline.getProgram();
+            RenderPass.UniformUploader uniformUploader = (string, gpuBufferSlice) -> {
+                if (glProgram.getUniform(string) instanceof Uniform.Ubo ubo1) {
+                    int blockBinding;
+                    try {
+                        blockBinding = ubo1.blockBinding();
+                    } catch (Throwable var7) {
+                        throw new MatchException(var7.toString(), var7);
+                    }
+
+                    VkGpuBuffer gpuBuffer1 = (VkGpuBuffer) gpuBufferSlice.buffer();
+
+                    UBO ubo = pipeline.getUBO(blockBinding);
+                    ubo.setUseGlobalBuffer(false);
+                    ubo.getBufferSlice().set(gpuBuffer1.buffer, gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
+                }
+            };
 
             for (RenderPass.Draw draw : collection) {
                 VertexFormat.IndexType indexType2 = draw.indexType() == null ? indexType : draw.indexType();
@@ -727,24 +745,7 @@ public class VkCommandEncoder implements CommandEncoder {
 
                 BiConsumer<T, RenderPass.UniformUploader> biConsumer = draw.uniformUploaderConsumer();
                 if (biConsumer != null) {
-                    biConsumer.accept(object, (string, gpuBufferSlice) -> {
-                        EGlProgram glProgram = ExtendedRenderPipeline.of(renderPass.pipeline).getProgram();
-                        if (glProgram.getUniform(string) instanceof Uniform.Ubo ubo1) {
-
-                            int blockBinding;
-                            try {
-                                blockBinding = ubo1.blockBinding();
-                            } catch (Throwable var7) {
-                                throw new MatchException(var7.toString(), var7);
-                            }
-
-                            VkGpuBuffer gpuBuffer1 = (VkGpuBuffer) gpuBufferSlice.buffer();
-
-                            UBO ubo = pipeline.getUBO(blockBinding);
-                            ubo.setUseGlobalBuffer(false);
-                            ubo.getBufferSlice().set(gpuBuffer1.buffer, gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
-                        }
-                    });
+                    biConsumer.accept(object, uniformUploader);
 
                     Renderer.getInstance().uploadAndBindUBOs(pipeline);
                 }
@@ -792,36 +793,33 @@ public class VkCommandEncoder implements CommandEncoder {
             vertexOffset = 0;
         }
 
+        Renderer renderer = Renderer.getInstance();
         VkCommandBuffer vkCommandBuffer = Renderer.getCommandBuffer();
-        VkGpuBuffer vertexBuffer = (VkGpuBuffer)renderPass.vertexBuffers[0];
-        try (MemoryStack stack = stackPush()) {
-            if (vertexBuffer != null) {
-//                VK11.vkCmdBindVertexBuffers(vkCommandBuffer, 0, stack.longs(vertexBuffer.buffer.getId()), stack.longs(0));
-                VK11.vkCmdBindVertexBuffers(vkCommandBuffer, 0, stack.longs(vertexBuffer.buffer.getId()), stack.longs(vertexBuffer.offset));
-            }
+        VkGpuBuffer vertexBuffer = (VkGpuBuffer) renderPass.vertexBuffers[0];
+        if (vertexBuffer != null) {
+            renderer.bindVertexBuffer(vkCommandBuffer, vertexBuffer.buffer.getId(), vertexBuffer.offset);
+        }
 
-            if (renderPass.indexBuffer != null) {
-                VkGpuBuffer indexBuffer = (VkGpuBuffer)renderPass.indexBuffer;
+        if (renderPass.indexBuffer != null) {
+            VkGpuBuffer indexBuffer = (VkGpuBuffer) renderPass.indexBuffer;
 
-                int vkIndexType = switch (indexType) {
-                    case SHORT -> VK_INDEX_TYPE_UINT16;
-                    case INT -> VK_INDEX_TYPE_UINT32;
-                };
+            int vkIndexType = switch (indexType) {
+                case SHORT -> VK_INDEX_TYPE_UINT16;
+                case INT -> VK_INDEX_TYPE_UINT32;
+            };
 
-//                VK11.vkCmdBindIndexBuffer(vkCommandBuffer, indexBuffer.buffer.getId(), 0, vkIndexType);
-                VK11.vkCmdBindIndexBuffer(vkCommandBuffer, indexBuffer.buffer.getId(), indexBuffer.offset, vkIndexType);
-                VK11.vkCmdDrawIndexed(vkCommandBuffer, vertexCount, instanceCount, firstIndex, vertexOffset, 0);
+            renderer.bindIndexBuffer(vkCommandBuffer, indexBuffer.buffer.getId(), indexBuffer.offset, vkIndexType);
+            VK11.vkCmdDrawIndexed(vkCommandBuffer, vertexCount, instanceCount, firstIndex, vertexOffset, 0);
+        }
+        else {
+            var autoIndexBuffer = Renderer.getDrawer().getAutoIndexBuffer(renderPipeline.getVertexFormatMode(), vertexCount);
+            if (autoIndexBuffer != null) {
+                int indexCount = autoIndexBuffer.getIndexCount(vertexCount);
+                renderer.bindIndexBuffer(vkCommandBuffer, autoIndexBuffer.getIndexBuffer().getId(), 0, autoIndexBuffer.getIndexBuffer().indexType.value);
+                VK11.vkCmdDrawIndexed(vkCommandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, 0);
             }
             else {
-                var autoIndexBuffer = Renderer.getDrawer().getAutoIndexBuffer(renderPipeline.getVertexFormatMode(), vertexCount);
-                if (autoIndexBuffer != null) {
-                    int indexCount = autoIndexBuffer.getIndexCount(vertexCount);
-                    VK11.vkCmdBindIndexBuffer(vkCommandBuffer, autoIndexBuffer.getIndexBuffer().getId(), 0, autoIndexBuffer.getIndexBuffer().indexType.value);
-                    VK11.vkCmdDrawIndexed(vkCommandBuffer, indexCount, instanceCount, firstIndex, vertexOffset, 0);
-                }
-                else {
-                    VK11.vkCmdDraw(vkCommandBuffer, vertexCount, instanceCount, vertexOffset, 0);
-                }
+                VK11.vkCmdDraw(vkCommandBuffer, vertexCount, instanceCount, vertexOffset, 0);
             }
         }
     }
@@ -857,15 +855,12 @@ public class VkCommandEncoder implements CommandEncoder {
     }
 
     public void setupUniforms(VkRenderPass renderPass) {
-        RenderPipeline renderPipeline = renderPass.pipeline;
-        EGlProgram glProgram = ExtendedRenderPipeline.of(renderPass.pipeline).getProgram();
         Pipeline pipeline = ExtendedRenderPipeline.of(renderPass.pipeline).getPipeline();
 
-        for (UBO ubo : pipeline.getBuffers()) {
-            String uniformName = ubo.name;
-            Uniform uniform = glProgram.getUniform(uniformName);
-
-            GpuBufferSlice gpuBufferSlice = renderPass.uniforms.get(uniformName);
+        List<UBO> uboList = pipeline.getBuffers();
+        for (int i = 0, n = uboList.size(); i < n; i++) {
+            UBO ubo = uboList.get(i);
+            GpuBufferSlice gpuBufferSlice = renderPass.uniforms.get(ubo.name);
 
             // In case uniform buffer is not set, fallback to global buffer
             if (gpuBufferSlice == null) {
@@ -876,16 +871,14 @@ public class VkCommandEncoder implements CommandEncoder {
 
             VkGpuBuffer gpuBuffer = (VkGpuBuffer) gpuBufferSlice.buffer();
 
-            assert ubo != null;
             ubo.setUseGlobalBuffer(false);
             ubo.getBufferSlice().set(gpuBuffer.buffer, gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
         }
 
-        for (ImageDescriptor imageDescriptor : pipeline.getImageDescriptors()) {
-            String uniformName = imageDescriptor.name;
-            int samplerIndex = imageDescriptor.imageIdx;
-
-            var textureSampler = renderPass.samplers.get(uniformName);
+        List<ImageDescriptor> imageDescriptors = pipeline.getImageDescriptors();
+        for (int i = 0, n = imageDescriptors.size(); i < n; i++) {
+            ImageDescriptor imageDescriptor = imageDescriptors.get(i);
+            var textureSampler = renderPass.samplers.get(imageDescriptor.name);
             if (textureSampler == null) {
                 continue;
             }
@@ -896,10 +889,9 @@ public class VkCommandEncoder implements CommandEncoder {
                 continue;
             }
 
-            GlStateManager._activeTexture(33984 + samplerIndex);
-            GlStateManager._bindTexture(gpuTexture.id);
-
-            gpuTexture.getVulkanImage().setSampler(textureSampler.sampler().getId());
+            var vulkanImage = gpuTexture.getVulkanImage();
+            vulkanImage.setSampler(textureSampler.sampler().getId());
+            VTextureSelector.bindTexture(imageDescriptor.imageIdx, vulkanImage);
         }
 
     }

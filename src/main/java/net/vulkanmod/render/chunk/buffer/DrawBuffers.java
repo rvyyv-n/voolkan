@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * route terrain buffer binds through Renderer state caching and optimize terrain draw submission.
+ */
+
 import net.minecraft.util.Mth;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.shader.PipelineManager;
@@ -494,9 +500,11 @@ public class DrawBuffers {
     public void bindBuffers(VkCommandBuffer commandBuffer, Pipeline pipeline, TerrainRenderType terrainRenderType,
                             double camX, double camY, double camZ,
                             long currentTime, int fadeTimeMs, float fadeTimeInv) {
+        Renderer renderer = Renderer.getInstance();
+        var vertexBuffer = getAreaBuffer(terrainRenderType);
+        renderer.bindVertexBuffer(commandBuffer, vertexBuffer.getId(), 0L);
+
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            var vertexBuffer = getAreaBuffer(terrainRenderType);
-            nvkCmdBindVertexBuffers(commandBuffer, 0, 1, stack.npointer(vertexBuffer.getId()), stack.npointer(0));
             updateChunkAreaOrigin(commandBuffer, pipeline, camX, camY, camZ, stack);
         }
 
@@ -507,7 +515,7 @@ public class DrawBuffers {
         ubo.getBufferSlice().set(sectionDataBuffer, 0, (int) sectionDataBuffer.getBufferSize());
 
         if (terrainRenderType == TerrainRenderType.TRANSLUCENT && this.indexBuffer != null) {
-            vkCmdBindIndexBuffer(commandBuffer, this.indexBuffer.getId(), 0, VK_INDEX_TYPE_UINT16);
+            renderer.bindIndexBuffer(commandBuffer, this.indexBuffer.getId(), 0L, VK_INDEX_TYPE_UINT16);
         }
     }
 

@@ -311,11 +311,23 @@ public abstract class Pipeline {
     }
 
     public UBO getUBO(int binding) {
-        return getUBO(ubo -> ubo.binding == binding);
+        for (int i = 0, n = this.buffers.size(); i < n; i++) {
+            UBO ubo = this.buffers.get(i);
+            if (ubo.binding == binding) {
+                return ubo;
+            }
+        }
+        return null;
     }
 
     public UBO getUBO(String name) {
-        return getUBO(ubo -> ubo.name.equals(name));
+        for (int i = 0, n = this.buffers.size(); i < n; i++) {
+            UBO ubo = this.buffers.get(i);
+            if (ubo.name.equals(name)) {
+                return ubo;
+            }
+        }
+        return null;
     }
 
     public UBO getUBO(Predicate<UBO> fn) {
@@ -330,7 +342,13 @@ public abstract class Pipeline {
     }
 
     public ImageDescriptor getImageDescriptor(String name) {
-        return getImageDescriptor(imageDescriptor -> imageDescriptor.name.equals(name));
+        for (int i = 0, n = this.imageDescriptors.size(); i < n; i++) {
+            ImageDescriptor descriptor = this.imageDescriptors.get(i);
+            if (descriptor.name.equals(name)) {
+                return descriptor;
+            }
+        }
+        return null;
     }
 
     public ImageDescriptor getImageDescriptor(Predicate<ImageDescriptor> fn) {

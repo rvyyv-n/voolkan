@@ -1,5 +1,11 @@
 package net.vulkanmod.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * remove redundant UBO upload in bind() since draw() uploads and binds UBOs.
+ */
+
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.vulkan.Renderer;
@@ -107,7 +113,6 @@ public class VBO {
         Renderer renderer = Renderer.getInstance();
         renderer.bindGraphicsPipeline(pipeline);
         VTextureSelector.bindShaderTextures(pipeline);
-        renderer.uploadAndBindUBOs(pipeline);
     }
 
     public void draw() {
