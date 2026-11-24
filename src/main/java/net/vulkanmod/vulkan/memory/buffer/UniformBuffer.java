@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * reset usedBytes when resizing a UniformBuffer so subsequent writes start at offset 0 of the new VkBuffer.
+ */
+
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryType;
 
@@ -21,6 +27,7 @@ public class UniformBuffer extends Buffer {
     public void checkCapacity(int size) {
         if (size > this.bufferSize - this.usedBytes) {
             resizeBuffer((this.bufferSize + size) * 2);
+            this.usedBytes = 0;
         }
     }
 

@@ -298,8 +298,6 @@ public class VkCommandEncoder implements CommandEncoder {
                 } else {
                     long dstOffset = gpuBufferSlice.offset();
 
-                    var commandBuffer = Renderer.getInstance().getTransferCb();
-
                     StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
 
                     // Large immediate batches (e.g. many entities sharing one RenderType) can
@@ -312,6 +310,9 @@ public class VkCommandEncoder implements CommandEncoder {
                     stagingBuffer.copyBuffer(size, byteBuffer);
 
                     long srcOffset = stagingBuffer.getOffset();
+
+                    // Fetch transferCb after staging copy in case overflow flushed and rotated it.
+                    var commandBuffer = Renderer.getInstance().getTransferCb();
 
                     try (MemoryStack stack = MemoryStack.stackPush()) {
                         if (!commandBuffer.isRecording()) {

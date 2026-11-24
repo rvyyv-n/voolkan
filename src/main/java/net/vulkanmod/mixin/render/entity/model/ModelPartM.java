@@ -17,6 +17,7 @@ import net.vulkanmod.vulkan.util.ColorUtil;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -73,14 +74,14 @@ public abstract class ModelPartM {
                 cubeModel.transformVertices(matrix4f);
 
                 for (CubeModel.Polygon polygon : polygons) {
-                    Vector3f polyNormal = polygon.normal();
+                    Vector3fc polyNormal = polygon.normal();
                     int packedNormal;
-                    if (polyNormal.y == 0.0f && polyNormal.z == 0.0f) {
-                        packedNormal = polyNormal.x > 0.0f ? pxPos : pxNeg;
-                    } else if (polyNormal.x == 0.0f && polyNormal.z == 0.0f) {
-                        packedNormal = polyNormal.y > 0.0f ? pyPos : pyNeg;
-                    } else if (polyNormal.x == 0.0f && polyNormal.y == 0.0f) {
-                        packedNormal = polyNormal.z > 0.0f ? pzPos : pzNeg;
+                    if (polyNormal.y() == 0.0f && polyNormal.z() == 0.0f && polyNormal.x() != 0.0f) {
+                        packedNormal = polyNormal.x() > 0.0f ? pxPos : pxNeg;
+                    } else if (polyNormal.x() == 0.0f && polyNormal.z() == 0.0f && polyNormal.y() != 0.0f) {
+                        packedNormal = polyNormal.y() > 0.0f ? pyPos : pyNeg;
+                    } else if (polyNormal.x() == 0.0f && polyNormal.y() == 0.0f && polyNormal.z() != 0.0f) {
+                        packedNormal = polyNormal.z() > 0.0f ? pzPos : pzNeg;
                     } else {
                         matrix3f.transform(this.normal.set(polyNormal)).normalize();
                         packedNormal = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());

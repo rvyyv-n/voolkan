@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * fence-sync chunk and inter-frame transfer uploads on staging overflow before resetting the buffer.
+ */
+
 import net.vulkanmod.render.chunk.buffer.UploadManager;
 import net.vulkanmod.render.chunk.util.Util;
 import net.vulkanmod.render.texture.ImageUploadHelper;
@@ -57,9 +63,14 @@ public class StagingBuffer extends Buffer {
 
     private void submitUploads() {
         // Submit and wait all recorded uploads before resetting the buffer
-        UploadManager.INSTANCE.submitUploads();
+        UploadManager.INSTANCE.syncUploads();
         ImageUploadHelper.INSTANCE.submitCommands(false);
-        Renderer.getInstance().flushCmds();
+        Renderer renderer = Renderer.getInstance();
+        if (Renderer.isRecording()) {
+            renderer.flushCmds();
+        } else {
+            renderer.submitTransferCbSync();
+        }
         Synchronization.INSTANCE.waitFences();
 
         this.reset();

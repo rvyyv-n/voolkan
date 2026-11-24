@@ -25,6 +25,7 @@ public class QuadSorter {
 
     private float[] distances;
     private int[] sortingPointsIndices;
+    private int[] sortScratch;
 
     public void setQuadSortOrigin(float x, float y, float z) {
         this.sortX = x;
@@ -33,15 +34,13 @@ public class QuadSorter {
     }
 
     public SortState getSortState() {
-        return new SortState(this.vertexCount, this.pointCount, this.sortingPoints, this.distances, this.sortingPointsIndices);
+        return new SortState(this.vertexCount, this.pointCount, this.sortingPoints);
     }
 
     public void restoreSortState(QuadSorter.SortState sortState) {
         this.vertexCount = sortState.vertexCount;
         this.pointCount = sortState.pointCount;
         this.sortingPoints = sortState.sortingPoints;
-        this.distances = sortState.distances;
-        this.sortingPointsIndices = sortState.sortingPointsIndices;
 
         this.indexOnly = true;
     }
@@ -92,8 +91,6 @@ public class QuadSorter {
         }
 
         this.sortingPoints = points;
-        this.distances = new float[count];
-        this.sortingPointsIndices = new int[count];
     }
 
     public void putSortedQuadIndices(TerrainBufferBuilder bufferBuilder, VertexFormat.IndexType indexType) {
@@ -109,27 +106,43 @@ public class QuadSorter {
         final float[] points = this.sortingPoints;
         float[] distances = this.distances;
         int[] indices = this.sortingPointsIndices;
-        if (distances == null || distances.length != count) {
+        int[] scratch = this.sortScratch;
+        if (distances == null || distances.length < count) {
             distances = new float[count];
             this.distances = distances;
         }
-        if (indices == null || indices.length != count) {
+        if (indices == null || indices.length < count) {
             indices = new int[count];
             this.sortingPointsIndices = indices;
+        }
+        if (count >= 16 && (scratch == null || scratch.length < count)) {
+            scratch = new int[count];
+            this.sortScratch = scratch;
         }
 
         final float sx = this.sortX;
         final float sy = this.sortY;
         final float sz = this.sortZ;
-        for (int i = 0, p = 0; i < count; ++i, p += 3) {
-            float dx = points[p]     - sx;
-            float dy = points[p + 1] - sy;
-            float dz = points[p + 2] - sz;
-            distances[i] = dx * dx + dy * dy + dz * dz;
-            indices[i] = i;
+        if (count >= 16) {
+            for (int i = 0, p = 0; i < count; ++i, p += 3) {
+                float dx = points[p]     - sx;
+                float dy = points[p + 1] - sy;
+                float dz = points[p + 2] - sz;
+                distances[i] = dx * dx + dy * dy + dz * dz;
+                indices[i] = i;
+                scratch[i] = i;
+            }
+            SortUtil.mergeSort(indices, distances, 0, count, scratch);
+        } else {
+            for (int i = 0, p = 0; i < count; ++i, p += 3) {
+                float dx = points[p]     - sx;
+                float dy = points[p + 1] - sy;
+                float dz = points[p + 2] - sz;
+                distances[i] = dx * dx + dy * dy + dz * dz;
+                indices[i] = i;
+            }
+            SortUtil.mergeSort(indices, distances, 0, count, null);
         }
-
-        SortUtil.mergeSort(indices, distances);
 
         final int size = indexType.bytes;
         if (size == Short.BYTES) {
@@ -173,15 +186,11 @@ public class QuadSorter {
         final int vertexCount;
         final int pointCount;
         final float[] sortingPoints;
-        final float[] distances;
-        final int[] sortingPointsIndices;
 
-        SortState(int vertexCount, int pointCount, float[] sortingPoints, float[] distances, int[] sortingPointsIndices) {
+        SortState(int vertexCount, int pointCount, float[] sortingPoints) {
             this.vertexCount = vertexCount;
             this.pointCount = pointCount;
             this.sortingPoints = sortingPoints;
-            this.distances = distances;
-            this.sortingPointsIndices = sortingPointsIndices;
         }
     }
 }

@@ -78,9 +78,21 @@ public class UploadManager {
                     null,
                     bufferMemoryBarriers,
                     null);
-        }
 
-        TransferQueue.uploadBufferCmd(commandBuffer, src.getId(), srcOffset, dst.getId(), dstOffset, size);
+            TransferQueue.uploadBufferCmd(commandBuffer, src.getId(), srcOffset, dst.getId(), dstOffset, size);
+
+            // Prevent WAW hazard when subsequent uploads in the same transfer CB write into dst's free regions.
+            bufferMemoryBarrier.buffer(dst.getId());
+            bufferMemoryBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            bufferMemoryBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    0,
+                    null,
+                    bufferMemoryBarriers,
+                    null);
+        }
     }
 
     public void syncUploads() {

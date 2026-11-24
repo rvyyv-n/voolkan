@@ -15,6 +15,7 @@ layout(binding = 1) uniform UBO {
     float FogRenderDistanceEnd;
     float FogSkyEnd;
     float FogCloudsEnd;
+    float AlphaCutout;
     ivec2 TextureSize;
     vec2 TexelSize;
     int UseRgss;

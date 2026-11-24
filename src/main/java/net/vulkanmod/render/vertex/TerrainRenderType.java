@@ -27,7 +27,7 @@ public enum TerrainRenderType {
 
     private static final TerrainRenderType[] COMPACT_REMAP = { CUTOUT, CUTOUT, TRANSLUCENT, TRANSLUCENT };
     private static final TerrainRenderType[] SEMI_COMPACT_REMAP = { SOLID, CUTOUT, TRANSLUCENT, TRANSLUCENT };
-    private static TerrainRenderType[] activeRemap = COMPACT_REMAP;
+    private static volatile TerrainRenderType[] activeRemap = COMPACT_REMAP;
 
     static {
         SEMI_COMPACT_RENDER_TYPES.add(CUTOUT);

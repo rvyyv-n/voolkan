@@ -85,6 +85,7 @@ public class DescriptorSets {
     }
 
     private void updateUniforms(UniformBuffer globalUB) {
+        int totalGlobalBytes = 0;
         for (int i = 0; i < this.uboCount; ++i) {
             UBO ubo = pipeline.buffers.get(i);
             // Prevent NPE in case UBO has no bound buffer slice
@@ -93,6 +94,17 @@ public class DescriptorSets {
                 ubo.setUpdate(true);
             }
 
+            if (ubo.useGlobalBuffer()) {
+                totalGlobalBytes += UniformBuffer.getAlignedSize(ubo.getSize());
+            }
+        }
+
+        if (totalGlobalBytes > 0) {
+            globalUB.checkCapacity(totalGlobalBytes);
+        }
+
+        for (int i = 0; i < this.uboCount; ++i) {
+            UBO ubo = pipeline.buffers.get(i);
             boolean useOwnUB = !ubo.useGlobalBuffer();
 
             int offset;
@@ -103,7 +115,6 @@ public class DescriptorSets {
             else {
                 offset = (int) globalUB.getUsedBytes();
                 int alignedSize = UniformBuffer.getAlignedSize(ubo.getSize());
-                globalUB.checkCapacity(alignedSize);
 
                 if (ubo.shouldUpdate()) {
                     ubo.update(globalUB.getPointer());

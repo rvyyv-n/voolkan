@@ -18,6 +18,7 @@
             { "name": "FogRenderDistanceEnd", "type": "float", "count": 1, "values": [ 1.0 ] },
             { "name": "FogSkyEnd", "type": "float", "count": 1, "values": [ 1.0 ] },
             { "name": "FogCloudsEnd", "type": "float", "count": 1, "values": [ 1.0 ] },
+            { "name": "AlphaCutout", "type": "float", "count": 1, "values": [ 0.0 ] },
             { "name": "TextureSize", "type": "int", "count": 2 },
             { "name": "TexelSize", "type": "float", "count": 2 },
             { "name": "UseRgss", "type": "int", "count": 1 }

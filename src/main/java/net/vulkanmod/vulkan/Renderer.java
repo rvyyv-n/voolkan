@@ -233,6 +233,10 @@ public class Renderer {
             for (int i = 0; i < offsetCount; i++) {
                 this.boundDescOffsets[i] = dynamicOffsets.get(i);
             }
+        } else if (commandBuffer == this.currentCmdBuffer && bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+            this.boundDescLayout = VK_NULL_HANDLE;
+            this.boundDescSet = VK_NULL_HANDLE;
+            this.boundDescOffsetCount = -1;
         }
         VUtil.UNSAFE.putLong(P_BIND_DESC_SET, descriptorSet);
         long pOffsets = offsetCount > 0 ? MemoryUtil.memAddress0(dynamicOffsets) : 0L;
@@ -399,15 +403,17 @@ public class Renderer {
                 int vkResult = vkAcquireNextImageKHR(device, swapChain.getId(), VUtil.UINT64_MAX,
                                                      semaphore, VK_NULL_HANDLE, pImageIndex);
 
-                if (vkResult == VK_SUBOPTIMAL_KHR || vkResult == VK_ERROR_OUT_OF_DATE_KHR || swapChainUpdate) {
+                if (vkResult == VK_SUCCESS || vkResult == VK_SUBOPTIMAL_KHR) {
+                    imageIndex = pImageIndex.get(0);
+                    swapChain.setAcquired(true);
+                    if (vkResult == VK_SUBOPTIMAL_KHR) {
+                        swapChainUpdate = true;
+                    }
+                } else if (vkResult == VK_ERROR_OUT_OF_DATE_KHR) {
                     swapChainUpdate = true;
-                }
-                else if (vkResult != VK_SUCCESS) {
+                } else {
                     throw new RuntimeException("Cannot acquire next swap chain image: %s".formatted(VkResult.decode(vkResult)));
                 }
-
-                imageIndex = pImageIndex.get(0);
-                swapChain.setAcquired(true);
             }
 
             this.beginMainRenderPass(stack);
@@ -643,6 +649,21 @@ public class Renderer {
         }
 
         return true;
+    }
+
+    public void submitTransferCbSync() {
+        var transferCb = transferCbs.get(currentFrame);
+
+        if (transferCb.isRecording()) {
+            final var transferQueue = DeviceManager.getTransferQueue();
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                transferCb.submitCommands(stack, transferQueue.vkQueue(), false);
+            }
+
+            Synchronization.INSTANCE.addCommandBuffer(transferCb, false);
+
+            transferCbs.set(currentFrame, transferQueue.getCommandPool().getCommandBuffer());
+        }
     }
 
     public void submitUploads() {
