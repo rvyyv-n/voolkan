@@ -1,5 +1,11 @@
 package net.vulkanmod.render.vertex;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * replace Function lambda remapping with a flat lookup table.
+ */
+
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.vulkanmod.Initializer;
@@ -7,7 +13,6 @@ import net.vulkanmod.interfaces.ExtendedRenderType;
 import net.vulkanmod.vulkan.VRenderSystem;
 
 import java.util.EnumSet;
-import java.util.function.Function;
 
 public enum TerrainRenderType {
     SOLID(0.0f),
@@ -20,7 +25,9 @@ public enum TerrainRenderType {
     public static final EnumSet<TerrainRenderType> COMPACT_RENDER_TYPES = EnumSet.of(CUTOUT, TRANSLUCENT);
     public static final EnumSet<TerrainRenderType> SEMI_COMPACT_RENDER_TYPES = EnumSet.of(SOLID, CUTOUT, TRANSLUCENT);
 
-    private static Function<TerrainRenderType, TerrainRenderType> remapper;
+    private static final TerrainRenderType[] COMPACT_REMAP = { CUTOUT, CUTOUT, TRANSLUCENT, TRANSLUCENT };
+    private static final TerrainRenderType[] SEMI_COMPACT_REMAP = { SOLID, CUTOUT, TRANSLUCENT, TRANSLUCENT };
+    private static TerrainRenderType[] activeRemap = COMPACT_REMAP;
 
     static {
         SEMI_COMPACT_RENDER_TYPES.add(CUTOUT);
@@ -72,21 +79,10 @@ public enum TerrainRenderType {
     }
 
     public static void updateMapping() {
-        if (Initializer.CONFIG.uniqueOpaqueLayer) {
-            remapper = (renderType) -> switch (renderType) {
-                case SOLID, CUTOUT -> TerrainRenderType.CUTOUT;
-                case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
-            };
-        } else {
-            remapper = (renderType) -> switch (renderType) {
-                case SOLID -> TerrainRenderType.SOLID;
-                case CUTOUT -> TerrainRenderType.CUTOUT;
-                case TRANSLUCENT, TRIPWIRE -> TerrainRenderType.TRANSLUCENT;
-            };
-        }
+        activeRemap = Initializer.CONFIG.uniqueOpaqueLayer ? COMPACT_REMAP : SEMI_COMPACT_REMAP;
     }
 
     public static TerrainRenderType getRemapped(TerrainRenderType renderType) {
-        return remapper.apply(renderType);
+        return activeRemap[renderType.ordinal()];
     }
 }

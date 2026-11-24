@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * track per-layer occupancy bitmask and fix deferred VRAM segment freeing in resetDrawParameters.
+ */
+
 import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.world.level.Level;
@@ -42,6 +48,7 @@ public class RenderSection {
     private boolean playerChanged;
     private boolean completelyEmpty = true;
     private boolean containsBlockEntities = false;
+    public byte layerMask = 0;
 
     public long visibility;
 
@@ -291,15 +298,34 @@ public class RenderSection {
     }
 
     public void resetDrawParameters(TerrainRenderType renderType) {
-        for (int i = 0; i < QuadFacing.COUNT; ++i) {
-            DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
-            long ptr = DrawParametersBuffer.getParamsPtr(drawBuffers.getDrawParamsPtr(), this.inAreaIndex, renderType.ordinal(), i);
+        this.layerMask &= (byte) ~(1 << renderType.ordinal());
+        if (this.chunkArea == null)
+            return;
 
-            AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
-            int vertexOffset = DrawParametersBuffer.getVertexOffset(ptr);
-            if (areaBuffer != null && vertexOffset != -1) {
-                int segmentOffset = vertexOffset * drawBuffers.vertexSize;
-                areaBuffer.setSegmentFree(segmentOffset);
+        DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
+        AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
+        long basePtr = drawBuffers.getDrawParamsPtr();
+        boolean freedVertex = false;
+
+        for (int i = 0; i < QuadFacing.COUNT; ++i) {
+            long ptr = DrawParametersBuffer.getParamsPtr(basePtr, this.inAreaIndex, renderType.ordinal(), i);
+
+            if (!freedVertex && areaBuffer != null) {
+                int vertexOffset = DrawParametersBuffer.getVertexOffset(ptr);
+                if (vertexOffset != -1) {
+                    areaBuffer.freeSegment(vertexOffset);
+                    freedVertex = true;
+                }
+            }
+
+            if (renderType == TerrainRenderType.TRANSLUCENT && i == QuadFacing.UNDEFINED.ordinal()) {
+                AreaBuffer indexBuffer = drawBuffers.getIndexBuffer();
+                if (indexBuffer != null && DrawParametersBuffer.getIndexCount(ptr) > 0) {
+                    int firstIndex = DrawParametersBuffer.getFirstIndex(ptr);
+                    if (firstIndex >= 0) {
+                        indexBuffer.freeSegment(firstIndex);
+                    }
+                }
             }
 
             DrawParametersBuffer.resetParameters(ptr);
@@ -384,15 +410,12 @@ public class RenderSection {
     }
 
     private void resetDrawParameters() {
+        this.layerMask = 0;
         if (this.chunkArea == null)
             return;
 
-        long basePtr = this.chunkArea.getDrawBuffers().getDrawParamsPtr();
         for (TerrainRenderType renderType : TerrainRenderType.VALUES) {
-            for (QuadFacing facing : QuadFacing.VALUES) {
-                long ptr = DrawParametersBuffer.getParamsPtr(basePtr, this.inAreaIndex, renderType.ordinal(), facing.ordinal());
-                DrawParametersBuffer.resetParameters(ptr);
-            }
+            this.resetDrawParameters(renderType);
         }
     }
 

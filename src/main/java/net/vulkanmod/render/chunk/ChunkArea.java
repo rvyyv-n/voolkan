@@ -1,9 +1,16 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * accept shared SectionData uniform buffer slab slice for DrawBuffers.
+ */
+
 import net.minecraft.core.BlockPos;
 import net.vulkanmod.render.chunk.buffer.DrawBuffers;
 import net.vulkanmod.render.chunk.frustum.VFrustum;
 import net.vulkanmod.render.chunk.util.StaticQueue;
+import net.vulkanmod.vulkan.memory.buffer.UniformBuffer;
 import org.joml.FrustumIntersection;
 import org.joml.Vector3i;
 
@@ -20,10 +27,10 @@ public class ChunkArea {
     //Help JIT optimisations by hardcoding the queue size to the max possible ChunkArea limit
     public final StaticQueue<RenderSection> sectionQueue = new StaticQueue<>(512);
 
-    public ChunkArea(int i, Vector3i origin, int minHeight) {
+    public ChunkArea(int i, Vector3i origin, int minHeight, UniformBuffer sectionDataSlab, long sectionDataOffset) {
         this.index = i;
         this.position = origin;
-        this.drawBuffers = new DrawBuffers(i, origin, minHeight);
+        this.drawBuffers = new DrawBuffers(i, origin, minHeight, sectionDataSlab, sectionDataOffset);
     }
 
     public void updateFrustum(VFrustum frustum) {

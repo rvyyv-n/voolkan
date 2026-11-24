@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.task;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * skip air blocks early and omit empty TerrainRenderTypes so empty sections are detected and freed properly.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
@@ -105,6 +111,9 @@ public class BuildTask extends ChunkTask {
                     blockPos.set(section.xOffset() + x, section.yOffset() + y, section.zOffset() + z);
 
                     BlockState blockState = this.region.getBlockState(blockPos);
+                    if (blockState.isAir()) {
+                        continue;
+                    }
                     if (blockState.isSolidRender()) {
                         visGraph.setOpaque(blockPos);
                     }
@@ -139,10 +148,19 @@ public class BuildTask extends ChunkTask {
         for (TerrainRenderType renderType : TerrainRenderType.VALUES) {
             TerrainBuilder builder = bufferBuilders.builder(renderType);
 
-            TerrainBuilder.DrawState drawState = builder.endDrawing();
+            boolean hasGeometry = false;
+            for (int i = 0; i < QuadFacing.COUNT; i++) {
+                if (builder.getBufferBuilder(i).getVertices() > 0) {
+                    hasGeometry = true;
+                    break;
+                }
+            }
 
-            UploadBuffer uploadBuffer = new UploadBuffer(builder, drawState);
-            compileResult.renderedLayers.put(renderType, uploadBuffer);
+            TerrainBuilder.DrawState drawState = builder.endDrawing();
+            if (hasGeometry && drawState != null) {
+                UploadBuffer uploadBuffer = new UploadBuffer(builder, drawState);
+                compileResult.renderedLayers.put(renderType, uploadBuffer);
+            }
 
             builder.clear();
         }

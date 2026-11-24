@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.util;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * expose indexed element access to avoid per-area Iterator allocations on the render hot path.
+ */
+
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Iterator;
@@ -39,6 +45,10 @@ public class StaticQueue<T> implements Iterable<T> {
 
     public int size() {
         return this.limit;
+    }
+
+    public T get(int index) {
+        return this.queue[index];
     }
 
     public void clear() {

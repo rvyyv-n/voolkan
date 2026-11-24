@@ -1,11 +1,19 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * share one SectionData uniform buffer slab across all ChunkAreas, fix ySize calculation, and fix xComplStart off-by-one.
+ */
+
 import net.minecraft.util.Mth;
 import net.vulkanmod.render.chunk.buffer.DrawBuffers;
 import net.vulkanmod.render.chunk.frustum.FrustumOctree;
 import net.vulkanmod.render.chunk.frustum.VFrustum;
 import net.vulkanmod.render.chunk.util.CircularIntList;
 import net.vulkanmod.render.chunk.util.Util;
+import net.vulkanmod.vulkan.memory.MemoryTypes;
+import net.vulkanmod.vulkan.memory.buffer.UniformBuffer;
 import org.joml.Vector3i;
 
 public class ChunkAreaManager {
@@ -13,6 +21,7 @@ public class ChunkAreaManager {
     public static final int HEIGHT = 8;
 
     public static final int AREA_SIZE = WIDTH * WIDTH * HEIGHT;
+    public static final int SECTION_DATA_SIZE = AREA_SIZE * 2 * 4;
 
     public static final int AREA_SH_XZ = Util.flooredLog(WIDTH);
     public static final int AREA_SH_Y = Util.flooredLog(HEIGHT);
@@ -27,6 +36,7 @@ public class ChunkAreaManager {
     final int ySize;
     final int minHeight;
     final ChunkArea[] chunkAreasArr;
+    private final UniformBuffer sectionDataSlab;
 
     int prevX;
     int prevZ;
@@ -41,8 +51,7 @@ public class ChunkAreaManager {
 
         int t = (width >> AREA_SH_XZ) + 2;
 
-        int relativeHeight = height - (minHeight >> 4);
-        this.ySize = (relativeHeight & 0x5) == 0 ? (relativeHeight >> AREA_SH_Y) : (relativeHeight >> AREA_SH_Y) + 1;
+        this.ySize = (height + HEIGHT - 1) >> AREA_SH_Y;
 
         //check if width is even
         if ((t & 1) == 0)
@@ -53,12 +62,15 @@ public class ChunkAreaManager {
         this.size = xzSize * ySize * xzSize;
         this.chunkAreasArr = new ChunkArea[size];
 
+        int sectionDataStride = UniformBuffer.getAlignedSize(SECTION_DATA_SIZE);
+        this.sectionDataSlab = new UniformBuffer(this.size * sectionDataStride, MemoryTypes.HOST_MEM);
+
         for (int z = 0; z < this.xzSize; ++z) {
             for (int y = 0; y < this.ySize; ++y) {
                 for (int x = 0; x < this.xzSize; ++x) {
                     int idx = this.getAreaIndex(x, y, z);
                     Vector3i origin = new Vector3i(x << BLOCK_TO_AREA_SH_XZ, y << BLOCK_TO_AREA_SH_Y, z << BLOCK_TO_AREA_SH_XZ);
-                    this.chunkAreasArr[idx] = new ChunkArea(idx, origin, minHeight);
+                    this.chunkAreasArr[idx] = new ChunkArea(idx, origin, minHeight, this.sectionDataSlab, (long) idx * sectionDataStride);
                 }
             }
         }
@@ -103,7 +115,7 @@ public class ChunkAreaManager {
         } else {
             xRangeStart = 0;
             xRangeEnd = -deltaX - 1;
-            xComplStart = xRangeEnd;
+            xComplStart = xRangeEnd + 1;
             xComplEnd = this.xzSize - 1;
         }
 
@@ -211,6 +223,7 @@ public class ChunkAreaManager {
         for (ChunkArea chunkArea : this.chunkAreasArr) {
             chunkArea.free();
         }
+        this.sectionDataSlab.scheduleFree();
     }
 
     public String[] getStats() {

@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * fix xComplStart off-by-one overlap during negative-X camera movement.
+ */
+
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -114,7 +120,7 @@ public class SectionGrid {
         } else {
             xRangeStart = 0;
             xRangeEnd = -dx - 1;
-            xComplStart = xRangeEnd;
+            xComplStart = xRangeEnd + 1;
             xComplEnd = this.gridWidth - 1;
         }
 
