@@ -39,7 +39,7 @@ public class RenderSystemMixin {
             return;
         }
 
-        FrameLimiter.limit(fps, RenderSystemMixin::pollEvents);
+        FrameLimiter.limit(fps, () -> pollEvents());
         ci.cancel();
     }
 }
