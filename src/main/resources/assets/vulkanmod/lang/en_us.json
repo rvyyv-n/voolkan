@@ -75,6 +75,8 @@
 
   "voolkan.options.backgroundFps": "Background FPS Cap",
   "voolkan.options.backgroundFps.tooltip": "Caps the framerate when the window is unfocused (and further when hidden or minimised). Set to Off to disable.",
+  "voolkan.options.batteryFps": "Battery FPS Cap",
+  "voolkan.options.batteryFps.tooltip": "Caps the framerate while running on battery power. Set to Off to disable.",
 
   "voolkan.options.compat": "Compatibility",
   "voolkan.options.compat.renderPath": "Render Path",

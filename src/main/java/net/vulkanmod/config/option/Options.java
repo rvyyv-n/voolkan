@@ -5,13 +5,14 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block, Presets row, and background FPS cap on the Video page.
+ * read-only Compatibility block, Presets row, and background/battery FPS caps on the Video page.
  */
 
 import com.mojang.blaze3d.platform.Window;
 import dev.voolkan.compat.CompatInfo;
 import dev.voolkan.gui.InfoOption;
 import dev.voolkan.gui.Preset;
+import dev.voolkan.power.PowerSources;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
@@ -156,44 +157,55 @@ public abstract class Options {
                 .setTooltip(value -> Component.translatable("voolkan.options.preset.tooltip"));
         presetOption.setOnChange(() -> presetOption.getNewValue().stage(currentPages));
 
+        List<Option<?>> displayOptions = new ArrayList<>();
+        displayOptions.add(windowModeOption);
+        displayOptions.add(resolutionOption);
+        displayOptions.add(refreshRateOption);
+        displayOptions.add(new RangeOption(Component.translatable("options.framerateLimit"),
+                10, 260, 10,
+                value -> Component.nullToEmpty(value == 260
+                        ? Component.translatable("options.framerateLimit.max").getString()
+                        : String.valueOf(value)),
+                value -> {
+                    mcOptions.framerateLimit().set(value);
+                    minecraft.getFramerateLimitTracker().setFramerateLimit(value);
+                },
+                () -> mcOptions.framerateLimit().get()));
+        displayOptions.add(new SwitchOption(Component.translatable("options.vsync"),
+                value -> {
+                    mcOptions.enableVsync().set(value);
+                    window.updateVsync(value);
+                },
+                () -> mcOptions.enableVsync().get()));
+        displayOptions.add(new CyclingOption<>(Component.translatable("options.inactivityFpsLimit"),
+                            InactivityFpsLimit.values(),
+                            value -> mcOptions.inactivityFpsLimit().set(value),
+                            () -> mcOptions.inactivityFpsLimit().get())
+                .setTranslator(InactivityFpsLimit::caption));
+        displayOptions.add(new RangeOption(Component.translatable("voolkan.options.backgroundFps"),
+                0, 60, 5,
+                value -> value == 0
+                        ? Component.translatable("options.off")
+                        : Component.literal(String.valueOf(value)),
+                value -> config.backgroundFps = value,
+                () -> config.backgroundFps)
+                .setTooltip(v -> Component.translatable("voolkan.options.backgroundFps.tooltip")));
+        if (PowerSources.get().isSupported()) {
+            displayOptions.add(new RangeOption(Component.translatable("voolkan.options.batteryFps"),
+                    0, 120, 10,
+                    value -> value == 0
+                            ? Component.translatable("options.off")
+                            : Component.literal(String.valueOf(value)),
+                    value -> config.batteryFps = value,
+                    () -> config.batteryFps)
+                    .setTooltip(v -> Component.translatable("voolkan.options.batteryFps.tooltip")));
+        }
+
         return new OptionBlock[]{
                 new OptionBlock("", new Option<?>[]{
                         presetOption
                 }),
-                new OptionBlock("", new Option<?>[]{
-                        windowModeOption,
-                        resolutionOption,
-                        refreshRateOption,
-                        new RangeOption(Component.translatable("options.framerateLimit"),
-                                10, 260, 10,
-                                value -> Component.nullToEmpty(value == 260
-                                        ? Component.translatable("options.framerateLimit.max").getString()
-                                        : String.valueOf(value)),
-                                value -> {
-                                    mcOptions.framerateLimit().set(value);
-                                    minecraft.getFramerateLimitTracker().setFramerateLimit(value);
-                                },
-                                () -> mcOptions.framerateLimit().get()),
-                        new SwitchOption(Component.translatable("options.vsync"),
-                                value -> {
-                                    mcOptions.enableVsync().set(value);
-                                    window.updateVsync(value);
-                                },
-                                () -> mcOptions.enableVsync().get()),
-                        new CyclingOption<>(Component.translatable("options.inactivityFpsLimit"),
-                                            InactivityFpsLimit.values(),
-                                            value -> mcOptions.inactivityFpsLimit().set(value),
-                                            () -> mcOptions.inactivityFpsLimit().get())
-                                .setTranslator(InactivityFpsLimit::caption),
-                        new RangeOption(Component.translatable("voolkan.options.backgroundFps"),
-                                0, 60, 5,
-                                value -> value == 0
-                                        ? Component.translatable("options.off")
-                                        : Component.literal(String.valueOf(value)),
-                                value -> config.backgroundFps = value,
-                                () -> config.backgroundFps)
-                                .setTooltip(v -> Component.translatable("voolkan.options.backgroundFps.tooltip"))
-                }),
+                new OptionBlock("", displayOptions.toArray(new Option<?>[0])),
                 new OptionBlock("", new Option<?>[]{
                         new RangeOption(Component.translatable("options.guiScale"),
                                 0, Math.max(window.calculateScale(0, minecraft.isEnforceUnicode()), mcOptions.guiScale().get()), 1,

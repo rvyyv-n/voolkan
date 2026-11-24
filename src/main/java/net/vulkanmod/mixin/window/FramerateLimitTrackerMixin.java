@@ -6,6 +6,7 @@ package net.vulkanmod.mixin.window;
 
 import com.mojang.blaze3d.platform.FramerateLimitTracker;
 import com.mojang.blaze3d.platform.Window;
+import dev.voolkan.power.PowerSources;
 import net.minecraft.client.Minecraft;
 import net.vulkanmod.Initializer;
 import org.lwjgl.glfw.GLFW;
@@ -37,7 +38,7 @@ public class FramerateLimitTrackerMixin {
     private boolean voolkan$visible = true;
 
     @Inject(method = "getFramerateLimit()I", at = @At("RETURN"), cancellable = true, require = 1)
-    private void voolkan$applyBackgroundCap(CallbackInfoReturnable<Integer> cir) {
+    private void voolkan$applyFrameCaps(CallbackInfoReturnable<Integer> cir) {
         int original = cir.getReturnValueI();
         int limit = original;
 
@@ -52,6 +53,11 @@ public class FramerateLimitTrackerMixin {
                     limit = Math.min(limit, backgroundFps);
                 }
             }
+        }
+
+        int batteryFps = Initializer.CONFIG.batteryFps;
+        if (batteryFps > 0 && PowerSources.isOnBattery()) {
+            limit = Math.min(limit, batteryFps);
         }
 
         if (limit != original) {
