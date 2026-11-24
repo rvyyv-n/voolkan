@@ -44,7 +44,6 @@ public class DefaultMainPass implements MainPass {
     private GpuTextureView[] colorAttachmentTextureViews;
     IntSupplier imageIdxSupplier;
     private GpuTexture depthAttachmentTexture;
-    private GpuTextureView depthAttachmentTextureView;
 
     private final WorldScale worldScale = new WorldScale();
 
@@ -248,7 +247,12 @@ public class DefaultMainPass implements MainPass {
 
     @Override
     public GpuTextureView getDepthAttachmentView() {
-        return this.worldScale.isActive() ? this.worldScale.getDepthAttachmentView() : this.depthAttachmentTextureView;
+        return this.worldScale.isActive() ? this.worldScale.getDepthAttachmentView() : null;
+    }
+
+    @Override
+    public boolean isWorldActive() {
+        return this.worldScale.isActive();
     }
 
     private void createAttachmentTextures() {
@@ -285,6 +289,5 @@ public class DefaultMainPass implements MainPass {
         }
 
         this.depthAttachmentTexture = device.gpuTextureFromVulkanImage(this.mainFramebuffer.getDepthAttachment());
-        this.depthAttachmentTextureView = device.createTextureView(this.depthAttachmentTexture);
     }
 }

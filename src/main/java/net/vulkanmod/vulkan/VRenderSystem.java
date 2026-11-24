@@ -104,11 +104,10 @@ public abstract class VRenderSystem {
     }
 
     public static void updateScreenSize() {
+        // While the world is drawn at a lower resolution, report the scaled target size
         Renderer renderer = Renderer.getInstance();
-        Framebuffer framebuffer = renderer != null && renderer.getMainPass() != null
-                ? renderer.getMainPass().getMainFramebuffer()
-                : null;
-        if (framebuffer != null && framebuffer.getWidth() > 0 && framebuffer.getHeight() > 0) {
+        if (renderer != null && renderer.getMainPass() != null && renderer.getMainPass().isWorldActive()) {
+            Framebuffer framebuffer = renderer.getMainPass().getMainFramebuffer();
             screenSize.putFloat(0, (float) framebuffer.getWidth());
             screenSize.putFloat(4, (float) framebuffer.getHeight());
             return;

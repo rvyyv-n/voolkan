@@ -69,6 +69,8 @@ public class MainTargetMixin extends RenderTarget {
 
     @Override
     public GpuTextureView getDepthTextureView() {
-        return Renderer.getInstance().getMainPass().getDepthAttachmentView();
+        // Only the scaled world target overrides the depth view; otherwise keep the vanilla behaviour
+        GpuTextureView worldDepthView = Renderer.getInstance().getMainPass().getDepthAttachmentView();
+        return worldDepthView != null ? worldDepthView : super.getDepthTextureView();
     }
 }

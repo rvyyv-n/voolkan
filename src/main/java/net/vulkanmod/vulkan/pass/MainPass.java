@@ -63,4 +63,9 @@ public interface MainPass {
         return null;
     }
 
+    /** True while the world is drawn into the scaled offscreen target (between beginWorld and endWorld). */
+    default boolean isWorldActive() {
+        return false;
+    }
+
 }
