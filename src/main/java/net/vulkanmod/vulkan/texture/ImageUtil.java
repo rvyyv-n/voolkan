@@ -210,11 +210,6 @@ public abstract class ImageUtil {
         blitFramebuffer(srcImage, dstImage, 0, 0, srcImage.width, srcImage.height, 0, 0, dstImage.width, dstImage.height, filtering);
     }
 
-    public static void blitFramebuffer(VulkanImage dstImage, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1) {
-        VulkanImage srcImage = Renderer.getInstance().getSwapChain().getColorAttachment();
-        blitFramebuffer(srcImage, dstImage, srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, VK_FILTER_NEAREST);
-    }
-
     public static void blitFramebuffer(VulkanImage srcImage, VulkanImage dstImage,
                                        int srcX0, int srcY0, int srcX1, int srcY1,
                                        int dstX0, int dstY0, int dstX1, int dstY1,

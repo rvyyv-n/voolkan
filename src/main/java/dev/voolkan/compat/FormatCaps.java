@@ -57,8 +57,32 @@ public final class FormatCaps {
         return (optimalFeatures(format) & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0;
     }
 
+    /**
+     * True when a blit from {@code srcFormat} to {@code dstFormat} is supported and valid: both formats have the
+     * blit features, depth/stencil formats only blit to the same format, and integer formats only blit to
+     * integer formats of the same signedness (VUIDs of vkCmdBlitImage).
+     */
     public static boolean canBlit(int srcFormat, int dstFormat) {
-        return supportsBlitSrc(srcFormat) && supportsBlitDst(dstFormat);
+        if (!supportsBlitSrc(srcFormat) || !supportsBlitDst(dstFormat)) {
+            return false;
+        }
+        if (VulkanImage.isDepthFormat(srcFormat) || VulkanImage.isDepthFormat(dstFormat)) {
+            return srcFormat == dstFormat;
+        }
+        return numericClass(srcFormat) == numericClass(dstFormat);
+    }
+
+    /** 1 = unsigned integer, 2 = signed integer, 0 = normalized or float. Covers the formats the renderer creates. */
+    private static int numericClass(int format) {
+        return switch (format) {
+            case VK_FORMAT_R8_UINT, VK_FORMAT_R8G8_UINT, VK_FORMAT_R8G8B8A8_UINT, VK_FORMAT_R16_UINT,
+                 VK_FORMAT_R16G16_UINT, VK_FORMAT_R16G16B16A16_UINT, VK_FORMAT_R32_UINT, VK_FORMAT_R32G32_UINT,
+                 VK_FORMAT_R32G32B32A32_UINT -> 1;
+            case VK_FORMAT_R8_SINT, VK_FORMAT_R8G8_SINT, VK_FORMAT_R8G8B8A8_SINT, VK_FORMAT_R16_SINT,
+                 VK_FORMAT_R16G16_SINT, VK_FORMAT_R16G16B16A16_SINT, VK_FORMAT_R32_SINT, VK_FORMAT_R32G32_SINT,
+                 VK_FORMAT_R32G32B32A32_SINT -> 2;
+            default -> 0;
+        };
     }
 
     /**

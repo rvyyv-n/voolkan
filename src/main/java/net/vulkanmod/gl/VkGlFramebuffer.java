@@ -158,12 +158,13 @@ public class VkGlFramebuffer {
             return;
         }
 
-        VulkanImage srcImage = readFramebuffer != null
-                ? readFramebuffer.colorAttachment
-                : Renderer.getInstance().getSwapChain().getColorAttachment();
-        VulkanImage dstImage = boundFramebuffer != null
-                ? boundFramebuffer.colorAttachment
-                : Renderer.getInstance().getSwapChain().getColorAttachment();
+        // The default framebuffer is the swapchain: its images have no TRANSFER usage, so they can't be blitted
+        if (readFramebuffer == null || boundFramebuffer == null) {
+            return;
+        }
+
+        VulkanImage srcImage = readFramebuffer.colorAttachment;
+        VulkanImage dstImage = boundFramebuffer.colorAttachment;
 
         if (srcImage == null || dstImage == null || srcImage == dstImage) {
             return;
