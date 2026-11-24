@@ -3,11 +3,12 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * pipeline cache is loaded from and saved to disk; log shader binary cache summary on shutdown.
+ * pipeline cache is loaded from and saved to disk; log shader binary cache summary on shutdown; persist pipeline state ledger and expose live pipelines for warm-up.
  */
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.voolkan.cache.PipelineCacheStore;
+import dev.voolkan.cache.PipelineStateStore;
 import dev.voolkan.cache.ShaderBinaryCache;
 import net.fabricmc.loader.api.FabricLoader;
 import net.vulkanmod.Initializer;
@@ -132,11 +133,13 @@ public abstract class Pipeline {
         }
     }
 
-    /** Writes the pipeline cache to disk. Must be called before the cache is destroyed. Never throws. */
+    /** Writes the pipeline cache and observed state ledger to disk. Must be called before the cache is destroyed. Never throws. */
     public static void savePipelineCache() {
         if (!isDiskCacheEnabled()) {
             return;
         }
+
+        PipelineStateStore.saveIfDirty();
 
         try (MemoryStack stack = stackPush()) {
             org.lwjgl.PointerBuffer pSize = stack.mallocPointer(1);
@@ -178,6 +181,10 @@ public abstract class Pipeline {
         ShaderBinaryCache.logSummary();
         savePipelineCache();
         vkDestroyPipelineCache(DEVICE, PIPELINE_CACHE, null);
+    }
+
+    public static List<Pipeline> getRegisteredPipelines() {
+        return List.copyOf(PIPELINES);
     }
 
     public static void recreateDescriptorSets(int frames) {

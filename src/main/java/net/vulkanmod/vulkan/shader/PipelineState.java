@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity.
+ * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity; expose state encoders and accessors for pipeline warm-up.
  */
 
 import net.vulkanmod.vulkan.VRenderSystem;
@@ -47,22 +47,30 @@ public class PipelineState {
     }
 
     public static int getDepthState() {
+        return encodeDepthState(VRenderSystem.depthTest, VRenderSystem.depthMask, VRenderSystem.depthFun);
+    }
+
+    public static int encodeDepthState(boolean depthTest, boolean depthMask, int glDepthFun) {
         int depthState = 0;
 
-        depthState |= VRenderSystem.depthTest ? DepthState.DEPTH_TEST_BIT : 0;
-        depthState |= VRenderSystem.depthMask ? DepthState.DEPTH_MASK_BIT : 0;
+        depthState |= depthTest ? DepthState.DEPTH_TEST_BIT : 0;
+        depthState |= depthMask ? DepthState.DEPTH_MASK_BIT : 0;
 
-        depthState |= DepthState.encodeDepthFun(VRenderSystem.depthFun);
+        depthState |= DepthState.encodeDepthFun(glDepthFun);
 
         return depthState;
     }
 
     public static int getLogicOpState() {
+        return encodeLogicOpState(VRenderSystem.logicOp, VRenderSystem.logicOpFun);
+    }
+
+    public static int encodeLogicOpState(boolean enabled, int glLogicOpFun) {
         int logicOpState = 0;
 
-        logicOpState |= VRenderSystem.logicOp ? LogicOpState.ENABLE_BIT : 0;
+        logicOpState |= enabled ? LogicOpState.ENABLE_BIT : 0;
 
-        logicOpState |= LogicOpState.encodeLogicOpFun(VRenderSystem.logicOpFun);
+        logicOpState |= LogicOpState.encodeLogicOpFun(glLogicOpFun);
 
         return logicOpState;
     }
@@ -117,6 +125,38 @@ public class PipelineState {
     PipelineState withoutRenderPass() {
         return new PipelineState(assemblyRasterState, blendState_i, depthState_i, logicOp_i, colorMask_i,
                                  null, colorFormat, depthFormat, dependencyKind);
+    }
+
+    public int getAssemblyRasterStateValue() {
+        return assemblyRasterState;
+    }
+
+    public int getBlendStateValue() {
+        return blendState_i;
+    }
+
+    public int getDepthStateValue() {
+        return depthState_i;
+    }
+
+    public int getLogicOpStateValue() {
+        return logicOp_i;
+    }
+
+    public int getColorMaskValue() {
+        return colorMask_i;
+    }
+
+    public int getColorFormat() {
+        return colorFormat;
+    }
+
+    public int getDepthFormat() {
+        return depthFormat;
+    }
+
+    public int getDependencyKind() {
+        return dependencyKind;
     }
 
     @Override

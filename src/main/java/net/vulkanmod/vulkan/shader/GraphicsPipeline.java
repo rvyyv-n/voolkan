@@ -3,14 +3,16 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes; release compiled SPIR-V buffers after creating shader modules.
+ * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes; release compiled SPIR-V buffers after creating shader modules; record observed states and support pipeline warm-up.
  */
 
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
+import dev.voolkan.cache.PipelineStateStore;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.interfaces.VertexFormatMixed;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -59,6 +61,10 @@ public class GraphicsPipeline extends Pipeline {
         PIPELINES.add(this);
     }
 
+    public static final int WARMUP_ALREADY_READY = 0;
+    public static final int WARMUP_BUILT = 1;
+    public static final int WARMUP_SKIPPED = -1;
+
     public long getHandle(PipelineState state) {
         // 0 is VK_NULL_HANDLE, which is also the map's default return value
         long handle = graphicsPipelines.getLong(state);
@@ -66,9 +72,46 @@ public class GraphicsPipeline extends Pipeline {
             handle = createGraphicsPipeline(state);
             // Store a key without the RenderPass reference: the pipeline stays valid for any compatible pass
             graphicsPipelines.put(state.withoutRenderPass(), handle);
+            PipelineStateStore.record(
+                    this.name,
+                    state.assemblyRasterState,
+                    state.blendState_i,
+                    state.depthState_i,
+                    state.logicOp_i,
+                    state.colorMask_i,
+                    state.colorFormat,
+                    state.depthFormat,
+                    state.dependencyKind);
         }
 
         return handle;
+    }
+
+    /**
+     * Pre-builds the {@code VkPipeline} handle for {@code state} if not already cached.
+     *
+     * @return {@link #WARMUP_BUILT} if a new handle was created, {@link #WARMUP_ALREADY_READY} if already
+     * present, or {@link #WARMUP_SKIPPED} if shaders are missing or creation failed.
+     */
+    public int warmUpState(PipelineState state) {
+        if (state == null || vertShaderModule == 0 || fragShaderModule == 0) {
+            return WARMUP_SKIPPED;
+        }
+        if (graphicsPipelines.containsKey(state)) {
+            return WARMUP_ALREADY_READY;
+        }
+
+        try {
+            long handle = createGraphicsPipeline(state);
+            if (handle == VK_NULL_HANDLE) {
+                return WARMUP_SKIPPED;
+            }
+            graphicsPipelines.put(state.withoutRenderPass(), handle);
+            return WARMUP_BUILT;
+        } catch (RuntimeException e) {
+            Initializer.LOGGER.debug("Pipeline warm-up skipped {}: {}", this.name, e.getMessage());
+            return WARMUP_SKIPPED;
+        }
     }
 
     private long createGraphicsPipeline(PipelineState state) {
@@ -265,6 +308,8 @@ public class GraphicsPipeline extends Pipeline {
     public void cleanUp() {
         vkDestroyShaderModule(DeviceManager.vkDevice, vertShaderModule, null);
         vkDestroyShaderModule(DeviceManager.vkDevice, fragShaderModule, null);
+        vertShaderModule = 0;
+        fragShaderModule = 0;
 
         vertexInputDescription.cleanUp();
 
