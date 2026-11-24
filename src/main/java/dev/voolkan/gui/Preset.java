@@ -59,6 +59,7 @@ public enum Preset {
         put("options.biomeBlendRadius", 0, 2, 4, 2);
         put("options.entityShadows", false, true, true, false);
         put("options.entityDistanceScaling", 2, 4, 6, 4);
+        put("voolkan.options.blockEntityDistance", 16, 64, 64, 32);
         put("options.mipmapLevels", 0, 2, 4, 2);
         put("options.weatherRadius", 3, 5, 8, 3);
         put("options.vignette", false, true, true, true);

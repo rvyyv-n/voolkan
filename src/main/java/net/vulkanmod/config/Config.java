@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps and worldScale options.
+ * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale and blockEntityDistance options.
  */
 
 import com.google.gson.Gson;
@@ -45,6 +45,8 @@ public class Config {
     public int batteryFps = 0;
     /** World render resolution as a percentage (50..100, step 5); 100 = native (off). */
     public int worldScale = 100;
+    /** Maximum render distance for block entities (chests, signs, banners) in blocks (16..128); 64 = vanilla default. */
+    public int blockEntityDistance = 64;
     /** Requested swapchain image count; 0 = driver minimum + 1. Clamped to the surface limits. */
     public int swapChainImages = 0;
     public int builderThreads = 0;

@@ -41,6 +41,7 @@
     "profiling.LevelRendererMixin",
     "profiling.TimerQueryM",
 
+    "render.BlockEntityRenderDispatcherMixin",
     "render.FogRendererMixin",
     "render.GameRendererMixin",
     "render.GuiRendererMixin",

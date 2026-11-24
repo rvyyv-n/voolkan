@@ -80,6 +80,9 @@
   "voolkan.options.batteryFps.tooltip": "Caps the framerate while running on battery power. Set to Off to disable.",
   "voolkan.options.worldScale": "World Resolution",
   "voolkan.options.worldScale.tooltip": "Renders the 3D world at a lower resolution and upscales it, while keeping the HUD and menus sharp. Lower values raise FPS when the GPU is the bottleneck.",
+  "voolkan.options.blockEntityDistance": "Block Entity Distance",
+  "voolkan.options.blockEntityDistance.value": "%s blocks",
+  "voolkan.options.blockEntityDistance.tooltip": "Limits how far away chests, signs, banners and similar block entities are drawn. Beacons and other global markers are not affected.",
 
   "voolkan.options.compat": "Compatibility",
   "voolkan.options.compat.renderPath": "Render Path",

@@ -5,7 +5,7 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block, Presets row, World Resolution, and background/battery FPS caps on the Video page.
+ * read-only Compatibility block, Presets row, World Resolution, background/battery FPS caps, and block entity distance.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -17,6 +17,7 @@ import dev.voolkan.render.WorldScale;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
+import net.minecraft.util.Mth;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.config.Config;
 import net.vulkanmod.config.Platform;
@@ -402,6 +403,13 @@ public abstract class Options {
                                         () -> (int) (mcOptions.entityDistanceScaling().get() * 4.0))
                                         .setImpact(PerformanceImpact.HIGH)
                                         .setTranslator(value -> Component.literal(String.valueOf(value / 4.0))),
+                        new RangeOption(Component.translatable("voolkan.options.blockEntityDistance"),
+                                        16, 128, 8,
+                                        value -> Component.translatable("voolkan.options.blockEntityDistance.value", value),
+                                        value -> config.blockEntityDistance = value,
+                                        () -> Mth.clamp(config.blockEntityDistance, 16, 128))
+                                        .setTooltip(v -> Component.translatable("voolkan.options.blockEntityDistance.tooltip"))
+                                        .setImpact(PerformanceImpact.MEDIUM),
                         new CyclingOption<>(Component.translatable("options.mipmapLevels"),
                                 new Integer[]{0,1,2,3,4},
                                 value -> {

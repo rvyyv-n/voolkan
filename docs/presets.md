@@ -24,6 +24,7 @@ Not touched by any preset: window mode, resolution, refresh rate (except Perform
 | Biome blend | 1x1 | 5x5 | 9x9 | 5x5 |
 | Entity shadows | off | on | on | off |
 | Entity distance | 0.5x (min) | 1.0x | 1.5x | 1.0x |
+| Block entity distance | 16 blocks | 64 blocks | 64 blocks | 32 blocks |
 | Mipmap levels | 0 | 2 | 4 | 2 |
 | Weather radius | 3 (min) | 5 | 8 | 3 (min) |
 | Vignette | off | on | on | on |
