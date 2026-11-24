@@ -22,6 +22,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ARGB;
 import net.vulkanmod.gl.VkGlFramebuffer;
@@ -68,6 +69,7 @@ public class VkCommandEncoder implements CommandEncoder {
     private EGlProgram lastProgram;
 
     private int framebufferId = VkGlFramebuffer.genFramebufferId();
+    private final LongOpenHashSet writtenTransferBuffers = new LongOpenHashSet();
 
     protected VkCommandEncoder(VkGpuDevice glDevice) {
         this.device = glDevice;
@@ -202,6 +204,7 @@ public class VkCommandEncoder implements CommandEncoder {
 
             long fence = graphicsQueue.submitCommands(commandBuffer);
             Synchronization.waitFence(fence);
+            commandBuffer.reset();
         }
     }
 
@@ -313,32 +316,35 @@ public class VkCommandEncoder implements CommandEncoder {
                     try (MemoryStack stack = MemoryStack.stackPush()) {
                         if (!commandBuffer.isRecording()) {
                             commandBuffer.begin(stack);
+                            this.writtenTransferBuffers.clear();
                         }
 
-                        VkMemoryBarrier.Buffer barrier = VkMemoryBarrier.calloc(1, stack);
-                        barrier.sType$Default();
+                        long dstBufferId = vkGpuBuffer.buffer.getId();
+                        if (!this.writtenTransferBuffers.add(dstBufferId)) {
+                            VkBufferMemoryBarrier.Buffer bufferMemoryBarriers = VkBufferMemoryBarrier.calloc(1, stack);
+                            VkBufferMemoryBarrier bufferMemoryBarrier = bufferMemoryBarriers.get(0);
+                            bufferMemoryBarrier.sType$Default();
+                            bufferMemoryBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                            bufferMemoryBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+                            bufferMemoryBarrier.buffer(dstBufferId);
+                            bufferMemoryBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+                            bufferMemoryBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+                            bufferMemoryBarrier.size(VK_WHOLE_SIZE);
 
-                        VkBufferMemoryBarrier.Buffer bufferMemoryBarriers = VkBufferMemoryBarrier.calloc(1, stack);
-                        VkBufferMemoryBarrier bufferMemoryBarrier = bufferMemoryBarriers.get(0);
-                        bufferMemoryBarrier.sType$Default();
-                        bufferMemoryBarrier.buffer(vkGpuBuffer.buffer.getId());
-                        bufferMemoryBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                        bufferMemoryBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                        bufferMemoryBarrier.size(VK_WHOLE_SIZE);
-
-                        vkCmdPipelineBarrier(commandBuffer.handle,
-                                             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                             0,
-                                             barrier,
-                                             bufferMemoryBarriers,
-                                             null);
+                            vkCmdPipelineBarrier(commandBuffer.handle,
+                                                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                                 0,
+                                                 null,
+                                                 bufferMemoryBarriers,
+                                                 null);
+                        }
 
                         VkBufferCopy.Buffer copyRegion = VkBufferCopy.calloc(1, stack);
                         copyRegion.size(size);
                         copyRegion.srcOffset(srcOffset);
                         copyRegion.dstOffset(dstOffset);
 
-                        vkCmdCopyBuffer(commandBuffer.handle, stagingBuffer.getId(), vkGpuBuffer.buffer.getId(), copyRegion);
+                        vkCmdCopyBuffer(commandBuffer.handle, stagingBuffer.getId(), dstBufferId, copyRegion);
                     }
                 }
             }

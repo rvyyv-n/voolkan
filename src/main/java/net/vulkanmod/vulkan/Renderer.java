@@ -93,6 +93,13 @@ public class Renderer {
     private static final LongBuffer BIND_DESC_SET = MemoryUtil.memAllocLong(1);
     private static final long P_BIND_DESC_SET = MemoryUtil.memAddress0(BIND_DESC_SET);
 
+    private static final int UPLOAD_WAIT_STAGE_MASK =
+            VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT
+            | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT
+            | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+            | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+            | VK_PIPELINE_STAGE_TRANSFER_BIT;
+
     private static final int PUSH_CONSTANTS_SCRATCH_SIZE = 128;
     private static final long P_PUSH_CONSTANTS = MemoryUtil.nmemAlloc(PUSH_CONSTANTS_SCRATCH_SIZE);
 
@@ -492,7 +499,7 @@ public class Renderer {
             Synchronization.INSTANCE.getWaitSemaphores(waitSemaphores);
 
             for (int i = 0; i < waitSemaphoreCount; i++) {
-                waitDstStageMask.put(i, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                waitDstStageMask.put(i, UPLOAD_WAIT_STAGE_MASK);
             }
 
             if (swapChain.isAcquired()) {
@@ -565,6 +572,9 @@ public class Renderer {
             this.endRenderPass(currentCmdBuffer);
             vkEndCommandBuffer(currentCmdBuffer);
 
+            submitUploads();
+            waitFences();
+
             VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
             submitInfo.sType(VK_STRUCTURE_TYPE_SUBMIT_INFO);
 
@@ -578,7 +588,7 @@ public class Renderer {
             Synchronization.INSTANCE.getWaitSemaphores(waitSemaphores);
 
             for (int i = 0; i < waitSemaphoreCount; i++) {
-                waitDstStageMask.put(i, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                waitDstStageMask.put(i, UPLOAD_WAIT_STAGE_MASK);
             }
 
             waitSemaphores.position(0);
@@ -588,9 +598,6 @@ public class Renderer {
             submitInfo.waitSemaphoreCount(waitSemaphores.limit());
             submitInfo.pWaitDstStageMask(waitDstStageMask);
 
-            submitUploads();
-            waitFences();
-
             vkResetFences(device, inFlightFences[currentFrame]);
             if ((vkResult = vkQueueSubmit(DeviceManager.getGraphicsQueue().vkQueue(), submitInfo, inFlightFences[currentFrame])) != VK_SUCCESS) {
                 vkResetFences(device, inFlightFences[currentFrame]);
@@ -598,8 +605,10 @@ public class Renderer {
             }
 
             slotSerials[currentFrame] = ++submitSerial;
+            Synchronization.INSTANCE.scheduleCbReset();
 
             vkWaitForFences(device, inFlightFences[currentFrame], true, VUtil.UINT64_MAX);
+            Vulkan.getStagingBuffer().reset();
 
             this.beginMainRenderPass(stack);
         }
@@ -714,7 +723,6 @@ public class Renderer {
     private void waitFences() {
         // Make sure there are no uploads/transitions scheduled
         Synchronization.INSTANCE.waitFences();
-        Vulkan.getStagingBuffer().reset();
     }
 
     private void resetDescriptors() {
@@ -746,8 +754,10 @@ public class Renderer {
     @SuppressWarnings("UnreachableCode")
     private void recreateSwapChain() {
         submitUploads();
+        UploadManager.INSTANCE.syncUploads();
         waitFences();
         Vulkan.waitIdle();
+        Synchronization.INSTANCE.clearSemaphoresAfterIdle();
 
         mainCommandBuffers.forEach(commandBuffer -> vkResetCommandBuffer(commandBuffer, 0));
         recordingCmds = false;
@@ -760,8 +770,6 @@ public class Renderer {
         int newFramesNum = clampFrameQueue(Initializer.CONFIG.frameQueueSize);
 
         if (framesNum != newFramesNum) {
-            UploadManager.INSTANCE.submitUploads();
-
             framesNum = newFramesNum;
             MemoryManager.getInstance().freeAllBuffers();
             MemoryManager.createInstance(newFramesNum);

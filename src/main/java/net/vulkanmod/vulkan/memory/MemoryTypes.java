@@ -23,6 +23,10 @@ import static org.lwjgl.vulkan.VK10.*;
 public class MemoryTypes {
     public static MemoryType GPU_MEM;
     public static MemoryType HOST_MEM;
+    /** Host-visible coherent memory that prefers device-local BAR (256 MB on GCN1) with automatic host fallback. */
+    public static MemoryType BAR_MEM;
+    /** Host-visible coherent memory that prefers CPU-cached pages for fast GPU-to-CPU readbacks. */
+    public static MemoryType READBACK_MEM;
 
     public static void createMemoryTypes() {
 
@@ -31,11 +35,11 @@ public class MemoryTypes {
             VkMemoryHeap heap = DeviceManager.memoryProperties.memoryHeaps(memoryType.heapIndex());
             int propertyFlags = memoryType.propertyFlags();
 
-            if (propertyFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+            if (GPU_MEM == null && propertyFlags == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
                 GPU_MEM = new DeviceLocalMemory(memoryType, heap);
             }
 
-            if (propertyFlags == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            if (HOST_MEM == null && propertyFlags == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
                 HOST_MEM = new HostCoherentMemory(memoryType, heap);
             }
         }
@@ -65,6 +69,16 @@ public class MemoryTypes {
             // Could not find device memory, fallback to host memory
             GPU_MEM = HOST_MEM;
         }
+
+        BAR_MEM = new HostPreferredMemory(
+                HOST_MEM.vkMemoryType, HOST_MEM.vkMemoryHeap,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+        READBACK_MEM = new HostPreferredMemory(
+                HOST_MEM.vkMemoryType, HOST_MEM.vkMemoryHeap,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
         logChosenHeaps();
     }
@@ -124,7 +138,7 @@ public class MemoryTypes {
         public void createBuffer(Buffer buffer, long size) {
             MemoryManager.getInstance().createBuffer(buffer, size,
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | buffer.usage,
-                    VK_MEMORY_HEAP_DEVICE_LOCAL_BIT);
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, false);
         }
 
         @Override
@@ -168,7 +182,6 @@ public class MemoryTypes {
         @Override
         public void copyFromBuffer(Buffer buffer, long size, ByteBuffer byteBuffer) {
             MemoryUtil.memCopy(buffer.getDataPtr(), MemoryUtil.memAddress(byteBuffer), size);
-            VUtil.memcpy(buffer, byteBuffer, size);
         }
 
         @Override
@@ -206,6 +219,24 @@ public class MemoryTypes {
         }
     }
 
+    static class HostPreferredMemory extends MappableMemory {
+        private final int requiredFlags;
+        private final int preferredFlags;
+
+        HostPreferredMemory(VkMemoryType vkMemoryType, VkMemoryHeap vkMemoryHeap, int requiredFlags, int preferredFlags) {
+            super(Type.HOST_LOCAL, vkMemoryType, vkMemoryHeap);
+            this.requiredFlags = requiredFlags;
+            this.preferredFlags = preferredFlags;
+        }
+
+        @Override
+        public void createBuffer(Buffer buffer, long size) {
+            MemoryManager.getInstance().createBuffer(buffer, size,
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | buffer.usage,
+                    this.requiredFlags, this.preferredFlags, true);
+        }
+    }
+
     static class DeviceMappableMemory extends MappableMemory {
 
         DeviceMappableMemory(VkMemoryType vkMemoryType, VkMemoryHeap vkMemoryHeap) {
@@ -216,7 +247,8 @@ public class MemoryTypes {
         public void createBuffer(Buffer buffer, long size) {
             MemoryManager.getInstance().createBuffer(buffer, size,
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | buffer.usage,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true);
         }
     }
 }

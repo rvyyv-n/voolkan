@@ -63,7 +63,7 @@ public class ChunkAreaManager {
         this.chunkAreasArr = new ChunkArea[size];
 
         int sectionDataStride = UniformBuffer.getAlignedSize(SECTION_DATA_SIZE);
-        this.sectionDataSlab = new UniformBuffer(this.size * sectionDataStride, MemoryTypes.HOST_MEM);
+        this.sectionDataSlab = new UniformBuffer(this.size * sectionDataStride, MemoryTypes.BAR_MEM);
 
         for (int z = 0; z < this.xzSize; ++z) {
             for (int y = 0; y < this.ySize; ++y) {

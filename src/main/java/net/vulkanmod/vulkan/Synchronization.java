@@ -107,6 +107,12 @@ public class Synchronization {
         this.semaphoreCbs.clear();
     }
 
+    public synchronized void clearSemaphoresAfterIdle() {
+        this.semaphores.clear();
+        this.semaphoreCbs.forEach(CommandPool.CommandBuffer::reset);
+        this.semaphoreCbs.clear();
+    }
+
     public static void waitFence(long fence) {
         VkDevice device = Vulkan.getVkDevice();
 

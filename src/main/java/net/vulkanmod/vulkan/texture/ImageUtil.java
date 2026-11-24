@@ -66,7 +66,8 @@ public abstract class ImageUtil {
             PointerBuffer pStagingAllocation = stack.pointers(0L);
             MemoryManager.getInstance().createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                     pStagingBuffer, pStagingAllocation);
+                                                     VK_MEMORY_PROPERTY_HOST_CACHED_BIT, false,
+                                                     pStagingBuffer, pStagingAllocation, null);
 
             copyImageToBuffer(stack, commandBuffer.getHandle(), pStagingBuffer.get(0), image.getId(), 0, image.width,
                               image.height, 0, 0, 0, 0, 0);
@@ -74,6 +75,7 @@ public abstract class ImageUtil {
 
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
 
             MemoryManager.MapAndCopy(pStagingAllocation.get(0),
                                      (data) -> VUtil.memcpy(data.getByteBuffer(0, (int) imageSize), ptr));
@@ -135,6 +137,7 @@ public abstract class ImageUtil {
 
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
         }
     }
 
@@ -319,6 +322,7 @@ public abstract class ImageUtil {
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
 
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
         }
     }
 
@@ -338,8 +342,8 @@ public abstract class ImageUtil {
 
         barrier.subresourceRange().aspectMask(image.aspect);
 
-        barrier.srcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
-        barrier.dstAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
+        barrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+        barrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
 
         vkCmdPipelineBarrier(commandBuffer,
                              VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,

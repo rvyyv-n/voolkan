@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use VMA persistent mapping pointer directly to eliminate native PointerBuffer leaks on mappable buffers.
+ */
+
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import net.vulkanmod.vulkan.memory.MemoryType;
@@ -30,6 +36,7 @@ public class Buffer {
     }
 
     public void createBuffer(long bufferSize) {
+        this.dataPtr = 0L;
         this.type.createBuffer(this, bufferSize);
 
         if (this.name != null) {
@@ -38,7 +45,7 @@ public class Buffer {
             }
         }
 
-        if (this.type.mappable()) {
+        if (this.type.mappable() && this.dataPtr == 0L) {
             this.dataPtr = MemoryManager.getInstance().Map(this.allocation).get(0);
         }
     }
@@ -98,6 +105,10 @@ public class Buffer {
 
     public long getDataPtr() {
         return dataPtr;
+    }
+
+    public void setDataPtr(long dataPtr) {
+        this.dataPtr = dataPtr;
     }
 
     public void setBufferSize(long size) {

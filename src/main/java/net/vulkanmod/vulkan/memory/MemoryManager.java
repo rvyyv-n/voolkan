@@ -22,6 +22,7 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.util.vma.VmaBudget;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
@@ -115,6 +116,11 @@ public class MemoryManager {
     }
 
     public void createBuffer(long size, int usage, int properties, LongBuffer pBuffer, PointerBuffer pBufferMemory) {
+        createBuffer(size, usage, properties, 0, false, pBuffer, pBufferMemory, null);
+    }
+
+    public void createBuffer(long size, int usage, int requiredFlags, int preferredFlags, boolean mapped,
+                             LongBuffer pBuffer, PointerBuffer pBufferMemory, VmaAllocationInfo pAllocationInfo) {
         try (MemoryStack stack = stackPush()) {
 
             VkBufferCreateInfo bufferInfo = VkBufferCreateInfo.calloc(stack);
@@ -122,10 +128,24 @@ public class MemoryManager {
             bufferInfo.size(size);
             bufferInfo.usage(usage);
 
-            VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack);
-            allocationInfo.requiredFlags(properties);
+            Queue.QueueFamilyIndices qf = Queue.getQueueFamilies();
+            if (qf.graphicsFamily != qf.transferFamily) {
+                bufferInfo.sharingMode(VK_SHARING_MODE_CONCURRENT);
+                bufferInfo.pQueueFamilyIndices(stack.ints(qf.graphicsFamily, qf.transferFamily));
+            } else {
+                bufferInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+            }
 
-            int result = vmaCreateBuffer(ALLOCATOR, bufferInfo, allocationInfo, pBuffer, pBufferMemory, null);
+            VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack);
+            allocationInfo.requiredFlags(requiredFlags);
+            if (preferredFlags != 0) {
+                allocationInfo.preferredFlags(preferredFlags);
+            }
+            if (mapped) {
+                allocationInfo.flags(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+            }
+
+            int result = vmaCreateBuffer(ALLOCATOR, bufferInfo, allocationInfo, pBuffer, pBufferMemory, pAllocationInfo);
             if (result != VK_SUCCESS) {
                 Initializer.LOGGER.info(String.format("Failed to create buffer with size: %.3f MB", ((float) size / BYTES_IN_MB)));
                 Initializer.LOGGER.info(String.format("Tracked Device Memory used: %d/%d MB", getAllocatedDeviceMemoryMB(), getDeviceMemoryMB()));
@@ -138,17 +158,25 @@ public class MemoryManager {
     }
 
     public synchronized void createBuffer(Buffer buffer, long size, int usage, int properties) {
+        createBuffer(buffer, size, usage, properties, 0, buffer.type.mappable());
+    }
+
+    public synchronized void createBuffer(Buffer buffer, long size, int usage, int requiredFlags, int preferredFlags, boolean mapped) {
         try (MemoryStack stack = stackPush()) {
             LongBuffer pBuffer = stack.mallocLong(1);
             PointerBuffer pAllocation = stack.pointers(VK_NULL_HANDLE);
+            VmaAllocationInfo vmaAllocInfo = mapped ? VmaAllocationInfo.calloc(stack) : null;
 
-            this.createBuffer(size, usage, properties, pBuffer, pAllocation);
+            this.createBuffer(size, usage, requiredFlags, preferredFlags, mapped, pBuffer, pAllocation, vmaAllocInfo);
 
             buffer.setId(pBuffer.get(0));
             buffer.setAllocation(pAllocation.get(0));
             buffer.setBufferSize(size);
+            if (mapped && vmaAllocInfo != null) {
+                buffer.setDataPtr(vmaAllocInfo.pMappedData());
+            }
 
-            if ((properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
+            if (buffer.type.getType() == MemoryType.Type.DEVICE_LOCAL) {
                 deviceMemory += size;
             }
             else {

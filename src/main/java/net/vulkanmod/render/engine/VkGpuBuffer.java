@@ -1,5 +1,11 @@
 package net.vulkanmod.render.engine;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * prefer CPU-cached host memory for USAGE_MAP_READ buffers.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 
 import java.nio.ByteBuffer;
@@ -47,11 +53,12 @@ public class VkGpuBuffer extends GpuBuffer {
             vkUsage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
         }
 
-        boolean mappable = (usage & GpuBuffer.USAGE_MAP_READ) != 0 |
+        boolean mapRead = (usage & GpuBuffer.USAGE_MAP_READ) != 0;
+        boolean mappable = mapRead |
                            (usage & GpuBuffer.USAGE_MAP_WRITE) != 0 |
                            (usage & GpuBuffer.USAGE_HINT_CLIENT_STORAGE) != 0;
 
-        MemoryType memoryType =  mappable ? MemoryTypes.HOST_MEM : MemoryTypes.GPU_MEM;
+        MemoryType memoryType = mapRead ? MemoryTypes.READBACK_MEM : (mappable ? MemoryTypes.HOST_MEM : MemoryTypes.GPU_MEM);
 
         this.buffer = new Buffer(supplier.get(), vkUsage, memoryType);
         this.buffer.createBuffer(this.size());

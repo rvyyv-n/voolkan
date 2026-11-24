@@ -19,6 +19,7 @@ import org.lwjgl.opengl.GL30;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
 import static org.lwjgl.vulkan.VK11.VK_ATTACHMENT_LOAD_OP_LOAD;
+import static org.lwjgl.vulkan.VK11.VK_ATTACHMENT_STORE_OP_STORE;
 import static org.lwjgl.vulkan.VK11.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 public class VkGlFramebuffer {
@@ -279,7 +280,7 @@ public class VkGlFramebuffer {
 
         if (hasDepthImage) {
             builder.getDepthAttachmentInfo()
-                   .setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD);
+                   .setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
         }
 
         this.renderPass = builder.build();
