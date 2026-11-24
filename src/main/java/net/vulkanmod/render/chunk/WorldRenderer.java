@@ -3,12 +3,13 @@ package net.vulkanmod.render.chunk;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * gate indirect draw on device support.
+ * gate indirect draw on device support; trigger pipeline warm-up on world load.
  */
 
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
+import dev.voolkan.cache.PipelineWarmup;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Camera;
@@ -302,6 +303,7 @@ public class WorldRenderer {
         ChunkStatusMap.createInstance(renderDistance);
         if (level != null) {
             this.allChanged();
+            PipelineWarmup.onWorldLoad();
         } else {
             if (this.sectionGrid != null) {
                 this.sectionGrid.freeAllBuffers();
