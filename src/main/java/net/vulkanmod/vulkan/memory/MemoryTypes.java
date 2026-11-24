@@ -1,5 +1,12 @@
 package net.vulkanmod.vulkan.memory;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * detect unified memory heaps and log chosen memory heap sizes at startup.
+ */
+
+import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.buffer.Buffer;
@@ -33,29 +40,78 @@ public class MemoryTypes {
             }
         }
 
-        if (GPU_MEM != null && HOST_MEM != null)
-            return;
+        if (GPU_MEM == null || HOST_MEM == null) {
+            // Could not find 1 or more MemoryTypes, need to use fallback
+            for (int i = 0; i < DeviceManager.memoryProperties.memoryTypeCount(); ++i) {
+                VkMemoryType memoryType = DeviceManager.memoryProperties.memoryTypes(i);
+                VkMemoryHeap heap = DeviceManager.memoryProperties.memoryHeaps(memoryType.heapIndex());
 
-        // Could not find 1 or more MemoryTypes, need to use fallback
-        for (int i = 0; i < DeviceManager.memoryProperties.memoryTypeCount(); ++i) {
-            VkMemoryType memoryType = DeviceManager.memoryProperties.memoryTypes(i);
-            VkMemoryHeap heap = DeviceManager.memoryProperties.memoryHeaps(memoryType.heapIndex());
+                // GPU mappable memory
+                if (GPU_MEM == null && (memoryType.propertyFlags() & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) == (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
+                    GPU_MEM = new DeviceMappableMemory(memoryType, heap);
+                }
 
-            // GPU mappable memory
-            if ((memoryType.propertyFlags() & (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) == (VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)) {
-                GPU_MEM = new DeviceMappableMemory(memoryType, heap);
+                if (HOST_MEM == null && (memoryType.propertyFlags() & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+                    HOST_MEM = new HostLocalFallbackMemory(memoryType, heap);
+                }
+
+                if (GPU_MEM != null && HOST_MEM != null) {
+                    break;
+                }
             }
-
-            if ((memoryType.propertyFlags() & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) == (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
-                HOST_MEM = new HostLocalFallbackMemory(memoryType, heap);
-            }
-
-            if (GPU_MEM != null && HOST_MEM != null)
-                return;
         }
 
-        // Could not find device memory, fallback to host memory
-        GPU_MEM = HOST_MEM;
+        if (GPU_MEM == null) {
+            // Could not find device memory, fallback to host memory
+            GPU_MEM = HOST_MEM;
+        }
+
+        logChosenHeaps();
+    }
+
+    public static boolean isUnifiedMemory() {
+        if (GPU_MEM == null || HOST_MEM == null || DeviceManager.memoryProperties == null) {
+            return false;
+        }
+        int gpuHeapIdx = GPU_MEM.vkMemoryType.heapIndex();
+        if (gpuHeapIdx != HOST_MEM.vkMemoryType.heapIndex()) {
+            return false;
+        }
+        return heapHasProperty(gpuHeapIdx, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                && heapHasProperty(gpuHeapIdx, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    }
+
+    private static boolean heapHasProperty(int heapIndex, int flag) {
+        int count = DeviceManager.memoryProperties.memoryTypeCount();
+        for (int i = 0; i < count; i++) {
+            VkMemoryType type = DeviceManager.memoryProperties.memoryTypes(i);
+            if (type.heapIndex() == heapIndex && (type.propertyFlags() & flag) != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void logChosenHeaps() {
+        if (GPU_MEM == null) {
+            return;
+        }
+        int gpuHeapIdx = GPU_MEM.vkMemoryType.heapIndex();
+        long gpuHeapMB = GPU_MEM.vkMemoryHeap.size() / MemoryManager.BYTES_IN_MB;
+        String budgetStatus = DeviceManager.memoryBudgetSupported ? "enabled" : "not supported";
+
+        if (isUnifiedMemory()) {
+            Initializer.LOGGER.info("Memory heap: unified {} MB (heap {}, VK_EXT_memory_budget: {})",
+                    gpuHeapMB, gpuHeapIdx, budgetStatus);
+        } else if (HOST_MEM != null && HOST_MEM.vkMemoryType.heapIndex() != gpuHeapIdx) {
+            int hostHeapIdx = HOST_MEM.vkMemoryType.heapIndex();
+            long hostHeapMB = HOST_MEM.vkMemoryHeap.size() / MemoryManager.BYTES_IN_MB;
+            Initializer.LOGGER.info("Memory heaps: VRAM {} MB (heap {}), shared {} MB (heap {}), VK_EXT_memory_budget: {}",
+                    gpuHeapMB, gpuHeapIdx, hostHeapMB, hostHeapIdx, budgetStatus);
+        } else {
+            Initializer.LOGGER.info("Memory heap: {} MB (heap {}, VK_EXT_memory_budget: {})",
+                    gpuHeapMB, gpuHeapIdx, budgetStatus);
+        }
     }
 
     public static class DeviceLocalMemory extends MemoryType {

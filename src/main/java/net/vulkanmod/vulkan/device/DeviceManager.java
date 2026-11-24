@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.device;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * choose the render path after device pick; enable dynamic rendering only when used; log capabilities (including the selectable devices) and report device setup failures readably.
+ * choose the render path after device pick; enable dynamic rendering and VK_EXT_memory_budget only when used/supported; log capabilities (including the selectable devices) and report device setup failures readably.
  */
 
 import dev.voolkan.compat.RenderPath;
@@ -48,6 +48,7 @@ public abstract class DeviceManager {
 
     public static SurfaceProperties surfaceProperties;
     public static boolean fullScreenExclusiveControl = false;
+    public static boolean memoryBudgetSupported = false;
 
     static GraphicsQueue graphicsQueue;
     static PresentQueue presentQueue;
@@ -247,20 +248,26 @@ public abstract class DeviceManager {
             }
 
             fullScreenExclusiveControl = false;
+            memoryBudgetSupported = false;
             Set<String> enabledExtensions = new HashSet<>(Vulkan.REQUIRED_EXTENSION);
             if (Vulkan.DYNAMIC_RENDERING) {
                 enabledExtensions.add(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
             }
-            if (Vulkan.surfaceCapabilities2Supported) {
-                Set<String> availableExtensions = getAvailableExtension(stack, physicalDevice).stream()
-                        .map(VkExtensionProperties::extensionNameString)
-                        .collect(toSet());
 
-                if (availableExtensions.contains(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)) {
-                    enabledExtensions.add(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
-                    fullScreenExclusiveControl = true;
-                    Initializer.LOGGER.info("VK_EXT_full_screen_exclusive enabled: opting out of full screen exclusive control");
-                }
+            Set<String> availableExtensions = getAvailableExtension(stack, physicalDevice).stream()
+                    .map(VkExtensionProperties::extensionNameString)
+                    .collect(toSet());
+
+            if (Vulkan.surfaceCapabilities2Supported
+                    && availableExtensions.contains(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME)) {
+                enabledExtensions.add(EXTFullScreenExclusive.VK_EXT_FULL_SCREEN_EXCLUSIVE_EXTENSION_NAME);
+                fullScreenExclusiveControl = true;
+                Initializer.LOGGER.info("VK_EXT_full_screen_exclusive enabled: opting out of full screen exclusive control");
+            }
+
+            if (availableExtensions.contains(EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME)) {
+                enabledExtensions.add(EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+                memoryBudgetSupported = true;
             }
             createInfo.ppEnabledExtensionNames(asPointerBuffer(enabledExtensions));
 

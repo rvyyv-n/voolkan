@@ -1,5 +1,11 @@
 package net.vulkanmod.mixin.debug;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * display cached VMA VRAM/shared/unified memory budget lines on the F3 screen.
+ */
+
 import net.minecraft.client.gui.components.debug.DebugEntryMemory;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.resources.Identifier;
@@ -11,13 +17,24 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 
 import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 @Mixin(DebugEntryMemory.class)
 public abstract class DebugEntryMemoryM {
+
+    @Unique
+    private static final long VOOLKAN_BUDGET_REFRESH_NS = 500_000_000L;
+
+    @Unique
+    private long voolkanLastBudgetRefreshNs;
+
+    @Unique
+    private List<String> voolkanCachedBudgetLines = List.of();
 
     @Shadow @Final private static Identifier GROUP;
 
@@ -35,17 +52,24 @@ public abstract class DebugEntryMemoryM {
         long m = Runtime.getRuntime().totalMemory();
         long n = Runtime.getRuntime().freeMemory();
         long o = m - n;
-        debugScreenDisplayer.addToGroup(
-                GROUP,
-                List.of(
-                        String.format(Locale.ROOT, "Mem: %2d%% %03d/%03dMB", o * 100L / l, bytesToMegabytes(o), bytesToMegabytes(l)),
-//                        String.format(Locale.ROOT, "Allocation rate: %03dMB/s", bytesToMegabytes(this.allocationRateCalculator.bytesAllocatedPerSecond(o))),
-                        String.format(Locale.ROOT, "Allocated: %2d%% %03dMB", m * 100L / l, bytesToMegabytes(m)),
-                        String.format("Off-heap: " + getOffHeapMemory() + "MB"),
-                        "NativeMemory: %dMB".formatted(MemoryManager.getInstance().getNativeMemoryMB()),
-                        "DeviceMemory: %dMB".formatted(MemoryManager.getInstance().getAllocatedDeviceMemoryMB())
-                )
-        );
+
+        MemoryManager memoryManager = MemoryManager.getInstance();
+        long now = System.nanoTime();
+        if (this.voolkanCachedBudgetLines.isEmpty() || now - this.voolkanLastBudgetRefreshNs >= VOOLKAN_BUDGET_REFRESH_NS) {
+            this.voolkanCachedBudgetLines = memoryManager.getMemoryBudgetLines();
+            this.voolkanLastBudgetRefreshNs = now;
+        }
+
+        List<String> lines = new ArrayList<>(5 + this.voolkanCachedBudgetLines.size());
+        lines.add(String.format(Locale.ROOT, "Mem: %2d%% %03d/%03dMB", o * 100L / l, bytesToMegabytes(o), bytesToMegabytes(l)));
+//        lines.add(String.format(Locale.ROOT, "Allocation rate: %03dMB/s", bytesToMegabytes(this.allocationRateCalculator.bytesAllocatedPerSecond(o))));
+        lines.add(String.format(Locale.ROOT, "Allocated: %2d%% %03dMB", m * 100L / l, bytesToMegabytes(m)));
+        lines.add(String.format("Off-heap: " + getOffHeapMemory() + "MB"));
+        lines.add("NativeMemory: %dMB".formatted(memoryManager.getNativeMemoryMB()));
+        lines.add("DeviceMemory: %dMB".formatted(memoryManager.getAllocatedDeviceMemoryMB()));
+        lines.addAll(this.voolkanCachedBudgetLines);
+
+        debugScreenDisplayer.addToGroup(GROUP, lines);
 
     }
 

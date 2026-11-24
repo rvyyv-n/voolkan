@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes.
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active.
  */
 
 import net.vulkanmod.vulkan.device.Device;
@@ -37,6 +37,7 @@ import static org.lwjgl.glfw.GLFWVulkan.glfwCreateWindowSurface;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.system.MemoryStack.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
+import static org.lwjgl.util.vma.Vma.VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
 import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
 import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
@@ -333,6 +334,9 @@ public class Vulkan {
             allocatorCreateInfo.pVulkanFunctions(vulkanFunctions);
             allocatorCreateInfo.instance(instance);
             allocatorCreateInfo.vulkanApiVersion(VK_API_VERSION_1_2);
+            if (DeviceManager.memoryBudgetSupported) {
+                allocatorCreateInfo.flags(VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT);
+            }
 
             PointerBuffer pAllocator = stack.pointers(VK_NULL_HANDLE);
 

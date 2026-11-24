@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * format VMA heap budget lines for the F3 debug screen.
+ */
+
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.Initializer;
@@ -22,6 +28,7 @@ import org.lwjgl.vulkan.VkImageCreateInfo;
 
 import java.nio.LongBuffer;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
@@ -332,6 +339,38 @@ public class MemoryManager {
             long budget = vmaBudget.budget();
 
             return String.format("Device Memory Heap Usage: %d/%dMB", bytesInMb(usage), bytesInMb(budget));
+        }
+    }
+
+    public List<String> getMemoryBudgetLines() {
+        if (MemoryTypes.GPU_MEM == null || DeviceManager.memoryProperties == null) {
+            return List.of();
+        }
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VmaBudget.Buffer vmaBudgets = VmaBudget.calloc(DeviceManager.memoryProperties.memoryHeapCount(), stack);
+            vmaGetHeapBudgets(ALLOCATOR, vmaBudgets);
+
+            String est = DeviceManager.memoryBudgetSupported ? "" : " (est.)";
+            int gpuHeapIdx = MemoryTypes.GPU_MEM.vkMemoryType.heapIndex();
+            int gpuHeapMB = bytesInMb(MemoryTypes.GPU_MEM.vkMemoryHeap.size());
+            VmaBudget gpuBudget = vmaBudgets.get(gpuHeapIdx);
+            String gpuLabel = MemoryTypes.isUnifiedMemory() ? "Unified memory" : "VRAM";
+            String gpuLine = String.format(Locale.ROOT, "%s: %d/%d MB%s (heap %d MB)",
+                    gpuLabel, bytesInMb(gpuBudget.usage()), bytesInMb(gpuBudget.budget()), est, gpuHeapMB);
+
+            if (MemoryTypes.HOST_MEM != null) {
+                int hostHeapIdx = MemoryTypes.HOST_MEM.vkMemoryType.heapIndex();
+                if (hostHeapIdx != gpuHeapIdx) {
+                    int hostHeapMB = bytesInMb(MemoryTypes.HOST_MEM.vkMemoryHeap.size());
+                    VmaBudget hostBudget = vmaBudgets.get(hostHeapIdx);
+                    String hostLine = String.format(Locale.ROOT, "Shared memory: %d/%d MB%s (heap %d MB)",
+                            bytesInMb(hostBudget.usage()), bytesInMb(hostBudget.budget()), est, hostHeapMB);
+                    return List.of(gpuLine, hostLine);
+                }
+            }
+
+            return List.of(gpuLine);
         }
     }
 }
