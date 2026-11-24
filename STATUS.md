@@ -32,7 +32,7 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 | Tag | Task | Detail |
 |---|---|---|
 | `qol-upstream` | Pass 8: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | built on `plan/v1-5`; waits for R7 smoke |
-| `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | |
+| `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | built on `plan/v1-5`; waits for R7 smoke |
 | `frame-caps` | Pass 10: precise limiter, background cap, battery-cap hook, Battery preset | |
 | `res-scale` | Pass 11: resolution scale for the world | deep review |
 | `pipeline-warmup` | Pass 12: build pipelines during world load | needs Pass 9 |
