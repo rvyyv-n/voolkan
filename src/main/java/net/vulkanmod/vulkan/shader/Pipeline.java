@@ -3,11 +3,12 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * pipeline cache is loaded from and saved to disk.
+ * pipeline cache is loaded from and saved to disk; log shader binary cache summary on shutdown.
  */
 
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.voolkan.cache.PipelineCacheStore;
+import dev.voolkan.cache.ShaderBinaryCache;
 import net.fabricmc.loader.api.FabricLoader;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.Renderer;
@@ -174,6 +175,7 @@ public abstract class Pipeline {
     }
 
     public static void destroyPipelineCache() {
+        ShaderBinaryCache.logSummary();
         savePipelineCache();
         vkDestroyPipelineCache(DEVICE, PIPELINE_CACHE, null);
     }

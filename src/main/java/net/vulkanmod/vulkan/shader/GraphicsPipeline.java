@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes.
+ * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes; release compiled SPIR-V buffers after creating shader modules.
  */
 
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -253,13 +253,13 @@ public class GraphicsPipeline extends Pipeline {
 
     private void createShaderModules(Builder builder) {
         String vsh = builder.shadersSrc.get(SPIRVUtils.ShaderKind.VERTEX_SHADER);
-        SPIRVUtils.SPIRV vertShaderSPIRV = SPIRVUtils.compileShader(String.format("%s.vsh", name), vsh, SPIRVUtils.ShaderKind.VERTEX_SHADER);
-
         String fsh = builder.shadersSrc.get(SPIRVUtils.ShaderKind.FRAGMENT_SHADER);
-        SPIRVUtils.SPIRV fragShaderSPIRV = SPIRVUtils.compileShader(String.format("%s.fsh", name), fsh, SPIRVUtils.ShaderKind.FRAGMENT_SHADER);
 
-        this.vertShaderModule = createShaderModule(vertShaderSPIRV.bytecode());
-        this.fragShaderModule = createShaderModule(fragShaderSPIRV.bytecode());
+        try (SPIRVUtils.SPIRV vertShaderSPIRV = SPIRVUtils.compileShader(String.format("%s.vsh", name), vsh, SPIRVUtils.ShaderKind.VERTEX_SHADER);
+             SPIRVUtils.SPIRV fragShaderSPIRV = SPIRVUtils.compileShader(String.format("%s.fsh", name), fsh, SPIRVUtils.ShaderKind.FRAGMENT_SHADER)) {
+            this.vertShaderModule = createShaderModule(vertShaderSPIRV.bytecode());
+            this.fragShaderModule = createShaderModule(fragShaderSPIRV.bytecode());
+        }
     }
 
     public void cleanUp() {

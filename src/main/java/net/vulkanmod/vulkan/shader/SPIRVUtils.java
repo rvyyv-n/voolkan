@@ -1,7 +1,15 @@
 package net.vulkanmod.vulkan.shader;
 
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * cache compiled SPIR-V binaries on disk, support owned ByteBuffer SPIRV instances, and release shaderc results on free.
+ */
+
+import dev.voolkan.cache.ShaderBinaryCache;
+import net.vulkanmod.Initializer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.system.NativeResource;
 import org.lwjgl.util.shaderc.ShadercIncludeResolveI;
 import org.lwjgl.util.shaderc.ShadercIncludeResult;
@@ -13,9 +21,18 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static org.lwjgl.system.MemoryUtil.NULL;
 import static org.lwjgl.system.MemoryUtil.memASCII;
@@ -33,7 +50,10 @@ public class SPIRVUtils {
     private static final ShaderReleaser SHADER_RELEASER = new ShaderReleaser();
     private static final long pUserData = 0;
 
-    private static ObjectArrayList<String> includePaths;
+    private static final List<String> includePaths = new CopyOnWriteArrayList<>();
+    private static final AtomicInteger includePathsVersion = new AtomicInteger();
+    private static volatile int hashedIncludeVersion = -1;
+    private static volatile byte[] cachedIncludeDigest;
 
     static {
         initCompiler();
@@ -61,15 +81,100 @@ public class SPIRVUtils {
         shaderc_compile_options_set_target_env(options, shaderc_env_version_vulkan_1_2, VK12.VK_API_VERSION_1_2);
         shaderc_compile_options_set_include_callbacks(options, SHADER_INCLUDER, SHADER_RELEASER, pUserData);
 
-        includePaths = new ObjectArrayList<>();
         addIncludePath("/assets/vulkanmod/shaders/include/");
     }
 
     public static void addIncludePath(String path) {
         URL url = SPIRVUtils.class.getResource(path);
 
-        if (url != null)
+        if (url != null) {
             includePaths.add(url.toExternalForm());
+            includePathsVersion.incrementAndGet();
+        }
+    }
+
+    /**
+     * Hashes every file under all registered include directories once per include-path set.
+     *
+     * <p>The include directory holds only a handful of small GLSL headers, so hashing all of them up front
+     * is negligible, guarantees that any header edit invalidates affected entries, and lets callers compute
+     * the exact cache key before invoking shaderc (needed for future pipeline warm-up).
+     *
+     * @return SHA-256 digest of all include files, or {@code null} if an include directory could not be walked
+     * (in which case disk caching is skipped so a stale binary can never be returned).
+     */
+    private static byte[] getIncludeDigest() {
+        int version = includePathsVersion.get();
+        if (hashedIncludeVersion == version) {
+            return cachedIncludeDigest;
+        }
+
+        synchronized (includePaths) {
+            version = includePathsVersion.get();
+            if (hashedIncludeVersion == version) {
+                return cachedIncludeDigest;
+            }
+
+            byte[] digest = computeIncludeDigest();
+            cachedIncludeDigest = digest;
+            hashedIncludeVersion = version;
+            return digest;
+        }
+    }
+
+    private static byte[] computeIncludeDigest() {
+        try {
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            for (String includePath : includePaths) {
+                Path dir = Paths.get(new URI(includePath));
+                if (!Files.isDirectory(dir)) {
+                    return null;
+                }
+                List<Path> files = new ArrayList<>();
+                try (Stream<Path> walk = Files.walk(dir)) {
+                    walk.filter(Files::isRegularFile).forEach(files::add);
+                }
+                files.sort(Comparator.comparing(p -> dir.relativize(p).toString().replace('\\', '/')));
+                for (Path file : files) {
+                    String rel = dir.relativize(file).toString().replace('\\', '/');
+                    byte[] relBytes = rel.getBytes(StandardCharsets.UTF_8);
+                    sha.update((byte) (relBytes.length >>> 24));
+                    sha.update((byte) (relBytes.length >>> 16));
+                    sha.update((byte) (relBytes.length >>> 8));
+                    sha.update((byte) relBytes.length);
+                    sha.update(relBytes);
+
+                    byte[] content = Files.readAllBytes(file);
+                    sha.update((byte) (content.length >>> 24));
+                    sha.update((byte) (content.length >>> 16));
+                    sha.update((byte) (content.length >>> 8));
+                    sha.update((byte) content.length);
+                    sha.update(content);
+                }
+            }
+            return sha.digest();
+        } catch (IOException | URISyntaxException | RuntimeException | NoSuchAlgorithmException e) {
+            Initializer.LOGGER.warn("Could not hash shader include directory; disabling SPIR-V disk cache for this run: {}", e.toString());
+            return null;
+        }
+    }
+
+    /** Computes the disk cache key for the given shader, or {@code null} if include hashing failed. */
+    public static String computeCacheKey(String filename, String source, ShaderKind shaderKind) {
+        byte[] includeDigest = getIncludeDigest();
+        if (includeDigest == null) {
+            return null;
+        }
+        return ShaderBinaryCache.computeKey(
+                ShaderBinaryCache.getModVersion(),
+                VK12.VK_API_VERSION_1_2,
+                DEBUG,
+                OPTIMIZATIONS,
+                shaderKind.kind,
+                filename,
+                source,
+                includeDigest
+        );
     }
 
     public static SPIRV compileShader(String filename, String source, ShaderKind shaderKind) {
@@ -77,18 +182,39 @@ public class SPIRVUtils {
             throw new NullPointerException("Source for %s.%s is null".formatted(filename, shaderKind));
         }
 
+        String cacheKey = null;
+        if (ShaderBinaryCache.isEnabled()) {
+            cacheKey = computeCacheKey(filename, source, shaderKind);
+            if (cacheKey != null) {
+                byte[] cached = ShaderBinaryCache.lookup(cacheKey);
+                if (cached != null) {
+                    ShaderBinaryCache.recordHit();
+                    return SPIRV.fromBytes(cached);
+                }
+            }
+        }
+
         long result = shaderc_compile_into_spv(compiler, source, shaderKind.kind, filename, "main", options);
 
         if (result == NULL) {
-            throw new RuntimeException("Failed to compile shader %s into SPRI-V".formatted(filename ));
+            throw new RuntimeException("Failed to compile shader %s into SPRI-V".formatted(filename));
         }
 
         if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
             String errorMessage = shaderc_result_get_error_message(result);
+            shaderc_result_release(result);
             throw new RuntimeException("Failed to compile shader %s into SPIR-V:\n\t%s".formatted(filename, errorMessage));
         }
 
-        return new SPIRV(result, shaderc_result_get_bytes(result));
+        ByteBuffer bytecode = shaderc_result_get_bytes(result);
+        if (cacheKey != null && bytecode != null) {
+            ShaderBinaryCache.recordMiss();
+            byte[] copy = new byte[bytecode.remaining()];
+            bytecode.slice().get(copy);
+            ShaderBinaryCache.store(cacheKey, copy);
+        }
+
+        return new SPIRV(result, bytecode);
     }
 
     public enum ShaderKind {
@@ -149,11 +275,24 @@ public class SPIRVUtils {
     public static final class SPIRV implements NativeResource {
 
         private final long handle;
+        private final boolean ownedBuffer;
         private ByteBuffer bytecode;
+        private boolean freed;
 
         public SPIRV(long handle, ByteBuffer bytecode) {
+            this(handle, bytecode, false);
+        }
+
+        private SPIRV(long handle, ByteBuffer bytecode, boolean ownedBuffer) {
             this.handle = handle;
             this.bytecode = bytecode;
+            this.ownedBuffer = ownedBuffer;
+        }
+
+        public static SPIRV fromBytes(byte[] bytes) {
+            ByteBuffer buffer = MemoryUtil.memAlloc(bytes.length);
+            buffer.put(bytes).flip();
+            return new SPIRV(NULL, buffer, true);
         }
 
         public ByteBuffer bytecode() {
@@ -162,7 +301,17 @@ public class SPIRVUtils {
 
         @Override
         public void free() {
-//            shaderc_result_release(handle);
+            if (freed) {
+                return;
+            }
+            freed = true;
+            if (ownedBuffer) {
+                if (bytecode != null) {
+                    MemoryUtil.memFree(bytecode);
+                }
+            } else if (handle != NULL) {
+                shaderc_result_release(handle);
+            }
             bytecode = null; // Help the GC
         }
     }
