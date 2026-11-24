@@ -2,7 +2,7 @@
 
 The Video page has a **Preset** row (Custom / Performance / Balanced / Quality / Battery). Choosing one only *stages* values in the options below; nothing changes until the user presses Apply, and Undo drops them. The row always shows Custom when the screen opens. Values live in `dev.voolkan.gui.Preset`.
 
-Not touched by any preset: window mode, resolution, refresh rate (except Performance), GUI scale, brightness, attack/autosave indicator, inactivity FPS limit, graphics preset (vanilla Fast/Fancy), chunk update priority, culling toggles other than the culling mode, unique opaque layer, indirect draw, builder threads, swapchain images, device selector.
+Not touched by any preset: window mode, resolution, refresh rate (except Performance), world resolution, GUI scale, brightness, attack/autosave indicator, inactivity FPS limit, graphics preset (vanilla Fast/Fancy), chunk update priority, culling toggles other than the culling mode, unique opaque layer, indirect draw, builder threads, swapchain images, device selector.
 
 | Option | Performance | Balanced | Quality | Battery |
 |---|---|---|---|---|

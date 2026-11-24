@@ -2,7 +2,7 @@
 
 Scope for voolkan v1.5 on Minecraft 1.21.11. It replaces the old `macos-perf` and `v1-5-qol` placeholders. Roadmap items are in `ROADMAP.md` under "Future: v1.5" (grep by tag); open work is in `STATUS.md`.
 
-Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Nothing here is built yet.
+Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Windows/base passes 8-13 are built on `plan/v1-5` (awaiting manual R7 smoke testing); macOS passes 14-16 are not started yet.
 
 ## Goals
 
