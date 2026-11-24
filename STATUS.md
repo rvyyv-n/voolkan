@@ -34,7 +34,7 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 | `qol-upstream` | Pass 8: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | built on `plan/v1-5`; waits for R7 smoke |
 | `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | built on `plan/v1-5`; waits for R7 smoke |
 | `frame-caps` | Pass 10: precise limiter, background cap, battery-cap hook, Battery preset | built on `plan/v1-5`; waits for R7 smoke with frame times |
-| `res-scale` | Pass 11: resolution scale for the world | deep review |
+| `res-scale` | Pass 11: resolution scale for the world | built & reviewed on `plan/v1-5`; waits for R7 smoke |
 | `pipeline-warmup` | Pass 12: build pipelines during world load | needs Pass 9 |
 | `qol-options` | Pass 13: block-entity distance, restore defaults per page | |
 | `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | deep review; Mac round 1 |
