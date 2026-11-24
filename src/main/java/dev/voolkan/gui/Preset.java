@@ -29,42 +29,45 @@ public enum Preset {
     CUSTOM("voolkan.options.preset.custom"),
     PERFORMANCE("voolkan.options.preset.performance"),
     BALANCED("voolkan.options.preset.balanced"),
-    QUALITY("voolkan.options.preset.quality");
+    QUALITY("voolkan.options.preset.quality"),
+    BATTERY("voolkan.options.preset.battery");
 
     /** Marker value: the highest value the option offers. */
     private static final Object MAX = new Object();
 
-    /** Option name key -> {performance, balanced, quality}. */
+    /** Option name key -> {performance, balanced, quality, battery}. */
     private static final Map<String, Object[]> VALUES = new LinkedHashMap<>();
 
     static {
         // Video
-        put("options.framerateLimit", 260, 120, 144);
-        put("options.vsync", false, true, true);
-        put("vulkanmod.options.refreshRate", MAX, null, null);
+        put("options.framerateLimit", 260, 120, 144, 60);
+        put("options.vsync", false, true, true, true);
+        put("vulkanmod.options.refreshRate", MAX, null, null, null);
+        put("voolkan.options.backgroundFps", null, null, null, 15);
+        put("voolkan.options.batteryFps", null, null, null, 60);
         // Graphics
-        put("options.renderDistance", 2, 12, 16);
-        put("options.simulationDistance", 5, 8, 10);
-        put("options.textureFiltering", TextureFilteringMethod.NONE, TextureFilteringMethod.NONE, TextureFilteringMethod.ANISOTROPIC);
-        put("options.maxAnisotropy", 1, 1, 2);
-        put("options.particles", ParticleStatus.MINIMAL, ParticleStatus.DECREASED, ParticleStatus.ALL);
-        put("options.renderClouds", CloudStatus.OFF, CloudStatus.FAST, CloudStatus.FANCY);
-        put("options.renderCloudsDistance", 2, 32, 64);
-        put("options.cutoutLeaves", false, true, true);
-        put("options.chunkFade", 0, 10, 20);
-        put("options.ao", LightMode.FLAT, LightMode.SMOOTH, LightMode.SUB_BLOCK);
-        put("options.biomeBlendRadius", 0, 2, 4);
-        put("options.entityShadows", false, true, true);
-        put("options.entityDistanceScaling", 2, 4, 6);
-        put("options.mipmapLevels", 0, 2, 4);
-        put("options.weatherRadius", 3, 5, 8);
-        put("options.vignette", false, true, true);
+        put("options.renderDistance", 2, 12, 16, 8);
+        put("options.simulationDistance", 5, 8, 10, 6);
+        put("options.textureFiltering", TextureFilteringMethod.NONE, TextureFilteringMethod.NONE, TextureFilteringMethod.ANISOTROPIC, TextureFilteringMethod.NONE);
+        put("options.maxAnisotropy", 1, 1, 2, 1);
+        put("options.particles", ParticleStatus.MINIMAL, ParticleStatus.DECREASED, ParticleStatus.ALL, ParticleStatus.DECREASED);
+        put("options.renderClouds", CloudStatus.OFF, CloudStatus.FAST, CloudStatus.FANCY, CloudStatus.OFF);
+        put("options.renderCloudsDistance", 2, 32, 64, null);
+        put("options.cutoutLeaves", false, true, true, true);
+        put("options.chunkFade", 0, 10, 20, 0);
+        put("options.ao", LightMode.FLAT, LightMode.SMOOTH, LightMode.SUB_BLOCK, LightMode.SMOOTH);
+        put("options.biomeBlendRadius", 0, 2, 4, 2);
+        put("options.entityShadows", false, true, true, false);
+        put("options.entityDistanceScaling", 2, 4, 6, 4);
+        put("options.mipmapLevels", 0, 2, 4, 2);
+        put("options.weatherRadius", 3, 5, 8, 3);
+        put("options.vignette", false, true, true, true);
         // Optimizations
-        put("vulkanmod.options.advCulling", 1, 2, 3);
+        put("vulkanmod.options.advCulling", 1, 2, 3, 2);
         // Other
-        put("vulkanmod.options.frameQueue", 1, 2, 2);
-        put("vulkanmod.options.lowLatency", true, false, false);
-        put("vulkanmod.options.textureAnimations", false, true, true);
+        put("vulkanmod.options.frameQueue", 1, 2, 2, 2);
+        put("vulkanmod.options.lowLatency", true, false, false, false);
+        put("vulkanmod.options.textureAnimations", false, true, true, true);
     }
 
     private final String key;
@@ -77,8 +80,8 @@ public enum Preset {
         return Component.translatable(this.key);
     }
 
-    private static void put(String nameKey, Object performance, Object balanced, Object quality) {
-        VALUES.put(nameKey, new Object[]{performance, balanced, quality});
+    private static void put(String nameKey, Object performance, Object balanced, Object quality, Object battery) {
+        VALUES.put(nameKey, new Object[]{performance, balanced, quality, battery});
     }
 
     /** Stage this preset's values in the matching options of {@code pages}. Returns the number of options set. */

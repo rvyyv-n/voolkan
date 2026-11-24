@@ -72,6 +72,7 @@
   "voolkan.options.preset.performance": "Performance",
   "voolkan.options.preset.balanced": "Balanced",
   "voolkan.options.preset.quality": "Quality",
+  "voolkan.options.preset.battery": "Battery",
 
   "voolkan.options.backgroundFps": "Background FPS Cap",
   "voolkan.options.backgroundFps.tooltip": "Caps the framerate when the window is unfocused (and further when hidden or minimised). Set to Off to disable.",
