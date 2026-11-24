@@ -1,5 +1,11 @@
 package net.vulkanmod.mixin.render.entity.model;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * precompute transformed axis normals once per ModelPart instead of normalizing every cube polygon.
+ */
+
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.model.geom.ModelPart;
@@ -32,6 +38,10 @@ public abstract class ModelPartM {
 
     @Unique
     public void renderCubes(PoseStack.Pose pose, VertexConsumer vertexConsumer, int light, int overlay, int color) {
+        if (this.cubes.isEmpty()) {
+            return;
+        }
+
         Matrix4f matrix4f = pose.pose();
         Matrix3f matrix3f = pose.normal();
 
@@ -42,8 +52,20 @@ public abstract class ModelPartM {
         if (useFastFormat) {
             color = ColorUtil.RGBA.fromArgb32(color);
 
-            for (ModelPart.Cube cube : this.cubes) {
-                ModelPartCubeMixed cubeMixed = (ModelPartCubeMixed)(cube);
+            this.normal.set(matrix3f.m00, matrix3f.m01, matrix3f.m02).normalize();
+            int pxPos = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());
+            int pxNeg = I32_SNorm.packNormal(-normal.x(), -normal.y(), -normal.z());
+
+            this.normal.set(matrix3f.m10, matrix3f.m11, matrix3f.m12).normalize();
+            int pyPos = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());
+            int pyNeg = I32_SNorm.packNormal(-normal.x(), -normal.y(), -normal.z());
+
+            this.normal.set(matrix3f.m20, matrix3f.m21, matrix3f.m22).normalize();
+            int pzPos = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());
+            int pzNeg = I32_SNorm.packNormal(-normal.x(), -normal.y(), -normal.z());
+
+            for (int c = 0, cn = this.cubes.size(); c < cn; c++) {
+                ModelPartCubeMixed cubeMixed = (ModelPartCubeMixed) this.cubes.get(c);
                 CubeModel cubeModel = cubeMixed.getCubeModel();
 
                 CubeModel.Polygon[] polygons = cubeModel.getPolygons();
@@ -51,10 +73,18 @@ public abstract class ModelPartM {
                 cubeModel.transformVertices(matrix4f);
 
                 for (CubeModel.Polygon polygon : polygons) {
-                    matrix3f.transform(this.normal.set(polygon.normal()));
-                    this.normal.normalize();
-
-                    int packedNormal = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());
+                    Vector3f polyNormal = polygon.normal();
+                    int packedNormal;
+                    if (polyNormal.y == 0.0f && polyNormal.z == 0.0f) {
+                        packedNormal = polyNormal.x > 0.0f ? pxPos : pxNeg;
+                    } else if (polyNormal.x == 0.0f && polyNormal.z == 0.0f) {
+                        packedNormal = polyNormal.y > 0.0f ? pyPos : pyNeg;
+                    } else if (polyNormal.x == 0.0f && polyNormal.y == 0.0f) {
+                        packedNormal = polyNormal.z > 0.0f ? pzPos : pzNeg;
+                    } else {
+                        matrix3f.transform(this.normal.set(polyNormal)).normalize();
+                        packedNormal = I32_SNorm.packNormal(normal.x(), normal.y(), normal.z());
+                    }
 
                     CubeModel.Vertex[] vertices = polygon.vertices();
 
@@ -69,8 +99,8 @@ public abstract class ModelPartM {
             }
         }
         else {
-            for (ModelPart.Cube cube : this.cubes) {
-                ModelPartCubeMixed cubeMixed = (ModelPartCubeMixed)(cube);
+            for (int c = 0, cn = this.cubes.size(); c < cn; c++) {
+                ModelPartCubeMixed cubeMixed = (ModelPartCubeMixed) this.cubes.get(c);
                 CubeModel cubeModel = cubeMixed.getCubeModel();
 
                 CubeModel.Polygon[] polygons = cubeModel.getPolygons();

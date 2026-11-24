@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.renderer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * eliminate per-fluid-block BlockPos and float[] heap allocations during terrain meshing.
+ */
+
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
 import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
@@ -38,6 +44,7 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
     private static final float MAX_FLUID_HEIGHT = 0.8888889F;
 
     private final BlockPos.MutableBlockPos mBlockPos = new BlockPos.MutableBlockPos();
+    private final BlockPos.MutableBlockPos mBlockPos2 = new BlockPos.MutableBlockPos();
 
     private final ModelQuad modelQuad = new ModelQuad();
 
@@ -74,8 +81,6 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
     }
 
     private boolean isFaceOccludedByState(BlockGetter blockGetter, float h, Direction direction, BlockPos blockPos, BlockState blockState) {
-        mBlockPos.set(blockPos).offset(Direction.DOWN.getUnitVec3i());
-
         if (blockState.canOcclude()) {
             VoxelShape occlusionShape = blockState.getOcclusionShape();
 
@@ -153,7 +158,7 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
         float brightnessUp = region.getShade(Direction.UP, true);
 
         Fluid fluid = fluidState.getType();
-        float height = this.getHeight(region, fluid, blockPos, blockState);
+        float height = this.getHeight(region, fluid, posX, posY, posZ, blockState);
         float neHeight;
         float nwHeight;
         float seHeight;
@@ -164,14 +169,14 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
             seHeight = 1.0F;
             swHeight = 1.0F;
         } else {
-            float s = this.getHeight(region, fluid, mBlockPos.set(blockPos).offset(Direction.NORTH.getUnitVec3i()), northState);
-            float t = this.getHeight(region, fluid, mBlockPos.set(blockPos).offset(Direction.SOUTH.getUnitVec3i()), southState);
-            float u = this.getHeight(region, fluid, mBlockPos.set(blockPos).offset(Direction.EAST.getUnitVec3i()), eastState);
-            float v = this.getHeight(region, fluid, mBlockPos.set(blockPos).offset(Direction.WEST.getUnitVec3i()), westState);
-            neHeight = this.calculateAverageHeight(region, fluid, height, s, u, mBlockPos.set(blockPos).offset(Direction.NORTH.getUnitVec3i()).offset(Direction.EAST.getUnitVec3i()));
-            nwHeight = this.calculateAverageHeight(region, fluid, height, s, v, mBlockPos.set(blockPos).offset(Direction.NORTH.getUnitVec3i()).offset(Direction.WEST.getUnitVec3i()));
-            seHeight = this.calculateAverageHeight(region, fluid, height, t, u, mBlockPos.set(blockPos).offset(Direction.SOUTH.getUnitVec3i()).offset(Direction.EAST.getUnitVec3i()));
-            swHeight = this.calculateAverageHeight(region, fluid, height, t, v, mBlockPos.set(blockPos).offset(Direction.SOUTH.getUnitVec3i()).offset(Direction.WEST.getUnitVec3i()));
+            float s = this.getHeight(region, fluid, posX, posY, posZ - 1, northState);
+            float t = this.getHeight(region, fluid, posX, posY, posZ + 1, southState);
+            float u = this.getHeight(region, fluid, posX + 1, posY, posZ, eastState);
+            float v = this.getHeight(region, fluid, posX - 1, posY, posZ, westState);
+            neHeight = this.calculateAverageHeight(region, fluid, height, s, u, posX + 1, posY, posZ - 1);
+            nwHeight = this.calculateAverageHeight(region, fluid, height, s, v, posX - 1, posY, posZ - 1);
+            seHeight = this.calculateAverageHeight(region, fluid, height, t, u, posX + 1, posY, posZ + 1);
+            swHeight = this.calculateAverageHeight(region, fluid, height, t, v, posX - 1, posY, posZ + 1);
         }
 
         float x0 = (posX & 15);
@@ -231,7 +236,7 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
 
             putQuad(modelQuad, bufferBuilder, x0, y0, z0, false);
 
-            if (fluidState.shouldRenderBackwardUpFace(region, blockPos.above())) {
+            if (fluidState.shouldRenderBackwardUpFace(region, mBlockPos.set(posX, posY + 1, posZ))) {
                 putQuad(modelQuad, bufferBuilder, x0, y0, z0, true);
             }
 
@@ -370,47 +375,61 @@ public class FluidRenderer implements FluidRendering.DefaultRenderer {
         }
     }
 
-    private float calculateAverageHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, float f, float g, float h, BlockPos blockPos) {
+    private float calculateAverageHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, float f, float g, float h, int x, int y, int z) {
         if (!(h >= 1.0F) && !(g >= 1.0F)) {
-            float[] fs = new float[2];
+            float totalHeight = 0.0F;
+            float totalWeight = 0.0F;
             if (h > 0.0F || g > 0.0F) {
-                float i = this.getHeight(blockAndTintGetter, fluid, blockPos);
+                float i = this.getHeight(blockAndTintGetter, fluid, x, y, z);
                 if (i >= 1.0F) {
                     return 1.0F;
                 }
 
-                this.addWeightedHeight(fs, i);
+                if (i >= 0.8F) {
+                    totalHeight += i * 10.0F;
+                    totalWeight += 10.0F;
+                } else if (i >= 0.0F) {
+                    totalHeight += i;
+                    totalWeight += 1.0F;
+                }
             }
 
-            this.addWeightedHeight(fs, f);
-            this.addWeightedHeight(fs, h);
-            this.addWeightedHeight(fs, g);
-            return fs[0] / fs[1];
+            if (f >= 0.8F) {
+                totalHeight += f * 10.0F;
+                totalWeight += 10.0F;
+            } else if (f >= 0.0F) {
+                totalHeight += f;
+                totalWeight += 1.0F;
+            }
+            if (h >= 0.8F) {
+                totalHeight += h * 10.0F;
+                totalWeight += 10.0F;
+            } else if (h >= 0.0F) {
+                totalHeight += h;
+                totalWeight += 1.0F;
+            }
+            if (g >= 0.8F) {
+                totalHeight += g * 10.0F;
+                totalWeight += 10.0F;
+            } else if (g >= 0.0F) {
+                totalHeight += g;
+                totalWeight += 1.0F;
+            }
+            return totalHeight / totalWeight;
         } else {
             return 1.0F;
         }
     }
 
-    private void addWeightedHeight(float[] fs, float f) {
-        if (f >= 0.8F) {
-            fs[0] += f * 10.0F;
-            fs[1] += 10.0F;
-        } else if (f >= 0.0F) {
-            fs[0] += f;
-            fs[1]++;
-        }
-
+    private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, int x, int y, int z) {
+        BlockState blockState = blockAndTintGetter.getBlockState(mBlockPos.set(x, y, z));
+        return this.getHeight(blockAndTintGetter, fluid, x, y, z, blockState);
     }
 
-    private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, BlockPos blockPos) {
-        BlockState blockState = blockAndTintGetter.getBlockState(blockPos);
-        return this.getHeight(blockAndTintGetter, fluid, blockPos, blockState);
-    }
-
-    private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, BlockPos blockPos, BlockState adjBlockState) {
+    private float getHeight(BlockAndTintGetter blockAndTintGetter, Fluid fluid, int x, int y, int z, BlockState adjBlockState) {
         FluidState adjFluidState = adjBlockState.getFluidState();
         if (fluid.isSame(adjFluidState.getType())) {
-            BlockState blockState2 = blockAndTintGetter.getBlockState(blockPos.offset(Direction.UP.getUnitVec3i()));
+            BlockState blockState2 = blockAndTintGetter.getBlockState(mBlockPos2.set(x, y + 1, z));
             return fluid.isSame(blockState2.getFluidState().getType()) ? 1.0F : adjFluidState.getOwnHeight();
         } else {
             return !adjBlockState.isSolid() ? 0.0F : -1.0f;

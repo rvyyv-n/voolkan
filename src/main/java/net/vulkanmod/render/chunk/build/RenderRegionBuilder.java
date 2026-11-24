@@ -1,15 +1,26 @@
 package net.vulkanmod.render.chunk.build;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * hoist light listeners and lazy default biome lookup out of the 27-section loop and remove duplicate DataLayer[] allocations.
+ */
+
 import it.unimi.dsi.fastutil.longs.Long2ReferenceLinkedOpenHashMap;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.DataLayer;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.lighting.LayerLightEventListener;
+import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.vulkanmod.interfaces.biome.BiomeManagerExtended;
 import net.vulkanmod.render.chunk.build.biome.BiomeData;
 
@@ -44,6 +55,14 @@ public class RenderRegionBuilder {
         long biomeZoomSeed = BiomeManagerExtended.of(level.getBiomeManager()).getBiomeZoomSeed();
         BiomeData biomeData = new BiomeData(biomeZoomSeed, minSecX, minSecY, minSecZ);
 
+        LevelLightEngine lightEngine = level.getLightEngine();
+        LayerLightEventListener blockLightListener = lightEngine.getLayerListener(LightLayer.BLOCK);
+        boolean hasSkyLight = level.dimensionType().hasSkyLight();
+        LayerLightEventListener skyLightListener = hasSkyLight ? lightEngine.getLayerListener(LightLayer.SKY) : null;
+        final int blockLightOrd = LightLayer.BLOCK.ordinal();
+        final int skyLightOrd = LightLayer.SKY.ordinal();
+        Biome defaultBiome = null;
+
         final int minHeightSec = level.getMinY() >> 4;
         for (int x = minSecX; x <= maxSecX; ++x) {
             for (int z = minSecZ; z <= maxSecZ; ++z) {
@@ -62,41 +81,30 @@ public class RenderRegionBuilder {
                     blockData[idx] = values;
 
                     SectionPos pos = SectionPos.of(x, y, z);
-                    DataLayer[] dataLayers = getSectionDataLayers(level, pos);
+                    DataLayer[] dataLayers = lightData[idx];
 
-                    lightData[idx] = dataLayers;
+                    DataLayer blockDataLayer = blockLightListener.getDataLayerData(pos);
+                    dataLayers[blockLightOrd] = blockDataLayer != null ? blockDataLayer : DEFAULT_BLOCK_LIGHT_DATA_LAYER;
 
-                    biomeData.getBiomeData(level, section, relX, relY, relZ);
+                    if (skyLightListener != null) {
+                        DataLayer skyDataLayer = skyLightListener.getDataLayerData(pos);
+                        dataLayers[skyLightOrd] = skyDataLayer != null ? skyDataLayer : DEFAULT_SKY_LIGHT_DATA_LAYER;
+                    } else {
+                        dataLayers[skyLightOrd] = null;
+                    }
+
+                    if (section == null && defaultBiome == null) {
+                        defaultBiome = level.registryAccess()
+                                .lookupOrThrow(Registries.BIOME)
+                                .getOrThrow(Biomes.PLAINS)
+                                .value();
+                    }
+                    biomeData.getBiomeData(section, defaultBiome, relX, relY, relZ);
                 }
             }
         }
 
         return new RenderRegion(level, secX, secY, secZ, blockData, lightData, biomeData, blockEntityMap);
-    }
-
-    private DataLayer[] getSectionDataLayers(Level level, SectionPos pos) {
-        DataLayer[] dataLayers = new DataLayer[2];
-
-        DataLayer blockDataLayer;
-        blockDataLayer = level.getLightEngine().getLayerListener(LightLayer.BLOCK).getDataLayerData(pos);
-
-        if (blockDataLayer == null)
-            blockDataLayer = DEFAULT_BLOCK_LIGHT_DATA_LAYER;
-
-        dataLayers[LightLayer.BLOCK.ordinal()] = blockDataLayer;
-
-        DataLayer skyDataLayer;
-        if (level.dimensionType().hasSkyLight()) {
-            skyDataLayer = level.getLightEngine().getLayerListener(LightLayer.SKY).getDataLayerData(pos);
-
-            if (skyDataLayer == null)
-                skyDataLayer = DEFAULT_SKY_LIGHT_DATA_LAYER;
-        } else
-            skyDataLayer = null;
-
-        dataLayers[LightLayer.SKY.ordinal()] = skyDataLayer;
-
-        return dataLayers;
     }
 
     private LevelChunk getLevelChunk(Level level, int x, int z) {

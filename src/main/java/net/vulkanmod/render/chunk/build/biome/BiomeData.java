@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.biome;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * store cell offsets in a flat float array to avoid per-cell Vector3f allocations and accept a pre-resolved default biome.
+ */
+
 import net.minecraft.core.registries.Registries;
 import net.minecraft.util.LinearCongruentialGenerator;
 import net.minecraft.util.Mth;
@@ -8,7 +14,6 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.vulkanmod.render.chunk.build.RenderRegion;
-import org.joml.Vector3f;
 
 public class BiomeData {
     private static final int ZOOM_LENGTH = 4;
@@ -20,8 +25,9 @@ public class BiomeData {
 
     int secX, secY, secZ;
 
-    // Cached cell offsets
-    Vector3f[] offsets = new Vector3f[SIZE];
+    // Cached cell offsets (flat x, y, z triplets)
+    private final float[] offsets = new float[SIZE * 3];
+    private final boolean[] offsetComputed = new boolean[SIZE];
 
     public BiomeData(long biomeZoomSeed, int secX, int secY, int secZ) {
         this.biomeZoomSeed = biomeZoomSeed;
@@ -31,31 +37,28 @@ public class BiomeData {
     }
 
     public void getBiomeData(Level level, LevelChunkSection chunkSection, int secX, int secY, int secZ) {
-        Biome defaultValue = level.registryAccess()
-                                  .lookupOrThrow(Registries.BIOME)
-                                  .getOrThrow(Biomes.PLAINS)
-                                  .value();
+        Biome defaultValue = chunkSection == null
+                ? level.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS).value()
+                : null;
+        getBiomeData(chunkSection, defaultValue, secX, secY, secZ);
+    }
 
+    public void getBiomeData(LevelChunkSection chunkSection, Biome defaultValue, int secX, int secY, int secZ) {
         int baseIdx = getRelativeSectionIdx(secX, secY, secZ);
 
-        for (int x = 0; x < 4; x++) {
-            for (int y = 0; y < 4; y++) {
-                for (int z = 0; z < 4; z++) {
-                    int relIdx = getRelativeIdx(x, y, z);
-                    int idx = baseIdx + relIdx;
-
-                    if (chunkSection != null) {
-                        biomes[idx] = chunkSection.getNoiseBiome(x, y, z)
-                                                  .value();
+        if (chunkSection != null) {
+            for (int x = 0; x < 4; x++) {
+                int xBase = baseIdx + (x << 4);
+                for (int y = 0; y < 4; y++) {
+                    int xyBase = xBase + (y << 2);
+                    for (int z = 0; z < 4; z++) {
+                        biomes[xyBase + z] = chunkSection.getNoiseBiome(x, y, z).value();
                     }
-                    else {
-                        biomes[idx] = defaultValue;
-                    }
-
                 }
             }
+        } else {
+            java.util.Arrays.fill(biomes, baseIdx, baseIdx + BIOMES_PER_SECTION, defaultValue);
         }
-
     }
 
     public Biome getBiome(int blockX, int blockY, int blockZ) {
@@ -72,7 +75,7 @@ public class BiomeData {
         float fracZoomZ = (z & 3) * 0.25f;
 
         int closestCellIdx = 0;
-        double closestDistance = Double.POSITIVE_INFINITY;
+        float closestDistance = Float.POSITIVE_INFINITY;
 
         for (int i = 0; i < 8; ++i) {
             boolean dirX = (i & 4) != 0;
@@ -90,8 +93,15 @@ public class BiomeData {
             int baseSectionIdx = getSectionIdx(cellX >> 2, cellY >> 2, cellZ >> 2);
             int cellIdx = baseSectionIdx + getRelativeIdx(cellX & 3, cellY & 3, cellZ & 3);
 
-            Vector3f offset = getOffset(baseSectionIdx, cellX, cellY, cellZ);
-            float distance = Mth.square(fCellX + offset.x()) + Mth.square(fCellY + offset.y()) + Mth.square(fCellZ + offset.z());
+            int offIdx = cellIdx * 3;
+            if (!this.offsetComputed[cellIdx]) {
+                computeCellOffset(this.biomeZoomSeed, cellX, cellY, cellZ, offIdx);
+                this.offsetComputed[cellIdx] = true;
+            }
+
+            float distance = Mth.square(fCellX + this.offsets[offIdx])
+                    + Mth.square(fCellY + this.offsets[offIdx + 1])
+                    + Mth.square(fCellZ + this.offsets[offIdx + 2]);
 
             if (closestDistance > distance) {
                 closestCellIdx = cellIdx;
@@ -106,20 +116,7 @@ public class BiomeData {
         return getRelativeSectionIdx(secX - this.secX, secY - this.secY, secZ - this.secZ);
     }
 
-    private Vector3f getOffset(int baseIndex, int cellX, int cellY, int cellZ) {
-        int relCellX = cellX & 3;
-        int relCellY = cellY & 3;
-        int relCellZ = cellZ & 3;
-        int idx = baseIndex + getRelativeIdx(relCellX, relCellY, relCellZ);
-
-        if (this.offsets[idx] == null) {
-            this.offsets[idx] = computeCellOffset(this.biomeZoomSeed, cellX, cellY, cellZ);
-        }
-
-        return this.offsets[idx];
-    }
-
-    private static Vector3f computeCellOffset(long l, int cellX, int cellY, int cellZ) {
+    private void computeCellOffset(long l, int cellX, int cellY, int cellZ, int offIdx) {
         long seed;
         seed = LinearCongruentialGenerator.next(l, cellX);
         seed = LinearCongruentialGenerator.next(seed, cellY);
@@ -128,13 +125,11 @@ public class BiomeData {
         seed = LinearCongruentialGenerator.next(seed, cellY);
         seed = LinearCongruentialGenerator.next(seed, cellZ);
 
-        float xOffset = getFiddle(seed);
+        this.offsets[offIdx] = getFiddle(seed);
         seed = LinearCongruentialGenerator.next(seed, l);
-        float yOffset = getFiddle(seed);
+        this.offsets[offIdx + 1] = getFiddle(seed);
         seed = LinearCongruentialGenerator.next(seed, l);
-        float zOffset = getFiddle(seed);
-
-        return new Vector3f(xOffset, yOffset, zOffset);
+        this.offsets[offIdx + 2] = getFiddle(seed);
     }
 
     private static float getFiddle(long l) {

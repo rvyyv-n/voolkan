@@ -1,5 +1,12 @@
 package net.vulkanmod.render.chunk.build.thread;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add reusable per-worker BlockState[] scratch array for RenderRegion unpacking.
+ */
+
+import net.minecraft.world.level.block.state.BlockState;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.chunk.RenderSection;
 import net.vulkanmod.render.chunk.build.renderer.BlockRenderer;
@@ -23,6 +30,7 @@ public class BuilderResources {
 
     public final ArrayLightDataCache lightDataCache = new ArrayLightDataCache();
     public final QuadLightData quadLightData = new QuadLightData();
+    public final BlockState[] blockDataScratch = new BlockState[RenderRegion.BLOCK_COUNT];
 
     private RenderRegion region;
 

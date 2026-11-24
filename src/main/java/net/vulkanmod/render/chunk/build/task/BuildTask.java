@@ -82,7 +82,9 @@ public class BuildTask extends ChunkTask {
     private CompileResult compile(float camX, float camY, float camZ, BuilderResources builderResources) {
         CompileResult compileResult = new CompileResult(this.section, true);
 
-        BlockPos startBlockPos = new BlockPos(section.xOffset(), section.yOffset(), section.zOffset()).immutable();
+        final int secOriginX = section.xOffset();
+        final int secOriginY = section.yOffset();
+        final int secOriginZ = section.zOffset();
         VisGraph visGraph = new VisGraph();
 
         if (this.region == null) {
@@ -94,7 +96,7 @@ public class BuildTask extends ChunkTask {
         ThreadBuilderPack bufferBuilders = builderResources.builderPack;
         setupBufferBuilders(bufferBuilders);
 
-        this.region.loadBlockStates();
+        this.region.loadBlockStates(builderResources.blockDataScratch);
         this.region.initTintCache(builderResources.tintCache);
 
         builderResources.update(this.region, this.section);
@@ -108,7 +110,7 @@ public class BuildTask extends ChunkTask {
         for (int y = 0; y < 16; ++y) {
             for (int z = 0; z < 16; ++z) {
                 for (int x = 0; x < 16; ++x) {
-                    blockPos.set(section.xOffset() + x, section.yOffset() + y, section.zOffset() + z);
+                    blockPos.set(secOriginX + x, secOriginY + y, secOriginZ + z);
 
                     BlockState blockState = this.region.getBlockState(blockPos);
                     if (blockState.isAir()) {
@@ -131,7 +133,7 @@ public class BuildTask extends ChunkTask {
                     }
 
                     if (blockState.getRenderShape() == RenderShape.MODEL) {
-                        pos.set(blockPos.getX() & 15, blockPos.getY() & 15, blockPos.getZ() & 15);
+                        pos.set(x, y, z);
                         blockRenderer.renderBlock(blockState, blockPos, pos);
                     }
                 }
@@ -141,7 +143,7 @@ public class BuildTask extends ChunkTask {
         TerrainBuilder trasnlucentTerrainBuilder = bufferBuilders.builder(TerrainRenderType.TRANSLUCENT);
         if (trasnlucentTerrainBuilder.getBufferBuilder(QuadFacing.UNDEFINED.ordinal()).getVertices() > 0) {
             trasnlucentTerrainBuilder.setupQuadSortingPoints();
-            trasnlucentTerrainBuilder.setupQuadSorting(camX - (float) startBlockPos.getX(), camY - (float) startBlockPos.getY(), camZ - (float) startBlockPos.getZ());
+            trasnlucentTerrainBuilder.setupQuadSorting(camX - (float) secOriginX, camY - (float) secOriginY, camZ - (float) secOriginZ);
             compileResult.transparencyState = trasnlucentTerrainBuilder.getSortState();
         }
 
