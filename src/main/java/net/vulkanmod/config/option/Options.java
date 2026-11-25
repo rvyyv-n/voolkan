@@ -597,7 +597,11 @@ public abstract class Options {
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.swapChainImages.tooltip")),
                         new SwitchOption(Component.translatable("vulkanmod.options.textureAnimations"),
                                 v -> config.textureAnimations = v,
-                                () -> config.textureAnimations)
+                                () -> config.textureAnimations),
+                        new SwitchOption(Component.translatable("voolkan.options.showFrameTimeF3"),
+                                v -> config.showFrameTimeF3 = v,
+                                () -> config.showFrameTimeF3)
+                                .setTooltip(v -> Component.translatable("voolkan.options.showFrameTimeF3.tooltip"))
                 }),
                 new OptionBlock("", new Option<?>[]{
                         new SwitchOption(Component.translatable("vulkanmod.options.wayland"),

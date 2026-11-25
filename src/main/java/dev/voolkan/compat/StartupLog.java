@@ -38,16 +38,38 @@ public final class StartupLog {
     private static int lastSwapWidth;
     private static int lastSwapHeight;
 
+    private static volatile String cachedCapabilitiesSummary = "";
+    private static volatile String cachedSwapChainSummary = "";
+
     private StartupLog() {}
 
     public static void reset() {
         swapChainLogged = false;
+        cachedCapabilitiesSummary = "";
+        cachedSwapChainSummary = "";
+    }
+
+    public static String getCapabilitiesSummary() {
+        return cachedCapabilitiesSummary;
+    }
+
+    public static String getSwapChainSummary() {
+        return cachedSwapChainSummary;
     }
 
     public static void logStartupCapabilities() {
+        String summary = buildStartupCapabilitiesSummary();
+        if (summary.isEmpty()) {
+            return;
+        }
+        cachedCapabilitiesSummary = summary;
+        Initializer.LOGGER.info(summary);
+    }
+
+    public static String buildStartupCapabilitiesSummary() {
         Device device = DeviceManager.device;
         if (device == null) {
-            return;
+            return "";
         }
 
         StringBuilder sb = new StringBuilder(512);
@@ -160,7 +182,7 @@ public final class StartupLog {
             sb.append('\n').append("  macOS perf opts: ").append(MacPerfOpts.describeActive());
         }
 
-        Initializer.LOGGER.info(sb.toString());
+        return sb.toString();
     }
 
     public static void logSwapChain(int format, int colorSpace, int width, int height,
@@ -188,8 +210,8 @@ public final class StartupLog {
         String range = minImageCount + ".." + (maxImageCount > 0 ? Integer.toString(maxImageCount) : "unlimited");
         String supportedModes = formatPresentModes(supportedPresentModes);
 
-        Initializer.LOGGER.info(
-                "Swapchain: {} ({}), {}x{}, {} images (requested {}, surface {}), present mode {} (supported: [{}])",
+        String summary = String.format(
+                "Swapchain: %s (%s), %dx%d, %d images (requested %d, surface %s), present mode %s (supported: [%s])",
                 formatName(format),
                 colorSpaceName(colorSpace),
                 width,
@@ -199,13 +221,15 @@ public final class StartupLog {
                 range,
                 presentModeName(presentMode),
                 supportedModes);
+        cachedSwapChainSummary = summary;
+        Initializer.LOGGER.info(summary);
     }
 
     private static String formatMvkConfigEnv() {
         TreeMap<String, String> mvkVars = new TreeMap<>();
         for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
             if (entry.getKey().startsWith("MVK_CONFIG_")) {
-                mvkVars.put(entry.getKey(), entry.getValue());
+                mvkVars.put(entry.getKey(), DiagnosticSanitizer.sanitizeEnvValue(entry.getValue()));
             }
         }
         if (mvkVars.isEmpty()) {

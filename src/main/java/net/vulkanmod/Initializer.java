@@ -6,6 +6,7 @@ package net.vulkanmod;
  * mod id lookup renamed to voolkan; update check disabled; register macOS battery power-source probe.
  */
 
+import dev.voolkan.compat.DiagnosticLogBuffer;
 import dev.voolkan.power.MacosPowerSource;
 import dev.voolkan.power.PowerSources;
 import net.fabricmc.api.ClientModInitializer;
@@ -28,6 +29,8 @@ public class Initializer implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		DiagnosticLogBuffer.installLogAppender();
+
 		VERSION = FabricLoader.getInstance()
 				.getModContainer("voolkan")
 				.get()

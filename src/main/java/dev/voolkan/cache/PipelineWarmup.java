@@ -13,6 +13,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import dev.voolkan.compat.MacPerfOpts;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.TextureFilteringMethod;
+import net.minecraft.client.gui.screens.LevelLoadingScreen;
+import net.minecraft.client.gui.screens.ProgressScreen;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.renderer.LevelTargetBundle;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.PostPass;
@@ -27,7 +30,6 @@ import net.vulkanmod.render.shader.CustomRenderPipelines;
 import net.vulkanmod.render.shader.PipelineManager;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
-import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
 import net.vulkanmod.vulkan.pass.MainPass;
@@ -36,21 +38,61 @@ import net.vulkanmod.vulkan.shader.Pipeline;
 import net.vulkanmod.vulkan.shader.PipelineState;
 import org.lwjgl.opengl.GL11;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.lwjgl.vulkan.VK10.*;
 
 /**
- * Pre-builds known Vulkan {@code VkPipeline} handles during world load using the driver pipeline
- * cache, compiled SPIR-V shader cache, and persisted {@link PipelineStateStore} ledger so draws do
- * not stall mid-frame on first encounter.
+ * Pre-builds known Vulkan {@code VkPipeline} handles incrementally on the render thread during
+ * world load using the driver pipeline cache, compiled SPIR-V shader cache, and persisted
+ * {@link PipelineStateStore} ledger so draws do not stall mid-frame on first encounter while
+ * keeping the loading screen responsive with live progress reporting.
  */
 public final class PipelineWarmup {
+    private static final long INITIAL_BURST_BUDGET_NS = 8_000_000L;
+    private static final long LOADING_SCREEN_BUDGET_NS = 20_000_000L;
+    private static final long IN_WORLD_BUDGET_NS = 3_000_000L;
+    private static final long INDICATOR_DELAY_NS = 100_000_000L;
+
+    public record Progress(boolean active, int completed, int total, long elapsedMs) {
+        public float fraction() {
+            if (total <= 0) {
+                return 1.0f;
+            }
+            return Math.min(1.0f, Math.max(0.0f, (float) completed / (float) total));
+        }
+    }
+
+    private sealed interface WarmupTask permits StaticPipelineTask, BuiltInTerrainTask, BuiltInCloudsTask, MenuBlurTask, SavedStateTask {}
+
+    private record StaticPipelineTask(RenderPipeline pipeline) implements WarmupTask {}
+    private record BuiltInTerrainTask() implements WarmupTask {}
+    private record BuiltInCloudsTask() implements WarmupTask {}
+    private record MenuBlurTask() implements WarmupTask {}
+    private record SavedStateTask(PipelineStateStore.StateRecord record) implements WarmupTask {}
+
     private static final AtomicBoolean FIRST_LOGGED = new AtomicBoolean(false);
+    private static final AtomicBoolean ACTIVE = new AtomicBoolean(false);
+    private static final AtomicBoolean DEFERRED_WORLD_LOAD = new AtomicBoolean(false);
+    private static final AtomicInteger COMPLETED_TASKS = new AtomicInteger(0);
+    private static final AtomicInteger TOTAL_TASKS = new AtomicInteger(0);
+    private static volatile boolean sessionStartSet = false;
+    private static volatile long sessionStartNs = 0L;
+    private static volatile boolean clearPending = false;
+
+    // Render-thread-only incremental work state
+    private static final Deque<WarmupTask> PENDING_TASKS = new ArrayDeque<>();
+    private static Map<String, List<GraphicsPipeline>> livePipelinesByName;
+    private static int sessionBuilt = 0;
+    private static int sessionAlreadyReady = 0;
+    private static int sessionBuiltFromSaved = 0;
 
     private PipelineWarmup() {
     }
@@ -63,163 +105,347 @@ public final class PipelineWarmup {
         return Initializer.CONFIG != null && Initializer.CONFIG.pipelineCache;
     }
 
+    /** Thread-safe snapshot of current warm-up progress. */
+    public static Progress getProgress() {
+        boolean isActive = ACTIVE.get();
+        int total = TOTAL_TASKS.get();
+        int completed = Math.min(COMPLETED_TASKS.get(), total);
+        long elapsedMs = (isActive && sessionStartSet)
+                ? Math.max(0L, (System.nanoTime() - sessionStartNs) / 1_000_000L)
+                : 0L;
+        return new Progress(isActive, completed, total, elapsedMs);
+    }
+
+    /** Returns true when warm-up is actively running long enough to merit showing the progress bar. */
+    public static boolean shouldShowIndicator() {
+        if (!ACTIVE.get() || !sessionStartSet) {
+            return false;
+        }
+        int total = TOTAL_TASKS.get();
+        int completed = COMPLETED_TASKS.get();
+        if (total <= 0 || completed >= total) {
+            return false;
+        }
+        return (System.nanoTime() - sessionStartNs) >= INDICATOR_DELAY_NS;
+    }
+
     /**
-     * Runs pipeline warm-up on the render thread when entering a world. Never throws into callers.
+     * Begins incremental pipeline warm-up on the render thread when entering a world.
+     * Warm cache hits finish immediately inside the initial burst without flashing a bar.
      */
     public static void onWorldLoad() {
+        beginWorldLoad();
+    }
+
+    public static void beginWorldLoad() {
         if (!isEnabled() || !RenderSystem.isOnRenderThread()) {
             return;
         }
 
-        Renderer renderer = Renderer.getInstance();
-        if (renderer == null) {
-            return;
-        }
+        cancel();
 
-        MainPass mainPass = renderer.getMainPass();
-        SwapChain swapChain = renderer.getSwapChain();
-        if (mainPass == null || swapChain == null || !swapChain.hasImages()) {
-            return;
-        }
-
-        // Never warm up against the 10x10 minimised dummy framebuffer or an active scaled world pass
-        if (mainPass.isWorldActive() || mainPass.getMainFramebuffer() != swapChain) {
-            return;
-        }
-
-        RenderPass mainRenderPass = mainPass.getMainRenderPass();
+        RenderPass mainRenderPass = currentSafeMainRenderPass();
         if (mainRenderPass == null) {
+            // Window may be minimized at world join; defer warm-up until the swapchain is ready again.
+            DEFERRED_WORLD_LOAD.set(true);
             return;
         }
-        if (!Vulkan.DYNAMIC_RENDERING && mainRenderPass.getId() == VK_NULL_HANDLE) {
-            return;
+
+        for (RenderPipeline rp : RenderPipelines.getStaticPipelines()) {
+            if (rp != null) {
+                PENDING_TASKS.addLast(new StaticPipelineTask(rp));
+            }
+        }
+        for (RenderPipeline rp : CustomRenderPipelines.pipelines) {
+            if (rp != null) {
+                PENDING_TASKS.addLast(new StaticPipelineTask(rp));
+            }
+        }
+        PENDING_TASKS.addLast(new BuiltInTerrainTask());
+        PENDING_TASKS.addLast(new BuiltInCloudsTask());
+        if (MacPerfOpts.menuBlurOpts()) {
+            PENDING_TASKS.addLast(new MenuBlurTask());
         }
 
-        long startNs = System.nanoTime();
-        int built = 0;
-        int alreadyReady = 0;
-        int builtFromSaved = 0;
-
-        // Step A: ensure GraphicsPipeline / VkShaderModule objects exist for all static pipelines
-        GpuDevice gpuDevice = RenderSystem.getDevice();
-        if (gpuDevice instanceof VkGpuDevice vkDevice) {
-            ensureCompiled(vkDevice, RenderPipelines.getStaticPipelines());
-            ensureCompiled(vkDevice, CustomRenderPipelines.pipelines);
-        }
-
-        // Step B(i): pre-build VkPipeline handles for static vanilla & custom RenderPipelines
-        int[] counts = new int[2]; // [0] = built, [1] = alreadyReady
-        warmStaticPipelines(RenderPipelines.getStaticPipelines(), mainRenderPass, counts);
-        warmStaticPipelines(CustomRenderPipelines.pipelines, mainRenderPass, counts);
-
-        // Step B(ii): pre-build VulkanMod's built-in PipelineManager pipelines
-        warmBuiltInPipelines(mainRenderPass, counts);
-
-        // Step B(ii-b): pre-build menu blur PostChain pipelines on macOS to avoid first-ESC PSO compile hitches
-        if (MacPerfOpts.menuBlurOpts() && gpuDevice instanceof VkGpuDevice vkDevice) {
-            warmMenuBlurPipelines(vkDevice, mainPass, counts);
-        }
-
-        built += counts[0];
-        alreadyReady += counts[1];
-
-        // Step B(iii): pre-build saved states from previous sessions compatible with mainRenderPass
         PipelineStateStore.loadOnce();
         List<PipelineStateStore.StateRecord> saved = PipelineStateStore.getObservedSnapshot();
-        if (!saved.isEmpty()) {
-            int mainColorFmt = mainRenderPass.getColorFormat();
-            int mainDepthFmt = mainRenderPass.getDepthFormat();
-            int mainDepKind = mainRenderPass.getDependencyKind();
-
-            Map<String, List<GraphicsPipeline>> byName = indexLiveGraphicsPipelines();
-            for (PipelineStateStore.StateRecord rec : saved) {
-                if (rec.colorFormat() != mainColorFmt
-                        || rec.depthFormat() != mainDepthFmt
-                        || rec.dependencyKind() != mainDepKind) {
-                    continue;
-                }
-
-                List<GraphicsPipeline> targets = byName.get(rec.pipelineName());
-                if (targets == null) {
-                    continue;
-                }
-
-                PipelineState state = new PipelineState(
-                        rec.assemblyRasterState(),
-                        rec.blendState(),
-                        rec.depthState(),
-                        rec.logicOp(),
-                        rec.colorMask(),
-                        mainRenderPass);
-
-                if (!isStateSupportedByDevice(state)) {
-                    continue;
-                }
-
-                for (GraphicsPipeline gp : targets) {
-                    int res = gp.warmUpState(state);
-                    if (res == GraphicsPipeline.WARMUP_BUILT) {
-                        built++;
-                        builtFromSaved++;
-                    } else if (res == GraphicsPipeline.WARMUP_ALREADY_READY) {
-                        alreadyReady++;
-                    }
-                }
+        int mainColorFmt = mainRenderPass.getColorFormat();
+        int mainDepthFmt = mainRenderPass.getDepthFormat();
+        int mainDepKind = mainRenderPass.getDependencyKind();
+        for (PipelineStateStore.StateRecord rec : saved) {
+            if (rec.colorFormat() == mainColorFmt
+                    && rec.depthFormat() == mainDepthFmt
+                    && rec.dependencyKind() == mainDepKind) {
+                PENDING_TASKS.addLast(new SavedStateTask(rec));
             }
         }
 
+        int total = PENDING_TASKS.size();
+        if (total == 0) {
+            return;
+        }
+
+        sessionBuilt = 0;
+        sessionAlreadyReady = 0;
+        sessionBuiltFromSaved = 0;
+        livePipelinesByName = null;
+        clearPending = false;
+        sessionStartNs = System.nanoTime();
+        sessionStartSet = true;
+        TOTAL_TASKS.set(total);
+        COMPLETED_TASKS.set(0);
+        ACTIVE.set(true);
+
+        // Run a short initial burst so already-cached pipelines complete immediately with zero UI flash.
+        stepWithBudget(INITIAL_BURST_BUDGET_NS);
+    }
+
+    /**
+     * Advances incremental warm-up on the render thread once per frame.
+     * Safe no-op when inactive or when the swapchain is minimized/unavailable.
+     */
+    public static void stepFrame() {
+        if (!RenderSystem.isOnRenderThread()) {
+            return;
+        }
+        if (clearPending && !ACTIVE.get()) {
+            clearRenderThreadState();
+            clearPending = false;
+        }
+        if (!ACTIVE.get()) {
+            if (DEFERRED_WORLD_LOAD.get() && currentSafeMainRenderPass() != null
+                    && DEFERRED_WORLD_LOAD.compareAndSet(true, false)) {
+                beginWorldLoad();
+            }
+            return;
+        }
+        long budgetNs = isOnLoadingScreen() ? LOADING_SCREEN_BUDGET_NS : IN_WORLD_BUDGET_NS;
+        stepWithBudget(budgetNs);
+    }
+
+    /** Cancels any pending warm-up work cleanly (e.g. on disconnect or Vulkan shutdown). */
+    public static void cancel() {
+        DEFERRED_WORLD_LOAD.set(false);
+        ACTIVE.set(false);
+        COMPLETED_TASKS.set(0);
+        TOTAL_TASKS.set(0);
+        sessionStartSet = false;
+        sessionStartNs = 0L;
+        if (RenderSystem.isOnRenderThread()) {
+            clearRenderThreadState();
+            clearPending = false;
+        } else {
+            clearPending = true;
+        }
+    }
+
+    private static void clearRenderThreadState() {
+        PENDING_TASKS.clear();
+        livePipelinesByName = null;
+        sessionBuilt = 0;
+        sessionAlreadyReady = 0;
+        sessionBuiltFromSaved = 0;
+    }
+
+    private static void stepWithBudget(long budgetNs) {
+        if (!ACTIVE.get()) {
+            return;
+        }
+        if (PENDING_TASKS.isEmpty()) {
+            finishSession();
+            return;
+        }
+
+        // Re-fetch live MainPass / RenderPass each frame so window resize or swapchain recreation
+        // never passes a destroyed legacy VkRenderPass handle.
+        Renderer renderer = Renderer.getInstance();
+        MainPass mainPass = renderer != null ? renderer.getMainPass() : null;
+        RenderPass mainRenderPass = currentSafeMainRenderPass();
+        if (mainPass == null || mainRenderPass == null) {
+            return;
+        }
+
+        GpuDevice gpuDevice = RenderSystem.getDevice();
+        VkGpuDevice vkDevice = gpuDevice instanceof VkGpuDevice vk ? vk : null;
+        int[] counts = new int[2]; // [0] = built, [1] = alreadyReady
+        long stepStart = System.nanoTime();
+
+        while (!PENDING_TASKS.isEmpty()) {
+            if (!ACTIVE.get()) {
+                clearRenderThreadState();
+                clearPending = false;
+                return;
+            }
+            WarmupTask task = PENDING_TASKS.pollFirst();
+            counts[0] = 0;
+            counts[1] = 0;
+
+            try {
+                if (task instanceof StaticPipelineTask st) {
+                    runStaticPipelineTask(vkDevice, st.pipeline(), mainRenderPass, counts);
+                    sessionBuilt += counts[0];
+                    sessionAlreadyReady += counts[1];
+                } else if (task instanceof BuiltInTerrainTask) {
+                    warmBuiltInTerrain(mainRenderPass, counts);
+                    sessionBuilt += counts[0];
+                    sessionAlreadyReady += counts[1];
+                } else if (task instanceof BuiltInCloudsTask) {
+                    warmBuiltInClouds(mainRenderPass, counts);
+                    sessionBuilt += counts[0];
+                    sessionAlreadyReady += counts[1];
+                } else if (task instanceof MenuBlurTask) {
+                    if (vkDevice != null && MacPerfOpts.menuBlurOpts()) {
+                        warmMenuBlurPipelines(vkDevice, mainPass, counts);
+                        sessionBuilt += counts[0];
+                        sessionAlreadyReady += counts[1];
+                    }
+                } else if (task instanceof SavedStateTask saved) {
+                    if (livePipelinesByName == null) {
+                        livePipelinesByName = indexLiveGraphicsPipelines();
+                    }
+                    runSavedStateTask(saved.record(), mainRenderPass, counts);
+                    sessionBuilt += counts[0];
+                    sessionBuiltFromSaved += counts[0];
+                    sessionAlreadyReady += counts[1];
+                }
+            } catch (RuntimeException e) {
+                Initializer.LOGGER.debug("Pipeline warm-up: skipped task {}: {}", task, e.getMessage());
+            }
+
+            if (!ACTIVE.get()) {
+                clearRenderThreadState();
+                clearPending = false;
+                return;
+            }
+            COMPLETED_TASKS.incrementAndGet();
+
+            if (System.nanoTime() - stepStart >= budgetNs) {
+                break;
+            }
+        }
+
+        if (ACTIVE.get() && PENDING_TASKS.isEmpty()) {
+            finishSession();
+        }
+    }
+
+    private static void finishSession() {
+        if (!ACTIVE.compareAndSet(true, false)) {
+            return;
+        }
+        long elapsedMs = sessionStartSet ? Math.max(0L, (System.nanoTime() - sessionStartNs) / 1_000_000L) : 0L;
+        int built = sessionBuilt;
+        int alreadyReady = sessionAlreadyReady;
+        int builtFromSaved = sessionBuiltFromSaved;
+
+        clearRenderThreadState();
+        sessionStartSet = false;
+        clearPending = false;
+
         boolean firstRun = FIRST_LOGGED.compareAndSet(false, true);
         if (built > 0 || firstRun) {
-            long elapsedMs = (System.nanoTime() - startNs) / 1_000_000L;
             Initializer.LOGGER.info(
                     "Pipeline warm-up: built {} pipelines ({} already ready, {} from saved states) in {} ms",
                     built, alreadyReady, builtFromSaved, elapsedMs);
         }
     }
 
-    private static void ensureCompiled(VkGpuDevice vkDevice, Iterable<RenderPipeline> pipelines) {
-        for (RenderPipeline rp : pipelines) {
-            if (rp == null) {
-                continue;
-            }
-            ExtendedRenderPipeline ext = ExtendedRenderPipeline.of(rp);
-            if (ext.getPipeline() != null) {
-                continue;
-            }
-            try {
-                vkDevice.compilePipeline(rp);
-            } catch (RuntimeException e) {
-                Initializer.LOGGER.debug("Pipeline warm-up: skipped compiling {}: {}", rp.getLocation(), e.getMessage());
-            }
+    private static RenderPass currentSafeMainRenderPass() {
+        Renderer renderer = Renderer.getInstance();
+        if (renderer == null) {
+            return null;
         }
+        MainPass mainPass = renderer.getMainPass();
+        SwapChain swapChain = renderer.getSwapChain();
+        if (mainPass == null || swapChain == null || !swapChain.hasImages()) {
+            return null;
+        }
+        // Never warm up against the 10x10 minimised dummy framebuffer or an active scaled world pass
+        if (mainPass.isWorldActive() || mainPass.getMainFramebuffer() != swapChain) {
+            return null;
+        }
+        RenderPass mainRenderPass = mainPass.getMainRenderPass();
+        if (mainRenderPass == null) {
+            return null;
+        }
+        if (!Vulkan.DYNAMIC_RENDERING && mainRenderPass.getId() == VK_NULL_HANDLE) {
+            return null;
+        }
+        return mainRenderPass;
     }
 
-    private static void warmStaticPipelines(Iterable<RenderPipeline> pipelines, RenderPass mainRenderPass, int[] counts) {
-        for (RenderPipeline rp : pipelines) {
-            if (rp == null) {
-                continue;
-            }
-            Pipeline p = ExtendedRenderPipeline.of(rp).getPipeline();
-            if (!(p instanceof GraphicsPipeline gp)) {
-                continue;
-            }
+    private static boolean isOnLoadingScreen() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null) {
+            return false;
+        }
+        if (mc.getOverlay() != null) {
+            return true;
+        }
+        Screen screen = mc.screen;
+        return screen instanceof LevelLoadingScreen || screen instanceof ProgressScreen;
+    }
 
-            PipelineState state = deriveState(rp, mainRenderPass);
-            if (state == null || !isStateSupportedByDevice(state)) {
-                continue;
-            }
+    private static void runStaticPipelineTask(VkGpuDevice vkDevice, RenderPipeline rp, RenderPass mainRenderPass, int[] counts) {
+        if (vkDevice != null) {
+            ensureCompiledSingle(vkDevice, rp);
+        }
+        Pipeline p = ExtendedRenderPipeline.of(rp).getPipeline();
+        if (!(p instanceof GraphicsPipeline gp)) {
+            return;
+        }
+        PipelineState state = deriveState(rp, mainRenderPass);
+        if (state == null || !isStateSupportedByDevice(state)) {
+            return;
+        }
+        recordResult(gp.warmUpState(state), counts);
+    }
 
+    private static void runSavedStateTask(PipelineStateStore.StateRecord rec, RenderPass mainRenderPass, int[] counts) {
+        if (rec.colorFormat() != mainRenderPass.getColorFormat()
+                || rec.depthFormat() != mainRenderPass.getDepthFormat()
+                || rec.dependencyKind() != mainRenderPass.getDependencyKind()) {
+            return;
+        }
+        List<GraphicsPipeline> targets = livePipelinesByName != null ? livePipelinesByName.get(rec.pipelineName()) : null;
+        if (targets == null) {
+            return;
+        }
+        PipelineState state = new PipelineState(
+                rec.assemblyRasterState(),
+                rec.blendState(),
+                rec.depthState(),
+                rec.logicOp(),
+                rec.colorMask(),
+                mainRenderPass);
+        if (!isStateSupportedByDevice(state)) {
+            return;
+        }
+        for (GraphicsPipeline gp : targets) {
             recordResult(gp.warmUpState(state), counts);
         }
     }
 
-    private static void warmBuiltInPipelines(RenderPass mainRenderPass, int[] counts) {
+    private static void ensureCompiledSingle(VkGpuDevice vkDevice, RenderPipeline rp) {
+        if (rp == null) {
+            return;
+        }
+        ExtendedRenderPipeline ext = ExtendedRenderPipeline.of(rp);
+        if (ext.getPipeline() != null) {
+            return;
+        }
+        try {
+            vkDevice.compilePipeline(rp);
+        } catch (RuntimeException e) {
+            Initializer.LOGGER.debug("Pipeline warm-up: skipped compiling {}: {}", rp.getLocation(), e.getMessage());
+        }
+    }
+
+    private static void warmBuiltInTerrain(RenderPass mainRenderPass, int[] counts) {
         int defaultLogicOp = PipelineState.encodeLogicOpState(false, 0);
         int depthLequalWrite = PipelineState.encodeDepthState(true, true, GL11.GL_LEQUAL);
         int colorMaskAll = PipelineState.ColorMask.getColorMask(true, true, true, true);
-        int colorMaskNone = PipelineState.ColorMask.getColorMask(false, false, false, false);
         int triFillCull = PipelineState.AssemblyRasterState.encode(true, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL);
-        int triFillNoCull = PipelineState.AssemblyRasterState.encode(false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL);
 
         // Opaque terrain: blend disabled (canonical default factors/op)
         PipelineState.BlendInfo opaqueBlendInfo = PipelineState.defaultBlendInfo();
@@ -267,6 +493,15 @@ public final class PipelineWarmup {
                 }
             }
         }
+    }
+
+    private static void warmBuiltInClouds(RenderPass mainRenderPass, int[] counts) {
+        int defaultLogicOp = PipelineState.encodeLogicOpState(false, 0);
+        int depthLequalWrite = PipelineState.encodeDepthState(true, true, GL11.GL_LEQUAL);
+        int colorMaskAll = PipelineState.ColorMask.getColorMask(true, true, true, true);
+        int colorMaskNone = PipelineState.ColorMask.getColorMask(false, false, false, false);
+        int triFillCull = PipelineState.AssemblyRasterState.encode(true, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL);
+        int triFillNoCull = PipelineState.AssemblyRasterState.encode(false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL);
 
         // Clouds: CloudRenderer uses SRC_ALPHA/ONE_MINUS_SRC_ALPHA, ONE/ZERO; cull on/off; colour mask all/none (fancy depth pre-pass)
         GraphicsPipeline clouds = PipelineManager.getCloudsPipeline();
@@ -319,7 +554,7 @@ public final class PipelineWarmup {
             if (rp == null) {
                 continue;
             }
-            ensureCompiled(vkDevice, List.of(rp));
+            ensureCompiledSingle(vkDevice, rp);
 
             Pipeline p = ExtendedRenderPipeline.of(rp).getPipeline();
             if (!(p instanceof GraphicsPipeline gp)) {
@@ -334,7 +569,7 @@ public final class PipelineWarmup {
                         recordResult(gp.warmUpState(state), counts);
                     }
                 }
-            } else if (Vulkan.DYNAMIC_RENDERING) {
+            } else if (Vulkan.DYNAMIC_RENDERING && targetMainPass != null) {
                 // Warm the offscreen depth-less RGBA8 swap target state directly under dynamic rendering.
                 PipelineState base = deriveState(rp, targetMainPass);
                 if (base != null && isStateSupportedByDevice(base)) {

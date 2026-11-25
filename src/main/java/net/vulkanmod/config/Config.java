@@ -53,6 +53,8 @@ public class Config {
     public int maxParticles = 0;
     /** Use VK_PRESENT_MODE_FIFO_RELAXED_KHR when VSync is on and the driver supports it. */
     public boolean adaptiveVsync = false;
+    /** Show rolling average frame time and 1% low FPS readout on the F3 debug screen. */
+    public boolean showFrameTimeF3 = true;
     /** Opt out of Windows fullscreen exclusive / independent flip via VK_EXT_full_screen_exclusive (for capture compatibility). */
     public boolean disallowFullscreenExclusive = false;
     /** Use native macOS fullscreen Spaces instead of borderless fullscreen (macOS only). */

@@ -31,6 +31,7 @@
     "debug.DebugEntryMemoryM",
     "debug.DebugEntrySystemSpecsM",
     "debug.DebugScreenEntriesM",
+    "debug.DebugScreenOverlayM",
     "debug.KeyboardHandlerM",
 
     "matrix.Matrix4fM",
@@ -87,6 +88,7 @@
 
     "screen.ScreenM",
     "screen.OptionsScreenM",
+    "screen.LevelLoadingScreenM",
 
     "texture.SpriteContentsAnimatedTextureM",
     "texture.TextureAtlasSpriteMixin",

@@ -309,11 +309,13 @@ public class WorldRenderer {
 
 //        this.entityRenderDispatcher.setLevel(level);
         this.level = level;
+        dev.voolkan.telemetry.FrameTimeTracker.reset();
         ChunkStatusMap.createInstance(renderDistance);
         if (level != null) {
             this.allChanged();
-            PipelineWarmup.onWorldLoad();
+            PipelineWarmup.beginWorldLoad();
         } else {
+            PipelineWarmup.cancel();
             if (this.sectionGrid != null) {
                 this.sectionGrid.freeAllBuffers();
                 this.sectionGrid = null;

@@ -3,10 +3,11 @@ package net.vulkanmod.config.gui;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * voolkan branding (Ko-fi button removed) and per-page Restore Defaults button.
+ * voolkan branding (Ko-fi button removed), per-page Restore Defaults button, and one-click Copy Diagnostics button.
  */
 
 import com.google.common.collect.Lists;
+import dev.voolkan.compat.DiagnosticsReport;
 import dev.voolkan.gui.PageDefaults;
 import net.minecraft.ChatFormatting;
 import net.minecraft.util.Util;
@@ -55,6 +56,11 @@ public class VOptionScreen extends Screen {
     private VButtonWidget applyButton;
     private VButtonWidget undoButton;
     private VButtonWidget restoreDefaultsButton;
+    private VButtonWidget copyDiagnosticsButton;
+    private boolean diagnosticsCopiedActive = false;
+    private long diagnosticsCopiedStartNs = 0L;
+
+    private static final long COPIED_FEEDBACK_NS = 2_500_000_000L;
 
     private VTextInputWidget searchField;
 
@@ -299,15 +305,25 @@ public class VOptionScreen extends Screen {
         this.restoreDefaultsButton = new VButtonWidget(restoreX, y0, restoreWidth, VGuiConstants.WIDGET_HEIGHT,
                 restoreLabel, button -> this.restoreCurrentPageDefaults());
 
+        Component copyLabel = Component.translatable("voolkan.options.buttons.copyDiagnostics");
+        Component copiedLabel = Component.translatable("voolkan.options.buttons.copied");
+        int copyWidth = VGuiConstants.PAGE_BUTTON_WIDTH;
+        this.copyDiagnosticsButton = new VButtonWidget(MARGIN, y0, copyWidth, VGuiConstants.WIDGET_HEIGHT,
+                this.isDiagnosticsCopiedActive() ? copiedLabel : copyLabel,
+                button -> this.copyDiagnostics());
+        this.copyDiagnosticsButton.setTooltip(Component.translatable("voolkan.options.buttons.copyDiagnostics.tooltip"));
+
         this.buttons.add(this.applyButton);
         this.buttons.add(doneButton);
         this.buttons.add(this.undoButton);
         this.buttons.add(this.restoreDefaultsButton);
+        this.buttons.add(this.copyDiagnosticsButton);
 
         this.addWidget(this.applyButton);
         this.addWidget(doneButton);
         this.addWidget(this.undoButton);
         this.addWidget(this.restoreDefaultsButton);
+        this.addWidget(this.copyDiagnosticsButton);
         this.addWidget(this.searchField);
 
         if (UpdateChecker.isUpdateAvailable()) {
@@ -374,6 +390,8 @@ public class VOptionScreen extends Screen {
             widget.render(mouseX, mouseY);
         }
 
+        this.updateDiagnosticsButtonLabel();
+
         for (VButtonWidget button : buttons) {
             button.updateState(mouseX, mouseY);
             button.render(mouseX, mouseY);
@@ -384,7 +402,7 @@ public class VOptionScreen extends Screen {
         VAbstractWidget hoveredWidget = null;
 
         for (var b : buttons) {
-            if (b.isMouseOver(mouseX, mouseY)) {
+            if (b.visible && b.isMouseOver(mouseX, mouseY)) {
                 hoveredWidget = b;
                 break;
             }
@@ -458,6 +476,32 @@ public class VOptionScreen extends Screen {
             boolean showRestore = currentPage != null && PageDefaults.hasDefaults(currentPage);
             this.restoreDefaultsButton.visible = showRestore;
             this.restoreDefaultsButton.active = showRestore && !PageDefaults.isAtDefaults(currentPage);
+        }
+    }
+
+    private boolean isDiagnosticsCopiedActive() {
+        return this.diagnosticsCopiedActive
+                && (System.nanoTime() - this.diagnosticsCopiedStartNs) < COPIED_FEEDBACK_NS;
+    }
+
+    private void updateDiagnosticsButtonLabel() {
+        if (this.copyDiagnosticsButton == null) {
+            return;
+        }
+        if (this.diagnosticsCopiedActive
+                && (System.nanoTime() - this.diagnosticsCopiedStartNs) >= COPIED_FEEDBACK_NS) {
+            this.diagnosticsCopiedActive = false;
+            this.copyDiagnosticsButton.setMessage(Component.translatable("voolkan.options.buttons.copyDiagnostics"));
+        }
+    }
+
+    private void copyDiagnostics() {
+        if (DiagnosticsReport.copyToClipboard()) {
+            this.diagnosticsCopiedActive = true;
+            this.diagnosticsCopiedStartNs = System.nanoTime();
+            if (this.copyDiagnosticsButton != null) {
+                this.copyDiagnosticsButton.setMessage(Component.translatable("voolkan.options.buttons.copied"));
+            }
         }
     }
 

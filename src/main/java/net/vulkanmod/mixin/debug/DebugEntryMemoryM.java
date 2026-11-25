@@ -3,14 +3,16 @@ package net.vulkanmod.mixin.debug;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * display cached VMA VRAM/shared/unified memory budget lines on the F3 screen.
+ * display cached VMA VRAM/shared/unified memory budget lines and rolling frame-time / 1% low stats on the F3 screen.
  */
 
+import dev.voolkan.telemetry.FrameTimeTracker;
 import net.minecraft.client.gui.components.debug.DebugEntryMemory;
 import net.minecraft.client.gui.components.debug.DebugScreenDisplayer;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
@@ -60,7 +62,7 @@ public abstract class DebugEntryMemoryM {
             this.voolkanLastBudgetRefreshNs = now;
         }
 
-        List<String> lines = new ArrayList<>(5 + this.voolkanCachedBudgetLines.size());
+        List<String> lines = new ArrayList<>(6 + this.voolkanCachedBudgetLines.size());
         lines.add(String.format(Locale.ROOT, "Mem: %2d%% %03d/%03dMB", o * 100L / l, bytesToMegabytes(o), bytesToMegabytes(l)));
 //        lines.add(String.format(Locale.ROOT, "Allocation rate: %03dMB/s", bytesToMegabytes(this.allocationRateCalculator.bytesAllocatedPerSecond(o))));
         lines.add(String.format(Locale.ROOT, "Allocated: %2d%% %03dMB", m * 100L / l, bytesToMegabytes(m)));
@@ -68,6 +70,12 @@ public abstract class DebugEntryMemoryM {
         lines.add("NativeMemory: %dMB".formatted(memoryManager.getNativeMemoryMB()));
         lines.add("DeviceMemory: %dMB".formatted(memoryManager.getAllocatedDeviceMemoryMB()));
         lines.addAll(this.voolkanCachedBudgetLines);
+        if (Initializer.CONFIG == null || Initializer.CONFIG.showFrameTimeF3) {
+            String frameTimeLine = FrameTimeTracker.getFormattedLine();
+            if (!frameTimeLine.isEmpty()) {
+                lines.add(frameTimeLine);
+            }
+        }
 
         debugScreenDisplayer.addToGroup(GROUP, lines);
 

@@ -1,10 +1,17 @@
 package net.vulkanmod.mixin.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * catch fatal Vulkan/renderer startup failures and present friendly guidance via VulkanStartupFailure.
+ */
+
 import com.mojang.blaze3d.shaders.ShaderSource;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.SamplerCache;
 import com.mojang.blaze3d.vertex.*;
+import dev.voolkan.compat.VulkanStartupFailure;
 import net.minecraft.client.renderer.DynamicUniforms;
 import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.vulkan.Renderer;
@@ -29,15 +36,19 @@ public abstract class RenderSystemMixin {
     public static void initRenderer(long l, int i, boolean bl, ShaderSource shaderSource, boolean bl2) {
         renderThread.setPriority(Thread.NORM_PRIORITY + 2);
 
-        VRenderSystem.initRenderer();
+        try {
+            VRenderSystem.initRenderer();
 
-        DEVICE = new VkGpuDevice(l, i, bl, shaderSource, bl2);
-        apiDescription = getDevice().getImplementationInformation();
+            DEVICE = new VkGpuDevice(l, i, bl, shaderSource, bl2);
+            apiDescription = getDevice().getImplementationInformation();
 
-        Renderer.initRenderer();
+            Renderer.initRenderer();
 
-        dynamicUniforms = new DynamicUniforms();
-        samplerCache.initialize();
+            dynamicUniforms = new DynamicUniforms();
+            samplerCache.initialize();
+        } catch (Throwable t) {
+            throw VulkanStartupFailure.handleFatal(l, t);
+        }
     }
 
 }

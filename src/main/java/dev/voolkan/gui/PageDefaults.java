@@ -90,6 +90,7 @@ public final class PageDefaults {
         DEFAULTS.put("vulkanmod.options.lowLatency", false);
         DEFAULTS.put("vulkanmod.options.swapChainImages", 0);
         DEFAULTS.put("vulkanmod.options.textureAnimations", true);
+        DEFAULTS.put("voolkan.options.showFrameTimeF3", true);
         DEFAULTS.put("vulkanmod.options.wayland", false);
         DEFAULTS.put("vulkanmod.options.deviceSelector", -1);
     }

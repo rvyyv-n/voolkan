@@ -6,6 +6,8 @@ package net.vulkanmod.vulkan;
  * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active; enable VK_KHR_portability_enumeration when advertised, query VK_EXT_layer_settings support, log startup capabilities, and shut down platform power probe on cleanup.
  */
 
+import dev.voolkan.cache.PipelineWarmup;
+import dev.voolkan.compat.DiagnosticLogBuffer;
 import dev.voolkan.compat.StartupLog;
 import dev.voolkan.macos.MacosWindowUtil;
 import dev.voolkan.power.PowerSources;
@@ -87,14 +89,18 @@ public class Vulkan {
 
         VkDebugUtilsMessengerCallbackDataEXT callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
 
+        String rawMessage = callbackData.pMessageString();
+        boolean isError = (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0;
+        DiagnosticLogBuffer.record(isError ? "ERROR" : "WARN", "vulkan", rawMessage);
+
         String s;
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
-            s = "\u001B[31m" + callbackData.pMessageString();
+        if (isError) {
+            s = "\u001B[31m" + rawMessage;
 
 //            System.err.println("Stack dump:");
 //            Thread.dumpStack();
         } else {
-            s = callbackData.pMessageString();
+            s = rawMessage;
         }
 
         System.err.println(s);
@@ -182,6 +188,7 @@ public class Vulkan {
     }
 
     public static void cleanUp() {
+        PipelineWarmup.cancel();
         vkDeviceWaitIdle(DeviceManager.vkDevice);
         vkDestroyCommandPool(DeviceManager.vkDevice, commandPool, null);
         vkDestroyFence(DeviceManager.vkDevice, immediateFence, null);

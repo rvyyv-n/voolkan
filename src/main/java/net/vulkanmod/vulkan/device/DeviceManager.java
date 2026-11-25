@@ -337,7 +337,13 @@ public abstract class DeviceManager {
 
     private static boolean isDeviceSuitable(Device device) {
         try (MemoryStack stack = stackPush()) {
-            Queue.QueueFamilyIndices indices = findQueueFamilies(device.physicalDevice);
+            Queue.QueueFamilyIndices indices;
+            try {
+                indices = findQueueFamilies(device.physicalDevice);
+            } catch (RuntimeException e) {
+                Initializer.LOGGER.debug("Skipping GPU {} due to unsupported queue families: {}", device.deviceName, e.getMessage());
+                return false;
+            }
 
             boolean extensionsSupported = device.getExtensionNames().containsAll(Vulkan.REQUIRED_EXTENSION);
 
@@ -345,7 +351,10 @@ public abstract class DeviceManager {
 
             if (extensionsSupported) {
                 SurfaceProperties surfaceProperties = querySurfaceProperties(device.physicalDevice, stack);
-                swapChainAdequate = surfaceProperties.formats.hasRemaining() && surfaceProperties.presentModes.hasRemaining();
+                swapChainAdequate = surfaceProperties.formats != null
+                        && surfaceProperties.formats.hasRemaining()
+                        && surfaceProperties.presentModes != null
+                        && surfaceProperties.presentModes.hasRemaining();
             }
 
             return indices.isSuitable() && extensionsSupported && swapChainAdequate;

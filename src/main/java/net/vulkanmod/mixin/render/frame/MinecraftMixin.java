@@ -9,6 +9,7 @@ package net.vulkanmod.mixin.render.frame;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.textures.GpuTexture;
+import dev.voolkan.cache.PipelineWarmup;
 import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import net.minecraft.client.Minecraft;
@@ -31,6 +32,7 @@ public class MinecraftMixin {
     private void preFrameOps(boolean bl, CallbackInfo ci) {
 //        Renderer.getInstance().preInitFrame();
         Renderer.getInstance().beginFrame();
+        PipelineWarmup.stepFrame();
 
         if (TileGpuOpts.isEnabled()) {
             Renderer.getInstance().getMainPass().deferInitialClear();

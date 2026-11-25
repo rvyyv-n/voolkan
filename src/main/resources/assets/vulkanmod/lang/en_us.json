@@ -15,6 +15,9 @@
   "vulkanmod.options.buttons.undo": "Undo",
   "vulkanmod.options.buttons.update_available": "Update available!",
   "voolkan.options.buttons.restoreDefaults": "Restore Defaults",
+  "voolkan.options.buttons.copyDiagnostics": "Copy Diagnostics",
+  "voolkan.options.buttons.copied": "Copied!",
+  "voolkan.options.buttons.copyDiagnostics.tooltip": "Copies GPU, driver, Vulkan/MoltenVK capabilities, key settings, and recent sanitized warnings to your clipboard. No usernames or local paths are included.",
 
   "vulkanmod.options.advCulling": "Advanced Chunk Culling",
   "vulkanmod.options.advCulling.aggressive": "Aggressive",
@@ -98,6 +101,9 @@
   "voolkan.options.maxParticles.tooltip": "Caps quad particles rendered per frame while keeping the newest visible particles. Set to Unlimited for vanilla behavior.",
   "voolkan.options.adaptiveVsync": "Adaptive VSync",
   "voolkan.options.adaptiveVsync.tooltip": "Uses Vulkan FIFO Relaxed when VSync is enabled so frames that miss a refresh present immediately instead of dropping to half refresh rate.",
+  "voolkan.options.showFrameTimeF3": "F3 Frame-Time & 1% Low",
+  "voolkan.options.showFrameTimeF3.tooltip": "Displays rolling average FPS, frame time (ms), and 1% low FPS / p99 ms alongside memory stats on the F3 debug screen.",
+  "voolkan.warmup.progress": "Warming up shaders: %s / %s",
 
   "voolkan.options.compat": "Compatibility",
   "voolkan.options.compat.renderPath": "Render Path",
