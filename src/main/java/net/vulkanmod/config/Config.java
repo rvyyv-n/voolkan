@@ -107,6 +107,7 @@ public class Config {
             this.frameQueueSize = 2;
             this.swapChainImages = 0;
             this.macNativeFullscreen = false;
+            this.indirectDraw = false;
         }
     }
 }

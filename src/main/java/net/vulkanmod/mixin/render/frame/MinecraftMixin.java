@@ -1,8 +1,15 @@
 package net.vulkanmod.mixin.render.frame;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * defer the initial frame-start clear on tile GPUs so lazy swapchain pass start folds it into LOAD_OP_CLEAR.
+ */
+
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.textures.GpuTexture;
+import dev.voolkan.compat.TileGpuOpts;
 import net.minecraft.client.Minecraft;
 import net.vulkanmod.render.texture.ImageUploadHelper;
 import net.vulkanmod.vulkan.Renderer;
@@ -24,7 +31,11 @@ public class MinecraftMixin {
 //        Renderer.getInstance().preInitFrame();
         Renderer.getInstance().beginFrame();
 
-        Renderer.clearAttachments(GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_COLOR_BUFFER_BIT);
+        if (TileGpuOpts.isEnabled()) {
+            Renderer.getInstance().getMainPass().deferInitialClear();
+        } else {
+            Renderer.clearAttachments(GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_COLOR_BUFFER_BIT);
+        }
     }
 
     @Redirect(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearColorAndDepthTextures(Lcom/mojang/blaze3d/textures/GpuTexture;ILcom/mojang/blaze3d/textures/GpuTexture;D)V"))

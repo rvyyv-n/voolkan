@@ -3,18 +3,20 @@ package net.vulkanmod.vulkan.pass;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * expose the main render pass for pipeline creation fallback; integrate scaled world rendering mode and depth attachment view.
+ * expose the main render pass for pipeline creation fallback; integrate scaled world rendering mode, depth attachment view, and tile-GPU lazy swapchain pass start with deferred initial clear and LOAD_OP_CLEAR variants.
  */
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.voolkan.compat.TileGpuOpts;
 import dev.voolkan.render.WorldScale;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.engine.VkGpuTexture;
 import net.vulkanmod.vulkan.Renderer;
+import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -39,6 +41,13 @@ public class DefaultMainPass implements MainPass {
 
     private RenderPass mainRenderPass;
     private RenderPass auxRenderPass;
+    private RenderPass mainClearBothPass;
+    private RenderPass mainClearColorPass;
+    private RenderPass mainClearDepthPass;
+
+    private boolean mainTargetStartedThisFrame = false;
+    private boolean pendingInitialClearColor = false;
+    private boolean pendingInitialClearDepth = false;
 
     private GpuTexture[] colorAttachmentTextures;
     private GpuTextureView[] colorAttachmentTextureViews;
@@ -60,7 +69,11 @@ public class DefaultMainPass implements MainPass {
 
             this.mainRenderPass.cleanUp();
             this.auxRenderPass.cleanUp();
+            cleanUpTilePasses();
         }
+        this.mainTargetStartedThisFrame = false;
+        this.pendingInitialClearColor = false;
+        this.pendingInitialClearDepth = false;
 
         Framebuffer framebuffer;
         if (Renderer.getInstance().getSwapChain().hasImages()) {
@@ -92,6 +105,49 @@ public class DefaultMainPass implements MainPass {
         builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         this.auxRenderPass = builder.build();
+
+        if (TileGpuOpts.isEnabled()) {
+            builder = RenderPass.builder(this.mainFramebuffer);
+            builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+            builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+            this.mainClearBothPass = builder.build();
+
+            builder = RenderPass.builder(this.mainFramebuffer);
+            builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+            builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE);
+            this.mainClearColorPass = builder.build();
+
+            builder = RenderPass.builder(this.mainFramebuffer);
+            builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE);
+            builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+            this.mainClearDepthPass = builder.build();
+        }
+    }
+
+    private void cleanUpTilePasses() {
+        if (this.mainClearBothPass != null) {
+            this.mainClearBothPass.cleanUp();
+            this.mainClearBothPass = null;
+        }
+        if (this.mainClearColorPass != null) {
+            this.mainClearColorPass.cleanUp();
+            this.mainClearColorPass = null;
+        }
+        if (this.mainClearDepthPass != null) {
+            this.mainClearDepthPass.cleanUp();
+            this.mainClearDepthPass = null;
+        }
+    }
+
+    private boolean isMainRenderPass(RenderPass pass) {
+        return pass != null && (pass == this.mainRenderPass
+                || pass == this.auxRenderPass
+                || pass == this.mainClearBothPass
+                || pass == this.mainClearColorPass
+                || pass == this.mainClearDepthPass);
     }
 
     @Override
@@ -106,6 +162,18 @@ public class DefaultMainPass implements MainPass {
         }
 
         this.worldScale.syncDisabled();
+
+        if (TileGpuOpts.isEnabled()) {
+            if (this.mainTargetStartedThisFrame) {
+                // Mid-frame resume (e.g. Renderer.flushCmds): preserve swapchain contents drawn earlier this frame
+                Framebuffer framebuffer = this.mainFramebuffer;
+                framebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                Renderer.getInstance().beginRenderPass(this.auxRenderPass, framebuffer);
+                Renderer.setViewport(0, 0, framebuffer.getWidth(), framebuffer.getHeight(), stack);
+                Renderer.resetScissor();
+            }
+            return;
+        }
 
         Framebuffer framebuffer = this.mainFramebuffer;
 
@@ -124,6 +192,21 @@ public class DefaultMainPass implements MainPass {
         Renderer.getInstance().endRenderPass(commandBuffer);
         this.worldScale.reset();
 
+        if (TileGpuOpts.isEnabled()
+                && !this.mainTargetStartedThisFrame
+                && this.mainFramebuffer == Renderer.getInstance().getSwapChain()
+                && this.mainFramebuffer.getColorAttachment().getCurrentLayout() == VK_IMAGE_LAYOUT_UNDEFINED) {
+            // Ensure a freshly acquired UNDEFINED swapchain image is cleared before presenting on empty frames
+            VRenderSystem.setClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            VRenderSystem.clearDepth(1.0);
+            Renderer.getInstance().beginRenderPass(this.mainClearBothPass, this.mainFramebuffer);
+            Renderer.getInstance().endRenderPass(commandBuffer);
+        }
+
+        this.mainTargetStartedThisFrame = false;
+        this.pendingInitialClearColor = false;
+        this.pendingInitialClearDepth = false;
+
         if (this.mainFramebuffer == Renderer.getInstance().getSwapChain()) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 this.mainFramebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
@@ -141,6 +224,7 @@ public class DefaultMainPass implements MainPass {
         this.worldScale.release();
         this.mainRenderPass.cleanUp();
         this.auxRenderPass.cleanUp();
+        cleanUpTilePasses();
     }
 
     @Override
@@ -166,6 +250,17 @@ public class DefaultMainPass implements MainPass {
     @Override
     public void resetWorld() {
         this.worldScale.reset();
+        this.mainTargetStartedThisFrame = false;
+        this.pendingInitialClearColor = false;
+        this.pendingInitialClearDepth = false;
+    }
+
+    @Override
+    public void deferInitialClear() {
+        if (TileGpuOpts.isEnabled() && !this.mainTargetStartedThisFrame) {
+            this.pendingInitialClearColor = true;
+            this.pendingInitialClearDepth = true;
+        }
     }
 
     @Override
@@ -183,11 +278,62 @@ public class DefaultMainPass implements MainPass {
         }
 
         // Do not rebind if the framebuffer is already bound
-        if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
+        if (isMainRenderPass(boundRenderPass))
             return;
+
+        if (TileGpuOpts.isEnabled() && !this.mainTargetStartedThisFrame) {
+            rebindMainTarget(false, false);
+            return;
+        }
 
         Renderer.getInstance().endRenderPass(commandBuffer);
         Renderer.getInstance().beginRenderPass(this.auxRenderPass, this.mainFramebuffer);
+    }
+
+    @Override
+    public boolean rebindMainTarget(boolean clearColor, boolean clearDepth) {
+        if (this.worldScale.isActive()) {
+            rebindMainTarget();
+            return false;
+        }
+
+        if (TileGpuOpts.isEnabled() && !this.mainTargetStartedThisFrame) {
+            boolean effectiveClearColor = clearColor || this.pendingInitialClearColor;
+            boolean effectiveClearDepth = clearDepth || this.pendingInitialClearDepth;
+
+            if (!clearColor && this.pendingInitialClearColor) {
+                VRenderSystem.setClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            }
+            if (!clearDepth && this.pendingInitialClearDepth) {
+                VRenderSystem.clearDepth(1.0);
+            }
+
+            this.pendingInitialClearColor = false;
+            this.pendingInitialClearDepth = false;
+
+            RenderPass pass;
+            if (effectiveClearColor && effectiveClearDepth) {
+                pass = this.mainClearBothPass;
+            } else if (effectiveClearColor) {
+                pass = this.mainClearColorPass;
+            } else if (effectiveClearDepth) {
+                pass = this.mainClearDepthPass;
+            } else {
+                pass = this.mainRenderPass;
+            }
+
+            // Renderer.beginRenderPass ensures recording, ends any prior pass, and transitions layouts on the live CB.
+            Renderer.getInstance().beginRenderPass(pass, this.mainFramebuffer);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                Renderer.setViewport(0, 0, this.mainFramebuffer.getWidth(), this.mainFramebuffer.getHeight(), stack);
+            }
+            Renderer.resetScissor();
+            this.mainTargetStartedThisFrame = true;
+            return clearColor || clearDepth;
+        }
+
+        rebindMainTarget();
+        return false;
     }
 
     /**
@@ -196,12 +342,28 @@ public class DefaultMainPass implements MainPass {
      * clear depth before GUI draws, avoiding a wasted full-resolution LOAD of color and depth.
      */
     public void rebindMainTargetDiscard() {
-        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
         RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
 
-        if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
+        if (isMainRenderPass(boundRenderPass))
             return;
 
+        this.pendingInitialClearColor = false;
+        this.pendingInitialClearDepth = false;
+
+        if (TileGpuOpts.isEnabled()) {
+            // Keep depth STORE_OP_STORE (mainRenderPass) because GuiRenderer.prepare() opens offscreen
+            // PiP/item-atlas FBO passes after GameRenderer's pre-GUI clearDepthTexture, then resumes
+            // swapchain drawing via auxRenderPass (LOAD_OP_LOAD).
+            Renderer.getInstance().beginRenderPass(this.mainRenderPass, this.mainFramebuffer);
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                Renderer.setViewport(0, 0, this.mainFramebuffer.getWidth(), this.mainFramebuffer.getHeight(), stack);
+            }
+            Renderer.resetScissor();
+            this.mainTargetStartedThisFrame = true;
+            return;
+        }
+
+        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
         Renderer.getInstance().endRenderPass(commandBuffer);
         Renderer.getInstance().beginRenderPass(this.mainRenderPass, this.mainFramebuffer);
     }
@@ -219,7 +381,7 @@ public class DefaultMainPass implements MainPass {
             activeFramebuffer = this.worldScale.getFramebuffer();
         }
         else {
-            if (boundRenderPass == this.mainRenderPass || boundRenderPass == this.auxRenderPass)
+            if (isMainRenderPass(boundRenderPass))
                 Renderer.getInstance().endRenderPass(commandBuffer);
             activeFramebuffer = this.mainFramebuffer;
         }

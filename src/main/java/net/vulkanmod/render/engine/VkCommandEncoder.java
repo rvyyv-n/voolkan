@@ -3,7 +3,7 @@ package net.vulkanmod.render.engine;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * oversized buffer writes fall back to a one-shot staging buffer; copyTextureToTexture (with cross-format blit fallback) and createFence are implemented.
+ * oversized buffer writes fall back to a one-shot staging buffer; copyTextureToTexture (with cross-format blit fallback) and createFence are implemented; fold main-target and offscreen clears into LOAD_OP_CLEAR on tile GPUs.
  */
 
 import com.mojang.blaze3d.buffers.GpuBuffer;
@@ -22,6 +22,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
+import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.ARGB;
@@ -90,6 +91,33 @@ public class VkCommandEncoder implements CommandEncoder {
             }
 
             if (Minecraft.getInstance().getMainRenderTarget().getColorTexture() == colorAttachmentView.texture()) {
+                if (TileGpuOpts.isEnabled()) {
+                    boolean clearColor = optionalInt.isPresent();
+                    boolean clearDepth = depthTexture != null && optionalDouble.isPresent();
+
+                    int j = 0;
+                    if (clearColor) {
+                        int k = optionalInt.getAsInt();
+                        VRenderSystem.setClearColor(ARGB.redFloat(k), ARGB.greenFloat(k), ARGB.blueFloat(k), ARGB.alphaFloat(k));
+                        j |= 16384;
+                    }
+
+                    if (clearDepth) {
+                        VRenderSystem.clearDepth(optionalDouble.getAsDouble());
+                        j |= 256;
+                    }
+
+                    boolean clearedNatively = Renderer.getInstance().getMainPass().rebindMainTarget(clearColor, clearDepth);
+                    if (j != 0 && !clearedNatively) {
+                        GlStateManager._disableScissorTest();
+                        GlStateManager._depthMask(true);
+                        GlStateManager._colorMask(true, true, true, true);
+                        GlStateManager._clear(j);
+                    }
+
+                    return new VkRenderPass(this, depthTexture != null, true);
+                }
+
                 Renderer.getInstance().getMainPass().rebindMainTarget();
 
                 int j = 0;
@@ -122,6 +150,27 @@ public class VkCommandEncoder implements CommandEncoder {
                 this.inRenderPass = true;
                 GpuTexture depthTexture1 = depthTexture != null ? depthTexture.texture() : null;
                 VkFbo fbo = ((VkTextureView)colorAttachmentView).getFbo(depthTexture1);
+
+                if (TileGpuOpts.isEnabled()) {
+                    boolean clearColor = optionalInt.isPresent();
+                    boolean clearDepth = depthTexture != null && optionalDouble.isPresent();
+
+                    if (clearColor) {
+                        int k = optionalInt.getAsInt();
+                        VRenderSystem.setClearColor(ARGB.redFloat(k), ARGB.greenFloat(k), ARGB.blueFloat(k), ARGB.alphaFloat(k));
+                    }
+
+                    if (clearDepth) {
+                        VRenderSystem.clearDepth(optionalDouble.getAsDouble());
+                    }
+
+                    fbo.bind(clearColor, clearDepth);
+
+                    GlStateManager._viewport(0, 0, colorAttachmentView.getWidth(0), colorAttachmentView.getHeight(0));
+                    this.lastPipeline = null;
+                    return new VkRenderPass(this, depthTexture != null, false);
+                }
+
                 fbo.bind();
 
                 int j = 0;
@@ -158,10 +207,36 @@ public class VkCommandEncoder implements CommandEncoder {
         }
         else if (Renderer.isRecording()) {
             if (Minecraft.getInstance().getMainRenderTarget().getColorTexture() == colorAttachment) {
-                Renderer.getInstance().getMainPass().rebindMainTarget();
+                if (TileGpuOpts.isEnabled()) {
+                    VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
+                    if (!Renderer.getInstance().getMainPass().rebindMainTarget(true, false)) {
+                        Renderer.clearAttachments(0x4000);
+                    }
+                } else {
+                    Renderer.getInstance().getMainPass().rebindMainTarget();
+
+                    VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
+                    Renderer.clearAttachments(0x4000);
+                }
+            }
+            else if (TileGpuOpts.isEnabled()) {
+                VkGpuTexture vkGpuTexture = (VkGpuTexture) colorAttachment;
+                VkGlFramebuffer glFramebuffer = VkGlFramebuffer.getFramebuffer(this.framebufferId);
+                Renderer.getInstance().endRenderPass();
+
+                if (glFramebuffer.getFramebuffer() == null
+                        || glFramebuffer.getFramebuffer().getColorAttachment() != vkGpuTexture.getVulkanImage()) {
+                    glFramebuffer.setAttachmentTexture(GL30.GL_COLOR_ATTACHMENT0, vkGpuTexture.glId());
+                    glFramebuffer.create();
+                }
 
                 VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
-                Renderer.clearAttachments(0x4000);
+                if (!VkGlFramebuffer.beginRendering(glFramebuffer, true, false)) {
+                    Renderer.clearAttachments(0x4000);
+                }
+                Renderer.getInstance().endRenderPass();
+
+                vkGpuTexture.needsClear = false;
             }
             else {
                 VkGpuTexture vkGpuTexture = (VkGpuTexture) colorAttachment;
@@ -215,11 +290,19 @@ public class VkCommandEncoder implements CommandEncoder {
         }
         else {
             if (Minecraft.getInstance().getMainRenderTarget().getColorTexture() == colorAttachment) {
-                Renderer.getInstance().getMainPass().rebindMainTarget();
+                if (TileGpuOpts.isEnabled()) {
+                    VRenderSystem.clearDepth(clearDepth);
+                    VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
+                    if (!Renderer.getInstance().getMainPass().rebindMainTarget(true, true)) {
+                        Renderer.clearAttachments(0x4100);
+                    }
+                } else {
+                    Renderer.getInstance().getMainPass().rebindMainTarget();
 
-                VRenderSystem.clearDepth(clearDepth);
-                VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
-                Renderer.clearAttachments(0x4100);
+                    VRenderSystem.clearDepth(clearDepth);
+                    VRenderSystem.setClearColor(ARGB.redFloat(clearColor), ARGB.greenFloat(clearColor), ARGB.blueFloat(clearColor), ARGB.alphaFloat(clearColor));
+                    Renderer.clearAttachments(0x4100);
+                }
             }
             else {
                 VkFbo fbo = ((VkGpuTexture)colorAttachment).getFbo(depthAttachment);
@@ -254,6 +337,10 @@ public class VkCommandEncoder implements CommandEncoder {
             {
                 Renderer.clearAttachments(0x4100, x0, y0, width, height);
             }
+            else if (TileGpuOpts.isEnabled() && Minecraft.getInstance().getMainRenderTarget().getColorTexture() == colorAttachment) {
+                Renderer.getInstance().getMainPass().rebindMainTarget();
+                Renderer.clearAttachments(0x4100, x0, y0, width, height);
+            }
             else {
                 VkGpuTexture gpuTexture = (VkGpuTexture) colorAttachment;
                 gpuTexture.getFbo(depthAttachment).bind();
@@ -269,6 +356,14 @@ public class VkCommandEncoder implements CommandEncoder {
             throw new IllegalStateException("Close the existing render pass before creating a new one!");
         }
         else {
+            if (TileGpuOpts.isEnabled() && Minecraft.getInstance().getMainRenderTarget().getDepthTexture() == depthAttachment) {
+                VRenderSystem.clearDepth(clearDepth);
+                if (!Renderer.getInstance().getMainPass().rebindMainTarget(false, true)) {
+                    Renderer.clearAttachments(0x100);
+                }
+                return;
+            }
+
             Framebuffer boundFramebuffer = Renderer.getInstance().getBoundFramebuffer();
             if (boundFramebuffer != null && boundFramebuffer.getDepthAttachment() == ((VkGpuTexture) depthAttachment).getVulkanImage()) {
                 VRenderSystem.clearDepth(clearDepth);

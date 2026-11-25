@@ -352,7 +352,8 @@ public class VulkanImage {
         switch (oldLayout) {
             case VK_IMAGE_LAYOUT_UNDEFINED -> {
                 srcAccessMask = 0;
-                sourceStage = (newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+                sourceStage = (newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                        || newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
                         ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
                         : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
             }

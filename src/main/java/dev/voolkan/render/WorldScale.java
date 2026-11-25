@@ -211,6 +211,7 @@ public final class WorldScale {
             }
 
             VRenderSystem.setClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            VRenderSystem.clearDepth(1.0);
             this.active = true;
             renderer.beginRenderPass(this.clearPass, this.framebuffer);
             return true;

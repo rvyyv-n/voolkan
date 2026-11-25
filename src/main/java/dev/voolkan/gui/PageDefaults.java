@@ -78,7 +78,7 @@ public final class PageDefaults {
         DEFAULTS.put("vulkanmod.options.entityCulling", true);
         DEFAULTS.put("vulkanmod.options.uniqueOpaqueLayer", true);
         DEFAULTS.put("vulkanmod.options.backfaceCulling", true);
-        DEFAULTS.put("vulkanmod.options.indirectDraw", true);
+        DEFAULTS.put("vulkanmod.options.indirectDraw", !Platform.isMacOS());
 
         // Other
         DEFAULTS.put("vulkanmod.options.builderThreads", 0);

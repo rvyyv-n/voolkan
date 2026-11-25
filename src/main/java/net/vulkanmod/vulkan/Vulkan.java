@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active; enable VK_KHR_portability_enumeration when advertised, log startup capabilities, and shut down platform power probe on cleanup.
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active; enable VK_KHR_portability_enumeration when advertised, query VK_EXT_layer_settings support, log startup capabilities, and shut down platform power probe on cleanup.
  */
 
 import dev.voolkan.compat.StartupLog;
@@ -148,6 +148,7 @@ public class Vulkan {
     public static boolean use24BitsDepthFormat = true;
     public static boolean surfaceCapabilities2Supported = false;
     public static boolean portabilityEnumerationSupported = false;
+    public static boolean layerSettingsSupported = false;
     private static int DEFAULT_DEPTH_FORMAT = 0;
 
     public static void initVulkan(long window) {
@@ -221,6 +222,7 @@ public class Vulkan {
 
             portabilityEnumerationSupported = availableExtensionNames.contains(
                     KHRPortabilityEnumeration.VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+            layerSettingsSupported = availableExtensionNames.contains("VK_EXT_layer_settings");
             surfaceCapabilities2Supported = org.lwjgl.system.Platform.get() == org.lwjgl.system.Platform.WINDOWS
                     && shouldDisallowFullscreenExclusive()
                     && availableExtensionNames.contains(

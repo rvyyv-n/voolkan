@@ -3,9 +3,11 @@ package net.vulkanmod.gl;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * repair legacy VkRenderPass framebuffer attachments, mips, and bound state; implement glBlitFramebuffer from read to draw target.
+ * repair legacy VkRenderPass framebuffer attachments, mips, and bound state; implement glBlitFramebuffer from read to draw target;
+ * add tile-GPU LOAD_OP_CLEAR render-pass variants for offscreen framebuffers.
  */
 
+import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
@@ -16,6 +18,7 @@ import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
+import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_CLEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
 import static org.lwjgl.vulkan.VK11.VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -49,6 +52,43 @@ public class VkGlFramebuffer {
         }
 
         boundFramebuffer = glFramebuffer;
+    }
+
+    /**
+     * Begins rendering into {@code glFramebuffer}, using a {@code LOAD_OP_CLEAR} render-pass variant
+     * on tile GPUs when the framebuffer is not already bound.
+     *
+     * @return {@code true} if the requested clear(s) were performed natively via {@code LOAD_OP_CLEAR}
+     */
+    public static boolean beginRendering(VkGlFramebuffer glFramebuffer, boolean clearColor, boolean clearDepth) {
+        if (!TileGpuOpts.isEnabled() || (!clearColor && !clearDepth)) {
+            beginRendering(glFramebuffer);
+            return false;
+        }
+
+        Framebuffer alreadyBound = Renderer.getInstance().getBoundFramebuffer();
+        boolean newlyBound = alreadyBound != glFramebuffer.framebuffer;
+        boolean doClearDepth = clearDepth && glFramebuffer.depthAttachment != null;
+        RenderPass pass = (newlyBound && (clearColor || doClearDepth))
+                ? glFramebuffer.getRenderPass(clearColor, doClearDepth)
+                : glFramebuffer.renderPass;
+
+        boolean begunRendering = Renderer.getInstance().beginRenderPass(pass, glFramebuffer.framebuffer);
+
+        if (begunRendering) {
+            Framebuffer framebuffer = glFramebuffer.framebuffer;
+            int viewWidth = framebuffer.getLevelWidth();
+            int viewHeight = framebuffer.getLevelHeight();
+
+            Renderer.setInvertedViewport(0, 0, viewWidth, viewHeight);
+            Renderer.setScissor(0, 0, viewWidth, viewHeight);
+
+            // TODO: invert cull instead of disabling
+            VRenderSystem.disableCull();
+        }
+
+        boundFramebuffer = glFramebuffer;
+        return newlyBound && (clearColor || doClearDepth);
     }
 
     public static int genFramebufferId() {
@@ -108,6 +148,45 @@ public class VkGlFramebuffer {
             }
         }
 
+    }
+
+    public static boolean bindFramebuffer(int target, int id, boolean clearColor, boolean clearDepth) {
+        if (id == 0 || !TileGpuOpts.isEnabled() || (!clearColor && !clearDepth)) {
+            bindFramebuffer(target, id);
+            return false;
+        }
+
+        VkGlFramebuffer glFramebuffer = map.get(id);
+
+        if (glFramebuffer == null)
+            throw new NullPointerException("No Framebuffer with ID: %d ".formatted(id));
+
+        if (glFramebuffer.needsUpdate) {
+            glFramebuffer.create();
+        }
+
+        boolean clearedNatively = false;
+        switch (target) {
+            case GL30.GL_DRAW_FRAMEBUFFER -> {
+                if (glFramebuffer.framebuffer != null) {
+                    clearedNatively = beginRendering(glFramebuffer, clearColor, clearDepth);
+                }
+
+                boundFramebuffer = glFramebuffer;
+            }
+            case GL30.GL_FRAMEBUFFER -> {
+                if (glFramebuffer.framebuffer != null) {
+                    clearedNatively = beginRendering(glFramebuffer, clearColor, clearDepth);
+                }
+
+                boundFramebuffer = glFramebuffer;
+                readFramebuffer = glFramebuffer;
+            }
+            case GL30.GL_READ_FRAMEBUFFER -> {
+                readFramebuffer = glFramebuffer;
+            }
+        }
+        return clearedNatively;
     }
 
     public static void deleteFramebuffer(int id) {
@@ -191,6 +270,9 @@ public class VkGlFramebuffer {
     public final int id;
     Framebuffer framebuffer;
     RenderPass renderPass;
+    RenderPass clearColorRenderPass;
+    RenderPass clearDepthRenderPass;
+    RenderPass clearBothRenderPass;
 
     VulkanImage colorAttachment;
     VulkanImage depthAttachment;
@@ -272,19 +354,51 @@ public class VkGlFramebuffer {
 
         this.framebuffer.setLevel(this.level);
 
+        this.renderPass = buildRenderPass(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_LOAD);
+        this.needsUpdate = false;
+    }
+
+    private RenderPass buildRenderPass(int colorLoadOp, int depthLoadOp) {
         RenderPass.Builder builder = RenderPass.builder(this.framebuffer);
 
         builder.getColorAttachmentInfo()
-               .setLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+               .setLoadOp(colorLoadOp)
                .setFinalLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-        if (hasDepthImage) {
+        if (this.depthAttachment != null) {
             builder.getDepthAttachmentInfo()
-                   .setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
+                   .setOps(depthLoadOp, VK_ATTACHMENT_STORE_OP_STORE);
         }
 
-        this.renderPass = builder.build();
-        this.needsUpdate = false;
+        return builder.build();
+    }
+
+    public RenderPass getRenderPass(boolean clearColor, boolean clearDepth) {
+        if (!TileGpuOpts.isEnabled()) {
+            return this.renderPass;
+        }
+
+        boolean doClearDepth = clearDepth && this.depthAttachment != null;
+        if (!clearColor && !doClearDepth) {
+            return this.renderPass;
+        }
+
+        if (clearColor && doClearDepth) {
+            if (this.clearBothRenderPass == null) {
+                this.clearBothRenderPass = buildRenderPass(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_CLEAR);
+            }
+            return this.clearBothRenderPass;
+        } else if (clearColor) {
+            if (this.clearColorRenderPass == null) {
+                this.clearColorRenderPass = buildRenderPass(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_LOAD_OP_LOAD);
+            }
+            return this.clearColorRenderPass;
+        } else {
+            if (this.clearDepthRenderPass == null) {
+                this.clearDepthRenderPass = buildRenderPass(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_LOAD_OP_CLEAR);
+            }
+            return this.clearDepthRenderPass;
+        }
     }
 
     public Framebuffer getFramebuffer() {
@@ -299,9 +413,21 @@ public class VkGlFramebuffer {
         if (framebuffer != null) {
             this.framebuffer.cleanUp(freeAttachments);
             this.renderPass.cleanUp();
+            if (this.clearColorRenderPass != null) {
+                this.clearColorRenderPass.cleanUp();
+            }
+            if (this.clearDepthRenderPass != null) {
+                this.clearDepthRenderPass.cleanUp();
+            }
+            if (this.clearBothRenderPass != null) {
+                this.clearBothRenderPass.cleanUp();
+            }
         }
 
         this.framebuffer = null;
         this.renderPass = null;
+        this.clearColorRenderPass = null;
+        this.clearDepthRenderPass = null;
+        this.clearBothRenderPass = null;
     }
 }

@@ -3,7 +3,7 @@ package net.vulkanmod.render.chunk.buffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * maintain an intrusive free-segment list for O(free) allocation and grow by up to 50% (capped at 8 MB) to reduce reallocations.
+ * maintain an intrusive free-segment list for O(free) allocation, grow by up to 50% (capped at 8 MB) to reduce reallocations, and support zero-staging direct writes on unified memory.
  */
 
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
@@ -21,7 +21,7 @@ public class AreaBuffer {
     private static final boolean DEBUG = false;
     private static final Logger LOGGER = Initializer.LOGGER;
 
-    private static final MemoryType MEMORY_TYPE = MemoryTypes.GPU_MEM;
+    private final MemoryType memoryType = MemoryTypes.getUnifiedOrGpuMem();
 
     private static final int MAX_GROWTH_INCREMENT = 8 * 1024 * 1024;
 
@@ -77,9 +77,9 @@ public class AreaBuffer {
     private Buffer allocateBuffer() {
         Buffer buffer;
         if (this.usage == Usage.VERTEX.usage) {
-            buffer = new VertexBuffer(this.size, MEMORY_TYPE);
+            buffer = new VertexBuffer(this.size, this.memoryType);
         } else {
-            buffer = new IndexBuffer(this.size, MEMORY_TYPE);
+            buffer = new IndexBuffer(this.size, this.memoryType);
         }
         return buffer;
     }
@@ -135,7 +135,11 @@ public class AreaBuffer {
         }
 
         Buffer dst = this.buffer;
-        UploadManager.INSTANCE.recordUpload(dst, segment.offset + offset, size, byteBuffer);
+        if (dst.type.mappable()) {
+            dst.type.copyToBuffer(dst, byteBuffer, size, 0, segment.offset + offset);
+        } else {
+            UploadManager.INSTANCE.recordUpload(dst, segment.offset + offset, size, byteBuffer);
+        }
     }
 
     public Segment upload(ByteBuffer byteBuffer, int oldOffset, long paramsPtr) {
@@ -170,7 +174,11 @@ public class AreaBuffer {
         segment.paramsPtr = paramsPtr;
 
         Buffer dst = this.buffer;
-        UploadManager.INSTANCE.recordUpload(dst, segment.offset, size, byteBuffer);
+        if (dst.type.mappable()) {
+            dst.type.copyToBuffer(dst, byteBuffer, size, 0, segment.offset);
+        } else {
+            UploadManager.INSTANCE.recordUpload(dst, segment.offset, size, byteBuffer);
+        }
 
         this.used += size;
 
@@ -217,7 +225,11 @@ public class AreaBuffer {
         this.size = newSize;
         Buffer dst = this.allocateBuffer();
 
-        UploadManager.INSTANCE.copyBuffer(this.buffer, dst);
+        if (dst.type.mappable() && this.buffer.type.mappable()) {
+            MemoryTypes.copyMappableBuffer(this.buffer, 0, dst, 0, oldSize);
+        } else {
+            UploadManager.INSTANCE.copyBuffer(this.buffer, dst);
+        }
 
         // TODO: moving only used segments causes corruption
 //        moveUsedSegments(dst);
@@ -269,7 +281,11 @@ public class AreaBuffer {
                         this.first = segment;
                         segment.prev = null;
                     } else {
-                        UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        if (dst.type.mappable() && this.buffer.type.mappable()) {
+                            MemoryTypes.copyMappableBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        } else {
+                            UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        }
 
                         dstOffset += uploadSize;
                     }
@@ -298,7 +314,11 @@ public class AreaBuffer {
         }
 
         if (uploadSize > 0) {
-            UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            if (dst.type.mappable() && this.buffer.type.mappable()) {
+                MemoryTypes.copyMappableBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            } else {
+                UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            }
         }
 
         if (prevUsed != null) {

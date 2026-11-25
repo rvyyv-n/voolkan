@@ -3,16 +3,18 @@ package net.vulkanmod.vulkan.memory;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * detect unified memory heaps and log chosen memory heap sizes at startup.
+ * detect unified memory heaps, log chosen memory heap sizes at startup, and add unified-memory direct-write fast path on Apple/MoltenVK/macOS.
  */
 
 import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.buffer.Buffer;
 import net.vulkanmod.vulkan.memory.buffer.StagingBuffer;
 import net.vulkanmod.vulkan.util.VUtil;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.util.vma.Vma;
 import org.lwjgl.vulkan.VkMemoryHeap;
 import org.lwjgl.vulkan.VkMemoryType;
 
@@ -27,8 +29,15 @@ public class MemoryTypes {
     public static MemoryType BAR_MEM;
     /** Host-visible coherent memory that prefers CPU-cached pages for fast GPU-to-CPU readbacks. */
     public static MemoryType READBACK_MEM;
+    /** Device-local, host-visible unified memory for zero-staging direct writes (Apple Silicon / MoltenVK / macOS). */
+    public static MemoryType UNIFIED_MEM;
+    public static boolean unifiedDirectWriteActive = false;
+    private static boolean unifiedDirectWriteCoherent = false;
 
     public static void createMemoryTypes() {
+        UNIFIED_MEM = null;
+        unifiedDirectWriteActive = false;
+        unifiedDirectWriteCoherent = false;
 
         for (int i = 0; i < DeviceManager.memoryProperties.memoryTypeCount(); ++i) {
             VkMemoryType memoryType = DeviceManager.memoryProperties.memoryTypes(i);
@@ -80,7 +89,75 @@ public class MemoryTypes {
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
 
+        initUnifiedDirectWrite();
+
         logChosenHeaps();
+    }
+
+    private static void initUnifiedDirectWrite() {
+        boolean disabled = Boolean.getBoolean("voolkan.disableUnifiedDirectWrite");
+        if (disabled || !isUnifiedMemory()) {
+            return;
+        }
+        boolean macOrApple = Platform.isMacOS()
+                || (DeviceManager.device != null && (DeviceManager.device.isApple() || DeviceManager.device.isMoltenVK()));
+        if (!macOrApple) {
+            return;
+        }
+
+        int unifiedHeapIdx = GPU_MEM.vkMemoryType.heapIndex();
+        VkMemoryType coherentType = null;
+        VkMemoryType nonCoherentType = null;
+        int reqFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+        int count = DeviceManager.memoryProperties.memoryTypeCount();
+        for (int i = 0; i < count; i++) {
+            VkMemoryType candidate = DeviceManager.memoryProperties.memoryTypes(i);
+            if (candidate.heapIndex() != unifiedHeapIdx) {
+                continue;
+            }
+            int flags = candidate.propertyFlags();
+            if ((flags & reqFlags) == reqFlags) {
+                if ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0) {
+                    if (coherentType == null) {
+                        coherentType = candidate;
+                    }
+                } else if (nonCoherentType == null) {
+                    nonCoherentType = candidate;
+                }
+            }
+        }
+
+        if (coherentType != null) {
+            UNIFIED_MEM = new UnifiedDirectMemory(coherentType, GPU_MEM.vkMemoryHeap, true);
+            unifiedDirectWriteActive = true;
+            unifiedDirectWriteCoherent = true;
+        } else if (nonCoherentType != null) {
+            UNIFIED_MEM = new UnifiedDirectMemory(nonCoherentType, GPU_MEM.vkMemoryHeap, false);
+            unifiedDirectWriteActive = true;
+            unifiedDirectWriteCoherent = false;
+        }
+    }
+
+    public static MemoryType getUnifiedOrGpuMem() {
+        return unifiedDirectWriteActive && UNIFIED_MEM != null ? UNIFIED_MEM : GPU_MEM;
+    }
+
+    public static boolean isUnifiedDirectWriteCoherent() {
+        return unifiedDirectWriteCoherent;
+    }
+
+    /**
+     * Direct CPU-to-CPU copy between two persistently mapped buffers, flushing/invalidating VMA
+     * allocations when either side uses non-coherent unified memory.
+     */
+    public static void copyMappableBuffer(Buffer src, long srcOffset, Buffer dst, long dstOffset, long size) {
+        if (src.type instanceof UnifiedDirectMemory uSrc && !uSrc.isCoherent()) {
+            Vma.vmaInvalidateAllocation(Vulkan.getAllocator(), src.getAllocation(), srcOffset, size);
+        }
+        MemoryUtil.memCopy(src.getDataPtr() + srcOffset, dst.getDataPtr() + dstOffset, size);
+        if (dst.type instanceof UnifiedDirectMemory uDst && !uDst.isCoherent()) {
+            Vma.vmaFlushAllocation(Vulkan.getAllocator(), dst.getAllocation(), dstOffset, size);
+        }
     }
 
     public static boolean isUnifiedMemory() {
@@ -249,6 +326,48 @@ public class MemoryTypes {
                     VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | buffer.usage,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true);
+        }
+    }
+
+    static class UnifiedDirectMemory extends MappableMemory {
+        private final boolean coherent;
+
+        UnifiedDirectMemory(VkMemoryType vkMemoryType, VkMemoryHeap vkMemoryHeap, boolean coherent) {
+            super(Type.DEVICE_LOCAL, vkMemoryType, vkMemoryHeap);
+            this.coherent = coherent;
+        }
+
+        boolean isCoherent() {
+            return this.coherent;
+        }
+
+        @Override
+        public void createBuffer(Buffer buffer, long size) {
+            int requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                    | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+                    | (this.coherent ? VK_MEMORY_PROPERTY_HOST_COHERENT_BIT : 0);
+            int preferredFlags = this.coherent
+                    ? VK_MEMORY_PROPERTY_HOST_CACHED_BIT
+                    : VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            MemoryManager.getInstance().createBuffer(buffer, size,
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | buffer.usage,
+                    requiredFlags, preferredFlags, true);
+        }
+
+        @Override
+        public void copyToBuffer(Buffer buffer, ByteBuffer src, long size, long srcOffset, long dstOffset) {
+            super.copyToBuffer(buffer, src, size, srcOffset, dstOffset);
+            if (!this.coherent) {
+                Vma.vmaFlushAllocation(Vulkan.getAllocator(), buffer.getAllocation(), dstOffset, size);
+            }
+        }
+
+        @Override
+        public void copyFromBuffer(Buffer buffer, long size, ByteBuffer byteBuffer) {
+            if (!this.coherent) {
+                Vma.vmaInvalidateAllocation(Vulkan.getAllocator(), buffer.getAllocation(), 0, size);
+            }
+            super.copyFromBuffer(buffer, size, byteBuffer);
         }
     }
 }

@@ -6,10 +6,12 @@ package net.vulkanmod.vulkan;
  * bind guard: fall back to the main render target when a pipeline is bound with no render pass;
  * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option;
  * submission serials so GPU fences can wait for the frame that holds the work recorded when they were created;
- * reset world-scale mode at frame start; clamp scissor rectangles safely to framebuffer bounds.
+ * reset world-scale mode at frame start; clamp scissor rectangles safely to framebuffer bounds;
+ * track swapchain imageAvailable semaphore consumption across mid-frame flushes and bind lazy tile-GPU pass on clearAttachments.
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
+import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.client.Minecraft;
@@ -147,6 +149,7 @@ public class Renderer {
     private static int lastReset = -1;
     private VkCommandBuffer currentCmdBuffer;
     private boolean recordingCmds = false;
+    private boolean imageAvailableConsumed = false;
     int recursion = 0;
 
     MainPass mainPass;
@@ -163,7 +166,7 @@ public class Renderer {
     }
 
     public static void setLineWidth(float width) {
-        if (INSTANCE.boundFramebuffer == null || INSTANCE.boundLineWidth == width) {
+        if (!INSTANCE.recordingCmds || INSTANCE.boundLineWidth == width) {
             return;
         }
         INSTANCE.boundLineWidth = width;
@@ -406,6 +409,7 @@ public class Renderer {
                 if (vkResult == VK_SUCCESS || vkResult == VK_SUBOPTIMAL_KHR) {
                     imageIndex = pImageIndex.get(0);
                     swapChain.setAcquired(true);
+                    imageAvailableConsumed = false;
                     if (vkResult == VK_SUBOPTIMAL_KHR) {
                         swapChainUpdate = true;
                     }
@@ -491,11 +495,12 @@ public class Renderer {
 
             // Submitted commands waited before main command buffer
             int waitSemaphoreCount = Synchronization.INSTANCE.getWaitSemaphoreCount();
+            boolean waitImageAvailable = swapChain.isAcquired() && !imageAvailableConsumed;
             int totalWaitSemaphores = waitSemaphoreCount;
 
             // Swapchain has an acquired image,
             // the corresponding acquire operation has to be waited before running this command buffer
-            if (swapChain.isAcquired()) {
+            if (waitImageAvailable) {
                 totalWaitSemaphores += 1;
             }
 
@@ -508,7 +513,7 @@ public class Renderer {
                 waitDstStageMask.put(i, UPLOAD_WAIT_STAGE_MASK);
             }
 
-            if (swapChain.isAcquired()) {
+            if (waitImageAvailable) {
                 waitSemaphores.put(totalWaitSemaphores - 1, imageAvailableSemaphores[currentFrame]);
                 waitDstStageMask.put(totalWaitSemaphores - 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
             }
@@ -562,6 +567,7 @@ public class Renderer {
 
             currentFrame = (currentFrame + 1) % framesNum;
             swapChain.setAcquired(false);
+            imageAvailableConsumed = false;
         }
     }
 
@@ -587,9 +593,11 @@ public class Renderer {
             submitInfo.pCommandBuffers(stack.pointers(currentCmdBuffer));
 
             int waitSemaphoreCount = Synchronization.INSTANCE.getWaitSemaphoreCount();
+            boolean waitImageAvailable = swapChain.isAcquired() && !imageAvailableConsumed;
+            int totalWaitSemaphores = waitSemaphoreCount + (waitImageAvailable ? 1 : 0);
 
-            LongBuffer waitSemaphores = stack.mallocLong(waitSemaphoreCount);
-            IntBuffer waitDstStageMask = stack.mallocInt(waitSemaphoreCount);
+            LongBuffer waitSemaphores = stack.mallocLong(totalWaitSemaphores);
+            IntBuffer waitDstStageMask = stack.mallocInt(totalWaitSemaphores);
 
             Synchronization.INSTANCE.getWaitSemaphores(waitSemaphores);
 
@@ -597,8 +605,13 @@ public class Renderer {
                 waitDstStageMask.put(i, UPLOAD_WAIT_STAGE_MASK);
             }
 
+            if (waitImageAvailable) {
+                waitSemaphores.put(totalWaitSemaphores - 1, imageAvailableSemaphores[currentFrame]);
+                waitDstStageMask.put(totalWaitSemaphores - 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+            }
+
             waitSemaphores.position(0);
-            waitSemaphores.limit(waitSemaphoreCount);
+            waitSemaphores.limit(totalWaitSemaphores);
 
             submitInfo.pWaitSemaphores(waitSemaphores);
             submitInfo.waitSemaphoreCount(waitSemaphores.limit());
@@ -608,6 +621,10 @@ public class Renderer {
             if ((vkResult = vkQueueSubmit(DeviceManager.getGraphicsQueue().vkQueue(), submitInfo, inFlightFences[currentFrame])) != VK_SUCCESS) {
                 vkResetFences(device, inFlightFences[currentFrame]);
                 throw new RuntimeException("Failed to submit draw command buffer: %s".formatted(VkResult.decode(vkResult)));
+            }
+
+            if (waitImageAvailable) {
+                imageAvailableConsumed = true;
             }
 
             slotSerials[currentFrame] = ++submitSerial;
@@ -782,6 +799,7 @@ public class Renderer {
 
         mainCommandBuffers.forEach(commandBuffer -> vkResetCommandBuffer(commandBuffer, 0));
         recordingCmds = false;
+        imageAvailableConsumed = false;
 
         swapChain.recreate();
 
@@ -849,7 +867,7 @@ public class Renderer {
                 return;
             }
 
-            if (!warnedNoRenderPass) {
+            if (!warnedNoRenderPass && !TileGpuOpts.isEnabled()) {
                 warnedNoRenderPass = true;
                 Initializer.LOGGER.warn("Graphics pipeline bound with no render pass: rebinding the main target");
             }
@@ -955,6 +973,13 @@ public class Renderer {
     }
 
     public static void clearAttachments(int attachments) {
+        if (INSTANCE.boundRenderPass == null && INSTANCE.recordingCmds && INSTANCE.mainPass != null && TileGpuOpts.isEnabled()) {
+            boolean clearColor = (attachments & GL_COLOR_BUFFER_BIT) != 0;
+            boolean clearDepth = (attachments & GL_DEPTH_BUFFER_BIT) != 0;
+            if (INSTANCE.mainPass.rebindMainTarget(clearColor, clearDepth)) {
+                return;
+            }
+        }
         clearAttachments(INSTANCE.currentCmdBuffer, attachments);
     }
 

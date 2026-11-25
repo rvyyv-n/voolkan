@@ -27,6 +27,24 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
 10. [ ] **Both render paths:** Default is Dynamic (`renderPath: "auto"`). Optionally test Legacy by adding `-Dvoolkan.renderPath=legacy` to JVM arguments, loading the same world, and comparing F3 FPS and visuals (remove the flag afterwards).
 11. [ ] **Clean quit:** Quit to title, then quit the game. Process exits cleanly with no hang and no crash report in `crash-reports/`.
 
+## Round 3: performance & tuning comparisons
+
+Once the base checklist above passes, run these quick A/B comparisons from the **same world and viewpoint** (stand still for ~15 s per run, VSync off, same render distance, and record F3 FPS / frame times):
+
+1. [ ] **Indirect Draw OFF (macOS default) vs ON:**
+   - Default on a fresh macOS config is **Indirect Draw: OFF** (`Options → Optimizations → Indirect Draw`, also restored by **Restore Defaults**).
+   - Measure FPS/frametimes with Indirect Draw **OFF**, then toggle it **ON**, press Apply, and measure the exact same viewpoint. Note whether ON is faster, slower, or causes any visual issues.
+2. [ ] **Dynamic vs Legacy render path:**
+   - Default is **Dynamic** (`renderPath: "auto"`).
+   - Add `-Dvoolkan.renderPath=legacy` to JVM arguments, launch into the same viewpoint, compare F3 FPS and visuals, then remove the flag.
+3. [ ] **Optional A/B diagnostic JVM flags (if troubleshooting or measuring gains):**
+   - `-Dvoolkan.disableTileOpts=true` — disables tile-GPU lazy swapchain start, deferred initial clear, and native `LOAD_OP_CLEAR` folding.
+   - `-Dvoolkan.disableUnifiedDirectWrite=true` — reverts chunk/VBO/index uploads to the staged transfer path.
+4. [ ] **Optional MoltenVK environment variables (set in the launcher's environment settings for A/B comparison, one at a time or together):**
+   - `MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=0`
+   - `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1`
+   - Active `MVK_CONFIG_*` variables, `Tile GPU opts`, and `Unified direct-write` status are logged automatically in the `Vulkan startup capabilities:` block of `logs/latest.log`.
+
 ## What to send back
 
 - `logs/latest.log` (and anything in `crash-reports/` if a crash occurred)

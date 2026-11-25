@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; mip level layouts are tracked per level.
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; mip level layouts are tracked per level; use VRenderSystem.clearDepthValue for LOAD_OP_CLEAR depth clears.
  */
 
 import net.vulkanmod.vulkan.Renderer;
@@ -181,7 +181,7 @@ public class RenderPass {
             clearValues.get(clearIdx++).color().float32(VRenderSystem.clearColor);
         }
         if (depthAttachmentInfo != null) {
-            clearValues.get(clearIdx).depthStencil().set(1.0f, 0);
+            clearValues.get(clearIdx).depthStencil().set(VRenderSystem.clearDepthValue, 0);
         }
 
         renderPassInfo.pClearValues(clearValues);
@@ -245,7 +245,7 @@ public class RenderPass {
 
         VkClearValue.Buffer clearValues = VkClearValue.malloc(2, stack);
         clearValues.get(0).color().float32(VRenderSystem.clearColor);
-        clearValues.get(1).depthStencil().set(1.0f, 0);
+        clearValues.get(1).depthStencil().set(VRenderSystem.clearDepthValue, 0);
 
         VkRenderingInfo renderingInfo = VkRenderingInfo.calloc(stack);
         renderingInfo.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_INFO_KHR);

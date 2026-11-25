@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.pass;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * expose the main render pass for pipeline creation fallback; add world-resolution scaling hooks and depth attachment view.
+ * expose the main render pass for pipeline creation fallback; add world-resolution scaling hooks, depth attachment view, and clear-folding rebindMainTarget overload.
  */
 
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -30,6 +30,20 @@ public interface MainPass {
     default void mainTargetUnbindWrite() {}
 
     default void rebindMainTarget() {}
+
+    /**
+     * Rebinds the main target and, when supported (tile GPUs before the swapchain pass has started
+     * this frame), folds the requested attachment clears into {@code LOAD_OP_CLEAR}.
+     *
+     * @return {@code true} if the requested clear(s) were performed natively by the render pass
+     */
+    default boolean rebindMainTarget(boolean clearColor, boolean clearDepth) {
+        rebindMainTarget();
+        return false;
+    }
+
+    /** Marks a deferred initial colour+depth clear at frame start on tile GPUs without opening a pass. */
+    default void deferInitialClear() {}
 
     default void bindAsTexture() {}
 

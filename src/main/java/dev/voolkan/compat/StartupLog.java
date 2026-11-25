@@ -17,7 +17,9 @@ import org.lwjgl.vulkan.VkPhysicalDeviceFeatures;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
 
 import java.nio.IntBuffer;
+import java.util.Map;
 import java.util.StringJoiner;
+import java.util.TreeMap;
 
 import static org.lwjgl.vulkan.VK10.*;
 
@@ -135,10 +137,25 @@ public final class StartupLog {
           .append(", GPU_MEM=").append(describeMemoryType(MemoryTypes.GPU_MEM))
           .append(", HOST_MEM=").append(describeMemoryType(MemoryTypes.HOST_MEM))
           .append(", BAR_MEM=").append(describeMemoryType(MemoryTypes.BAR_MEM))
+          .append(", UNIFIED_MEM=").append(describeMemoryType(MemoryTypes.UNIFIED_MEM))
           .append('\n');
 
         // Chosen default depth format
-        sb.append("  Default depth format: ").append(formatName(Vulkan.getDefaultDepthFormat()));
+        sb.append("  Default depth format: ").append(formatName(Vulkan.getDefaultDepthFormat())).append('\n');
+
+        // Tile-GPU, unified-memory, and MoltenVK diagnostics
+        sb.append("  Tile GPU opts: ").append(TileGpuOpts.isEnabled() ? "enabled" : "disabled").append('\n');
+        sb.append("  Unified direct-write: ");
+        if (MemoryTypes.unifiedDirectWriteActive) {
+            sb.append("enabled (coherent=").append(MemoryTypes.isUnifiedDirectWriteCoherent()).append(')');
+        } else {
+            sb.append("disabled");
+        }
+        sb.append('\n');
+        sb.append("  VK_EXT_layer_settings: ")
+          .append(Vulkan.layerSettingsSupported ? "advertised" : "not advertised")
+          .append('\n');
+        sb.append("  MVK_CONFIG env: ").append(formatMvkConfigEnv());
 
         Initializer.LOGGER.info(sb.toString());
     }
@@ -179,6 +196,23 @@ public final class StartupLog {
                 range,
                 presentModeName(presentMode),
                 supportedModes);
+    }
+
+    private static String formatMvkConfigEnv() {
+        TreeMap<String, String> mvkVars = new TreeMap<>();
+        for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
+            if (entry.getKey().startsWith("MVK_CONFIG_")) {
+                mvkVars.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (mvkVars.isEmpty()) {
+            return "none";
+        }
+        StringJoiner joiner = new StringJoiner(", ");
+        for (Map.Entry<String, String> entry : mvkVars.entrySet()) {
+            joiner.add(entry.getKey() + "=" + entry.getValue());
+        }
+        return joiner.toString();
     }
 
     private static String describeMemoryType(MemoryType type) {

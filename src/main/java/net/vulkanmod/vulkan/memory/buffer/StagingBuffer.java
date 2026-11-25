@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.memory.buffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * fence-sync chunk and inter-frame transfer uploads on staging overflow before resetting the buffer.
+ * fence-sync chunk and inter-frame transfer uploads and drain pending async semaphores on staging overflow before resetting the buffer.
  */
 
 import net.vulkanmod.render.chunk.buffer.UploadManager;
@@ -70,6 +70,9 @@ public class StagingBuffer extends Buffer {
             renderer.flushCmds();
         } else {
             renderer.submitTransferCbSync();
+            if (Synchronization.INSTANCE.getWaitSemaphoreCount() > 0) {
+                Synchronization.INSTANCE.clearSemaphoresAfterIdle();
+            }
         }
         Synchronization.INSTANCE.waitFences();
 
