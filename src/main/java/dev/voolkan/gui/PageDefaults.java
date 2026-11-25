@@ -76,14 +76,14 @@ public final class PageDefaults {
         // Optimizations
         DEFAULTS.put("vulkanmod.options.advCulling", 2);
         DEFAULTS.put("vulkanmod.options.entityCulling", true);
-        DEFAULTS.put("vulkanmod.options.uniqueOpaqueLayer", true);
+        DEFAULTS.put("vulkanmod.options.uniqueOpaqueLayer", !Platform.isMacOS());
         DEFAULTS.put("vulkanmod.options.backfaceCulling", true);
         DEFAULTS.put("vulkanmod.options.indirectDraw", !Platform.isMacOS());
 
         // Other
         DEFAULTS.put("vulkanmod.options.builderThreads", 0);
         DEFAULTS.put("vulkanmod.options.frameQueue", 2);
-        DEFAULTS.put("vulkanmod.options.lowLatency", Platform.isMacOS());
+        DEFAULTS.put("vulkanmod.options.lowLatency", false);
         DEFAULTS.put("vulkanmod.options.swapChainImages", 0);
         DEFAULTS.put("vulkanmod.options.textureAnimations", true);
         DEFAULTS.put("vulkanmod.options.wayland", false);

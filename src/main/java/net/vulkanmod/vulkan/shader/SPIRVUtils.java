@@ -3,10 +3,11 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * cache compiled SPIR-V binaries on disk, support owned ByteBuffer SPIRV instances, and release shaderc results on free.
+ * cache compiled SPIR-V binaries on disk, support owned ByteBuffer SPIRV instances, release shaderc results on free, and fix shaderc Vulkan 1.2 target environment on macOS.
  */
 
 import dev.voolkan.cache.ShaderBinaryCache;
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.Initializer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -41,6 +42,8 @@ import static org.lwjgl.util.shaderc.Shaderc.*;
 public class SPIRVUtils {
     private static final boolean DEBUG = Boolean.getBoolean("voolkan.shaderDebug");
     private static final boolean OPTIMIZATIONS = !Boolean.getBoolean("voolkan.disableShaderOptimizations");
+    /** Distinguishes macOS Vulkan 1.2 SPIR-V cache entries from pre-fix binaries without affecting Windows keys. */
+    private static final int MAC_SHADER_ENV_CACHE_TAG = 0x40000000;
 
     private static long compiler;
     private static long options;
@@ -78,7 +81,11 @@ public class SPIRVUtils {
         if (DEBUG)
             shaderc_compile_options_set_generate_debug_info(options);
 
-        shaderc_compile_options_set_target_env(options, shaderc_env_version_vulkan_1_2, VK12.VK_API_VERSION_1_2);
+        if (MacPerfOpts.shaderOptsMac()) {
+            shaderc_compile_options_set_target_env(options, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
+        } else {
+            shaderc_compile_options_set_target_env(options, shaderc_env_version_vulkan_1_2, VK12.VK_API_VERSION_1_2);
+        }
         shaderc_compile_options_set_include_callbacks(options, SHADER_INCLUDER, SHADER_RELEASER, pUserData);
 
         addIncludePath("/assets/vulkanmod/shaders/include/");
@@ -165,9 +172,12 @@ public class SPIRVUtils {
         if (includeDigest == null) {
             return null;
         }
+        int targetEnvVersion = MacPerfOpts.shaderOptsMac()
+                ? (VK12.VK_API_VERSION_1_2 | MAC_SHADER_ENV_CACHE_TAG)
+                : VK12.VK_API_VERSION_1_2;
         return ShaderBinaryCache.computeKey(
                 ShaderBinaryCache.getModVersion(),
-                VK12.VK_API_VERSION_1_2,
+                targetEnvVersion,
                 DEBUG,
                 OPTIMIZATIONS,
                 shaderKind.kind,

@@ -103,7 +103,10 @@ public class Config {
 
     private void applyPlatformDefaults() {
         if (Platform.isMacOS()) {
-            this.lowLatency = true;
+            // Overlap CPU/GPU across frameQueueSize=2 (safe with per-frame depth attachments)
+            // and split SOLID into the early-Z no-discard shader for Apple TBDR HSR.
+            this.lowLatency = false;
+            this.uniqueOpaqueLayer = false;
             this.frameQueueSize = 2;
             this.swapChainImages = 0;
             this.macNativeFullscreen = false;
