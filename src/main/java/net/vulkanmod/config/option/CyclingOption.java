@@ -1,5 +1,11 @@
 package net.vulkanmod.config.option;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * keep cycling index synchronized when syncFromSupplier updates the value.
+ */
+
 import net.minecraft.network.chat.Component;
 import net.vulkanmod.config.gui.widget.CyclingOptionWidget;
 import net.vulkanmod.config.gui.widget.OptionWidget;
@@ -66,6 +72,12 @@ public class CyclingOption<E> extends Option<E> {
 
     public void setNewValue(E e) {
         super.setNewValue(e);
+        this.index = findNewValueIndex();
+    }
+
+    @Override
+    public void syncFromSupplier() {
+        super.syncFromSupplier();
         this.index = findNewValueIndex();
     }
 

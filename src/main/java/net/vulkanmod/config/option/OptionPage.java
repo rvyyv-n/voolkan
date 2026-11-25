@@ -1,5 +1,11 @@
 package net.vulkanmod.config.option;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * invoke option onPostApply hooks after applying changes so staging triggers like Preset reset cleanly.
+ */
+
 import net.vulkanmod.config.gui.OptionBlock;
 import net.vulkanmod.config.gui.VOptionList;
 
@@ -40,6 +46,7 @@ public class OptionPage {
                 if (option.isChanged()) {
                     option.apply();
                 }
+                option.onPostApply();
             }
         }
     }

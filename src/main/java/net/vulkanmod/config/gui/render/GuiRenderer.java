@@ -107,6 +107,27 @@ public abstract class GuiRenderer {
         }
     }
 
+    /** Draws left-aligned text clipped to {@code maxWidth}, smoothly scrolling when overflowing. */
+    public static void drawScrollingLeftString(Font font, Component component, int x, int y, int maxWidth, int color) {
+        if (maxWidth <= 0) {
+            return;
+        }
+        int textWidth = font.width(component);
+        if (textWidth <= maxWidth) {
+            drawString(font, component, x, y, color);
+        } else {
+            int scrollAmount = textWidth - maxWidth;
+            double currentTimeInSeconds = (double) Util.getMillis() / 1000.0;
+            double scrollSpeed = Math.max(scrollAmount * 0.5, 3.0);
+            double scrollingOffset = Math.sin((Math.PI / 2) * Math.cos((Math.PI * 2) * currentTimeInSeconds / scrollSpeed)) / 2.0 + 0.5;
+            double horizontalScroll = Mth.lerp(scrollingOffset, 0.0, scrollAmount);
+
+            enableScissor(x - 1, y - 2, x + maxWidth, y + font.lineHeight + 2);
+            drawString(font, component, (int) (x - horizontalScroll), y, color);
+            disableScissor();
+        }
+    }
+
     public static int getMaxTextWidth(Font font, List<FormattedCharSequence> list) {
         int maxWidth = 0;
         for (var text : list) {

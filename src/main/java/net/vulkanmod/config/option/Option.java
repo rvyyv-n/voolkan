@@ -145,6 +145,15 @@ public abstract class Option<T> {
         return this.name;
     }
 
+    /** Returns the unformatted base option name without any appended value suffix. */
+    public Component getBaseName() {
+        return this.name;
+    }
+
+    /** Hook called unconditionally on every option after a page applies changes. */
+    public void onPostApply() {
+    }
+
     /** Translation key of the option name, or null when the name is not translatable. */
     public String getNameKey() {
         return this.name.getContents() instanceof TranslatableContents contents ? contents.getKey() : null;

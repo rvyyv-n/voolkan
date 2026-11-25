@@ -1,5 +1,13 @@
 package net.vulkanmod.config.gui.widget;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add per-option inline reset button and right-click reset support, clipped/scrolling labels for narrow layouts,
+ * and allow hovering inactive/read-only rows to display tooltips.
+ */
+
+import dev.voolkan.gui.OptionResetControl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.narration.NarratableEntry;
@@ -19,6 +27,7 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
     protected Component displayedValue;
 
     protected boolean controlHovered;
+    private boolean resetHovered;
 
     final O option;
 
@@ -28,11 +37,15 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
         this.displayedValue = Component.literal("N/A");
     }
 
+    public O getOption() {
+        return this.option;
+    }
+
     @Override
     public void setDimensions(int x, int y, int width, int height) {
         super.setDimensions(x, y, width, height);
 
-        this.controlWidth = Math.min((int) (width * 0.5f) - 8, 120);
+        this.controlWidth = Math.max(72, Math.min((int) (width * 0.44f) - 8, 120));
         this.controlX = this.x + this.width - this.controlWidth - 8;
     }
 
@@ -44,6 +57,7 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
         this.updateDisplayedValue();
 
         this.controlHovered = mouseX >= this.controlX && mouseY >= this.y && mouseX < this.controlX + this.controlWidth && mouseY < this.y + this.height;
+        this.resetHovered = OptionResetControl.isHovered(this, mouseX, mouseY);
         this.renderWidget(mouseX, mouseY);
     }
 
@@ -67,15 +81,18 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
             nameComp = nameComp.copy().withStyle(style -> style.withItalic(true));
         }
 
-        GuiRenderer.drawString(
+        int labelX = this.x + 8;
+        int labelMaxWidth = Math.max(20, OptionResetControl.getLabelRightEdge(this) - labelX);
+        GuiRenderer.drawScrollingLeftString(
                 textRenderer,
-                nameComp.getVisualOrderText(),
-                this.x + 8,
+                nameComp,
+                labelX,
                 this.y + (this.height - 8) / 2,
+                labelMaxWidth,
                 color
         );
 
-
+        OptionResetControl.render(this, mouseX, mouseY);
         this.renderControls(mouseX, mouseY);
     }
 
@@ -102,6 +119,26 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
             return false;
         }
 
+        // Right-click anywhere on the row resets to platform-aware default
+        if (event.button() == 1 && this.isMouseOver(event.x(), event.y())) {
+            if (OptionResetControl.tryReset(this.option)) {
+                this.updateDisplayedValue();
+                super.playDownSound(Minecraft.getInstance().getSoundManager());
+                return true;
+            }
+            return false;
+        }
+
+        // Left-click on the inline reset button
+        if (event.button() == 0 && OptionResetControl.isHovered(this, event.x(), event.y())) {
+            if (OptionResetControl.tryReset(this.option)) {
+                this.updateDisplayedValue();
+                super.playDownSound(Minecraft.getInstance().getSoundManager());
+                return true;
+            }
+            return false;
+        }
+
         if (this.isValidClickButton(event.button()) && this.clicked(event.x(), event.y())) {
             this.playDownSound(Minecraft.getInstance().getSoundManager());
             this.onClick(event.x(), event.y());
@@ -121,7 +158,19 @@ public abstract class OptionWidget<O extends Option<?>> extends VAbstractWidget 
 
     @Override
     public boolean isMouseOver(double mouseX, double mouseY) {
-        return this.active && this.visible && mouseX >= (double)this.x && mouseY >= (double)this.y && mouseX < (double)(this.x + this.width) && mouseY < (double)(this.y + this.height);
+        return this.visible && mouseX >= (double)this.x && mouseY >= (double)this.y && mouseX < (double)(this.x + this.width) && mouseY < (double)(this.y + this.height);
+    }
+
+    public boolean isResetHovered() {
+        return this.resetHovered;
+    }
+
+    public boolean canResetToDefault() {
+        return OptionResetControl.isVisible(this);
+    }
+
+    public Component getResetButtonTooltip() {
+        return OptionResetControl.getButtonTooltip(this.option);
     }
 
     @Override
