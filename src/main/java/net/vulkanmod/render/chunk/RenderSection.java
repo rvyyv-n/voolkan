@@ -3,7 +3,8 @@ package net.vulkanmod.render.chunk;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * track per-layer occupancy bitmask and fix deferred VRAM segment freeing in resetDrawParameters.
+ * track per-layer occupancy bitmask, fix deferred VRAM segment freeing in resetDrawParameters,
+ * and track compile generation / player-changed priority for budgeted chunk uploads.
  */
 
 import com.google.common.collect.Sets;
@@ -46,6 +47,8 @@ public class RenderSection {
 
     private boolean dirty = true;
     private boolean playerChanged;
+    private int compileGeneration = 0;
+    private int compiledGeneration = -1;
     private boolean completelyEmpty = true;
     private boolean containsBlockEntities = false;
     public byte layerMask = 0;
@@ -213,12 +216,17 @@ public class RenderSection {
 
         if (this.compileStatus.sortTask != null) {
             this.compileStatus.sortTask.cancel();
+            this.compileStatus.sortTask = null;
         }
 
-        if (!compiledSection.hasTransparencyState()) {
+        // If a newer build is already pending (compileGeneration > compiledGeneration), skip sorting:
+        // the pending BuildTask will produce freshly sorted translucent indices for the new geometry.
+        if (this.compiledGeneration != this.compileGeneration
+                || !compiledSection.hasTransparencyState()) {
             return false;
         } else {
-            this.compileStatus.sortTask = ChunkTask.createSortTask(this, cameraPos);
+            this.compileStatus.sortTask = ChunkTask.createSortTask(
+                    this, cameraPos, this.compiledGeneration, compiledSection);
             taskDispatcher.schedule(this.compileStatus.sortTask);
             return true;
         }
@@ -252,8 +260,26 @@ public class RenderSection {
         RenderRegion renderRegion = renderRegionCache.createRegion(level, secX, secY, secZ);
 
         boolean flag1 = this.compileStatus.compiledSection == CompiledSection.UNCOMPILED;
-        this.compileStatus.buildTask = ChunkTask.createBuildTask(this, renderRegion, cameraPos, !flag1 || flag);
+        boolean highPriority = !flag1 || flag || this.isDirtyFromPlayer();
+        int generation = this.nextCompileGeneration();
+        this.compileStatus.buildTask = ChunkTask.createBuildTask(this, renderRegion, cameraPos, highPriority, generation);
         return this.compileStatus.buildTask;
+    }
+
+    public int getCompileGeneration() {
+        return this.compileGeneration;
+    }
+
+    public int nextCompileGeneration() {
+        return ++this.compileGeneration;
+    }
+
+    public int getCompiledGeneration() {
+        return this.compiledGeneration;
+    }
+
+    public void setCompiledGeneration(int generation) {
+        this.compiledGeneration = generation;
     }
 
     protected boolean cancelTasks() {
@@ -401,8 +427,11 @@ public class RenderSection {
 
     private void reset() {
         this.cancelTasks();
+        this.compileGeneration++;
+        this.compiledGeneration = -1;
         this.compileStatus.compiledSection = CompiledSection.UNCOMPILED;
         this.dirty = true;
+        this.playerChanged = false;
         this.visibility = 0;
         this.completelyEmpty = true;
 

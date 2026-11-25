@@ -36,8 +36,8 @@ public class BuildTask extends ChunkTask {
     @Nullable
     protected RenderRegion region;
 
-    public BuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority) {
-        super(renderSection, cameraPos);
+    public BuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority, int generation) {
+        super(renderSection, cameraPos, generation);
         this.region = renderRegion;
         this.highPriority = highPriority;
     }
@@ -80,7 +80,7 @@ public class BuildTask extends ChunkTask {
     }
 
     private CompileResult compile(float camX, float camY, float camZ, BuilderResources builderResources) {
-        CompileResult compileResult = new CompileResult(this.section, true);
+        CompileResult compileResult = new CompileResult(this.section, true, this.highPriority, this.generation);
 
         final int secOriginX = section.xOffset();
         final int secOriginY = section.yOffset();

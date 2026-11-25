@@ -320,6 +320,7 @@ public class WorldRenderer {
             }
 
             this.taskDispatcher.stopThreads();
+            this.taskDispatcher.clearBatchQueue();
 
             this.graphNeedsUpdate = true;
         }

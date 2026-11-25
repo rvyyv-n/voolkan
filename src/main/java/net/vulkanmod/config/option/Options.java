@@ -5,7 +5,8 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block, Presets row, World Resolution, background/battery FPS caps, block entity distance, and macOS fullscreen/swapchain options.
+ * read-only Compatibility block, Presets row, World Resolution, background/battery FPS caps, block entity distance,
+ * chunk upload budget, particle limit, adaptive VSync, and macOS fullscreen/swapchain options.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -13,6 +14,8 @@ import dev.voolkan.compat.CompatInfo;
 import dev.voolkan.gui.InfoOption;
 import dev.voolkan.gui.Preset;
 import dev.voolkan.power.PowerSources;
+import dev.voolkan.render.ChunkUploadBudget;
+import dev.voolkan.render.ParticleCap;
 import dev.voolkan.render.WorldScale;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
@@ -28,6 +31,7 @@ import net.vulkanmod.render.chunk.build.light.LightMode;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.device.DeviceManager;
+import net.vulkanmod.vulkan.framebuffer.SwapChain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -209,12 +213,32 @@ public abstract class Options {
                     minecraft.getFramerateLimitTracker().setFramerateLimit(value);
                 },
                 () -> mcOptions.framerateLimit().get()));
-        displayOptions.add(new SwitchOption(Component.translatable("options.vsync"),
+        var vsyncOption = new SwitchOption(Component.translatable("options.vsync"),
                 value -> {
                     mcOptions.enableVsync().set(value);
                     window.updateVsync(value);
                 },
-                () -> mcOptions.enableVsync().get()));
+                () -> mcOptions.enableVsync().get());
+        displayOptions.add(vsyncOption);
+        if (SwapChain.isAdaptiveVsyncSupported()) {
+            var adaptiveVsyncOption = new SwitchOption(Component.translatable("voolkan.options.adaptiveVsync"),
+                    value -> {
+                        if (config.adaptiveVsync != value) {
+                            config.adaptiveVsync = value;
+                            SwapChain swapChain = Renderer.getInstance() != null
+                                    ? Renderer.getInstance().getSwapChain()
+                                    : null;
+                            if (mcOptions.enableVsync().get() || (swapChain != null && swapChain.isVsync())) {
+                                Renderer.scheduleSwapChainUpdate();
+                            }
+                        }
+                    },
+                    () -> config.adaptiveVsync)
+                    .setTooltip(v -> Component.translatable("voolkan.options.adaptiveVsync.tooltip"))
+                    .setActivationFn(() -> Boolean.TRUE.equals(vsyncOption.getNewValue()));
+            vsyncOption.setOnChange(adaptiveVsyncOption::updateActiveState);
+            displayOptions.add(adaptiveVsyncOption);
+        }
         displayOptions.add(new CyclingOption<>(Component.translatable("options.inactivityFpsLimit"),
                             InactivityFpsLimit.values(),
                             value -> mcOptions.inactivityFpsLimit().set(value),
@@ -370,6 +394,15 @@ public abstract class Options {
                                             () -> mcOptions.particles().get())
                                 .setImpact(PerformanceImpact.MEDIUM)
                                 .setTranslator(ParticleStatus::caption),
+                        new CyclingOption<>(Component.translatable("voolkan.options.maxParticles"),
+                                            ParticleCap.OPTION_VALUES,
+                                            value -> config.maxParticles = value,
+                                            () -> ParticleCap.normalizeOptionValue(config.maxParticles))
+                                .setTranslator(v -> v == ParticleCap.UNLIMITED
+                                        ? Component.translatable("voolkan.options.maxParticles.unlimited")
+                                        : Component.literal(String.valueOf(v)))
+                                .setTooltip(v -> Component.translatable("voolkan.options.maxParticles.tooltip"))
+                                .setImpact(PerformanceImpact.MEDIUM),
                         new CyclingOption<>(Component.translatable("options.renderClouds"),
                                             CloudStatus.values(),
                                             value -> mcOptions.cloudStatus().set(value),
@@ -505,7 +538,22 @@ public abstract class Options {
                                 () -> config.indirectDraw)
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.indirectDraw.tooltip"))
                                 .setActivationFn(() -> DeviceManager.device.isDrawIndirectSupported())
-                                .setImpact(PerformanceImpact.HIGH)
+                                .setImpact(PerformanceImpact.HIGH),
+                        new RangeOption(Component.translatable("voolkan.options.chunkUploadBudget"),
+                                ChunkUploadBudget.AUTO, ChunkUploadBudget.UNLIMITED, ChunkUploadBudget.STEP,
+                                value -> {
+                                    if (value == ChunkUploadBudget.AUTO) {
+                                        return Component.translatable("voolkan.options.chunkUploadBudget.auto");
+                                    }
+                                    if (value >= ChunkUploadBudget.UNLIMITED) {
+                                        return Component.translatable("voolkan.options.chunkUploadBudget.unlimited");
+                                    }
+                                    return Component.translatable("voolkan.options.chunkUploadBudget.value", value);
+                                },
+                                value -> config.chunkUploadBudget = value,
+                                () -> ChunkUploadBudget.normalizeOptionValue(config.chunkUploadBudget))
+                                .setTooltip(v -> Component.translatable("voolkan.options.chunkUploadBudget.tooltip"))
+                                .setImpact(PerformanceImpact.MEDIUM)
                 })
         };
     }

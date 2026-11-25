@@ -51,6 +51,7 @@ public enum Preset {
         put("options.textureFiltering", TextureFilteringMethod.NONE, TextureFilteringMethod.NONE, TextureFilteringMethod.ANISOTROPIC, TextureFilteringMethod.NONE);
         put("options.maxAnisotropy", 1, 1, 2, 1);
         put("options.particles", ParticleStatus.MINIMAL, ParticleStatus.DECREASED, ParticleStatus.ALL, ParticleStatus.DECREASED);
+        put("voolkan.options.maxParticles", 500, 0, 0, 500);
         put("options.renderClouds", CloudStatus.OFF, CloudStatus.FAST, CloudStatus.FANCY, CloudStatus.OFF);
         put("options.renderCloudsDistance", 2, 32, 64, null);
         put("options.cutoutLeaves", false, true, true, true);

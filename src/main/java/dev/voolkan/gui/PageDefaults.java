@@ -45,6 +45,7 @@ public final class PageDefaults {
         DEFAULTS.put("voolkan.options.worldScale", 100);
         DEFAULTS.put("options.framerateLimit", 120);
         DEFAULTS.put("options.vsync", true);
+        DEFAULTS.put("voolkan.options.adaptiveVsync", false);
         DEFAULTS.put("options.inactivityFpsLimit", InactivityFpsLimit.AFK);
         DEFAULTS.put("voolkan.options.backgroundFps", 30);
         DEFAULTS.put("voolkan.options.batteryFps", 0);
@@ -61,6 +62,7 @@ public final class PageDefaults {
         DEFAULTS.put("options.textureFiltering", TextureFilteringMethod.NONE);
         DEFAULTS.put("options.maxAnisotropy", 2);
         DEFAULTS.put("options.particles", ParticleStatus.ALL);
+        DEFAULTS.put("voolkan.options.maxParticles", 0);
         DEFAULTS.put("options.renderClouds", CloudStatus.FANCY);
         DEFAULTS.put("options.renderCloudsDistance", 128);
         DEFAULTS.put("options.cutoutLeaves", true);
@@ -80,6 +82,7 @@ public final class PageDefaults {
         DEFAULTS.put("vulkanmod.options.uniqueOpaqueLayer", !Platform.isMacOS());
         DEFAULTS.put("vulkanmod.options.backfaceCulling", true);
         DEFAULTS.put("vulkanmod.options.indirectDraw", !Platform.isMacOS());
+        DEFAULTS.put("voolkan.options.chunkUploadBudget", 0);
 
         // Other
         DEFAULTS.put("vulkanmod.options.builderThreads", 0);

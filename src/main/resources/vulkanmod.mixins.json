@@ -72,6 +72,8 @@
     "render.frapi.ModelBlockRendererMixin",
     "render.frapi.SubmitNodeCollectionMixin",
     "render.frapi.SubmitNodeStorageMixin",
+    "render.particle.ParticleAccessor",
+    "render.particle.ParticleEngineMixin",
     "render.particle.QuadParticleGroupM",
     "render.particle.QuadParticleRenderStateM",
     "render.shader.RenderPipelineM",

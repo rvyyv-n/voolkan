@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale, blockEntityDistance, macNativeFullscreen, and macReduceResolution options, and apply macOS fresh-config defaults.
+ * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale, blockEntityDistance, chunkUploadBudget, maxParticles, adaptiveVsync, macNativeFullscreen, and macReduceResolution options, and apply macOS fresh-config defaults.
  */
 
 import com.google.gson.Gson;
@@ -47,6 +47,12 @@ public class Config {
     public int worldScale = 100;
     /** Maximum render distance for block entities (chests, signs, banners) in blocks (16..128); 64 = vanilla default. */
     public int blockEntityDistance = 64;
+    /** Background chunk section upload budget per frame: 0 = Auto, 1..63 = sections/frame, 64 = Unlimited. */
+    public int chunkUploadBudget = 0;
+    /** Per-frame quad particle limit; 0 = Unlimited (vanilla behavior). */
+    public int maxParticles = 0;
+    /** Use VK_PRESENT_MODE_FIFO_RELAXED_KHR when VSync is on and the driver supports it. */
+    public boolean adaptiveVsync = false;
     /** Opt out of Windows fullscreen exclusive / independent flip via VK_EXT_full_screen_exclusive (for capture compatibility). */
     public boolean disallowFullscreenExclusive = false;
     /** Use native macOS fullscreen Spaces instead of borderless fullscreen (macOS only). */
@@ -113,6 +119,7 @@ public class Config {
             this.swapChainImages = 0;
             this.macNativeFullscreen = false;
             this.macReduceResolution = false;
+            this.adaptiveVsync = false;
             this.indirectDraw = false;
         }
     }

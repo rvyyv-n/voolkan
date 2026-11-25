@@ -4,7 +4,7 @@ package net.vulkanmod.vulkan.framebuffer;
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * configurable swapchain image count; BGRA swapchain format preferred over RGBA; log readable swapchain configuration via StartupLog;
- * macOS/MoltenVK present-mode and image-count clamps and MemoryStack fix in getExtent.
+ * macOS/MoltenVK present-mode and image-count clamps, Adaptive VSync (FIFO_RELAXED) support/selection, and MemoryStack fix in getExtent.
  */
 
 import dev.voolkan.compat.MacPerfOpts;
@@ -52,6 +52,8 @@ public class SwapChain extends Framebuffer {
         return Platform.isMacOS() || (DeviceManager.device != null && DeviceManager.device.isMoltenVK());
     }
 
+    private static volatile boolean adaptiveVsyncSupported = false;
+
     private final Long2ReferenceOpenHashMap<long[]> FBO_map = new Long2ReferenceOpenHashMap<>();
 
     private long swapChainId = VK_NULL_HANDLE;
@@ -60,6 +62,7 @@ public class SwapChain extends Framebuffer {
     private VkExtent2D extent2D;
     public boolean isBGRAformat;
     private boolean vsync = false;
+    private volatile int activePresentMode = VK_PRESENT_MODE_FIFO_KHR;
     private boolean hasImages = false;
     private boolean acquired = false;
 
@@ -128,6 +131,7 @@ public class SwapChain extends Framebuffer {
 
             VkSurfaceFormatKHR surfaceFormat = getFormat(surfaceProperties.formats);
             int presentMode = getPresentMode(surfaceProperties.presentModes);
+            this.activePresentMode = presentMode;
             VkExtent2D extent = getExtent(surfaceProperties.capabilities);
 
             if (extent.width() == 0 && extent.height() == 0) {
@@ -379,7 +383,19 @@ public class SwapChain extends Framebuffer {
     }
 
     private int getPresentMode(IntBuffer availablePresentModes) {
-        int requestedMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : defUncappedMode;
+        boolean hasFifoRelaxed = !isMacOrMoltenVK()
+                && containsPresentMode(availablePresentModes, VK_PRESENT_MODE_FIFO_RELAXED_KHR);
+        adaptiveVsyncSupported = hasFifoRelaxed;
+
+        int requestedMode;
+        if (vsync) {
+            boolean wantAdaptive = Initializer.CONFIG != null && Initializer.CONFIG.adaptiveVsync;
+            requestedMode = (wantAdaptive && hasFifoRelaxed)
+                    ? VK_PRESENT_MODE_FIFO_RELAXED_KHR
+                    : VK_PRESENT_MODE_FIFO_KHR;
+        } else {
+            requestedMode = defUncappedMode;
+        }
 
         if (isMacOrMoltenVK() && requestedMode == VK_PRESENT_MODE_MAILBOX_KHR) {
             requestedMode = VK_PRESENT_MODE_FIFO_KHR;
@@ -389,14 +405,24 @@ public class SwapChain extends Framebuffer {
         if (requestedMode == VK_PRESENT_MODE_FIFO_KHR)
             return VK_PRESENT_MODE_FIFO_KHR;
 
-        for (int i = 0; i < availablePresentModes.capacity(); i++) {
-            if (availablePresentModes.get(i) == requestedMode) {
-                return requestedMode;
-            }
+        if (containsPresentMode(availablePresentModes, requestedMode)) {
+            return requestedMode;
         }
 
         Initializer.LOGGER.warn("Requested mode not supported: " + getDisplayModeString(requestedMode) + ": using FIFO present mode");
         return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    private static boolean containsPresentMode(IntBuffer availablePresentModes, int targetMode) {
+        if (availablePresentModes == null) {
+            return false;
+        }
+        for (int i = availablePresentModes.position(); i < availablePresentModes.limit(); i++) {
+            if (availablePresentModes.get(i) == targetMode) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String getDisplayModeString(int requestedMode) {
@@ -438,11 +464,12 @@ public class SwapChain extends Framebuffer {
     private static int checkPresentMode(int... requestedModes) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             var a = DeviceManager.querySurfaceProperties(vkDevice.getPhysicalDevice(), stack).presentModes;
+            if (a == null) {
+                return VK_PRESENT_MODE_FIFO_KHR;
+            }
             for (int dMode : requestedModes) {
-                for (int i = 0; i < a.capacity(); i++) {
-                    if (a.get(i) == dMode) {
-                        return dMode;
-                    }
+                if (containsPresentMode(a, dMode)) {
+                    return dMode;
                 }
             }
             return VK_PRESENT_MODE_FIFO_KHR; // If None of the request modes exist/are supported by Driver
@@ -512,5 +539,13 @@ public class SwapChain extends Framebuffer {
 
     public int getImagesNum() {
         return this.swapChainImages.size();
+    }
+
+    public static boolean isAdaptiveVsyncSupported() {
+        return adaptiveVsyncSupported;
+    }
+
+    public int getActivePresentMode() {
+        return this.activePresentMode;
     }
 }

@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.task;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * propagate section compile generation through chunk build and sort tasks.
+ */
+
 import net.vulkanmod.render.chunk.RenderSection;
 import net.vulkanmod.render.chunk.build.RenderRegion;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
@@ -12,22 +18,24 @@ public abstract class ChunkTask {
 
     protected static TaskDispatcher taskDispatcher;
 
-    public static BuildTask createBuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority) {
-        return new BuildTask(renderSection, renderRegion, cameraPos, highPriority);
+    public static BuildTask createBuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority, int generation) {
+        return new BuildTask(renderSection, renderRegion, cameraPos, highPriority, generation);
     }
 
-    public static SortTransparencyTask createSortTask(RenderSection renderSection, Vector3d cameraPos) {
-        return new SortTransparencyTask(renderSection, cameraPos);
+    public static SortTransparencyTask createSortTask(RenderSection renderSection, Vector3d cameraPos, int generation, CompiledSection compiledSection) {
+        return new SortTransparencyTask(renderSection, cameraPos, generation, compiledSection.transparencyState);
     }
 
     protected final RenderSection section;
     protected final Vector3d cameraPos;
+    protected final int generation;
     protected AtomicBoolean cancelled = new AtomicBoolean(false);
     public boolean highPriority = false;
 
-    ChunkTask(RenderSection renderSection, Vector3d cameraPos) {
+    ChunkTask(RenderSection renderSection, Vector3d cameraPos, int generation) {
         this.section = renderSection;
         this.cameraPos = cameraPos;
+        this.generation = generation;
     }
 
     public abstract String name();
