@@ -1,5 +1,11 @@
 package net.vulkanmod.config;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * fix Platform.isWindows() to check Util.OS.WINDOWS instead of Util.OS.LINUX.
+ */
+
 import net.minecraft.util.Util;
 import org.apache.commons.lang3.SystemUtils;
 import org.lwjgl.glfw.GLFW;
@@ -73,7 +79,7 @@ public abstract class Platform {
     }
 
     public static boolean isWindows() {
-        return OS == Util.OS.LINUX;
+        return OS == Util.OS.WINDOWS;
     }
 
     public static boolean isLinux() {

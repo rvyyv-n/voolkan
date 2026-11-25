@@ -3,9 +3,10 @@ package net.vulkanmod.vulkan.device;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * detect dynamic rendering support and keep the extension list.
+ * detect dynamic rendering support and keep the extension list; query Vulkan 1.2 driver properties, VK_KHR_portability_subset capabilities, and Apple/MoltenVK/tile-GPU predicates.
  */
 
+import dev.voolkan.compat.PortabilityInfo;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
@@ -21,9 +22,11 @@ import static org.lwjgl.glfw.GLFW.GLFW_PLATFORM_WIN32;
 import static org.lwjgl.glfw.GLFW.glfwGetPlatform;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME;
+import static org.lwjgl.vulkan.KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME;
 import static org.lwjgl.vulkan.VK10.*;
 import static org.lwjgl.vulkan.VK11.vkEnumerateInstanceVersion;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2;
+import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceProperties2;
 
 public class Device {
     final VkPhysicalDevice physicalDevice;
@@ -35,6 +38,10 @@ public class Device {
     public final String driverVersion;
     public final String vkVersion;
 
+    private final int driverId;
+    private final String driverName;
+    private final String driverInfo;
+
     public final VkPhysicalDeviceFeatures2 availableFeatures;
     public final VkPhysicalDeviceVulkan11Features availableFeatures11;
 
@@ -43,6 +50,8 @@ public class Device {
 
     private boolean drawIndirectSupported;
     private boolean dynamicRenderingSupported;
+    private final boolean portabilitySubsetSupported;
+    private final PortabilityInfo portabilityInfo;
     private Set<String> extensionNames = Set.of();
 
     public Device(VkPhysicalDevice device) {
@@ -56,6 +65,36 @@ public class Device {
         this.deviceName = properties.deviceNameString();
         this.driverVersion = decodeDvrVersion(properties.driverVersion(), properties.vendorID());
         this.vkVersion = decDefVersion(properties.apiVersion());
+
+        this.extensionNames = queryExtensionNames();
+
+        int queriedDriverId = 0;
+        String queriedDriverName = "";
+        String queriedDriverInfo = "";
+        int apiVersion = properties.apiVersion();
+        boolean driverPropertiesSupported = VK_VERSION_MAJOR(apiVersion) > 1
+                || (VK_VERSION_MAJOR(apiVersion) == 1 && VK_VERSION_MINOR(apiVersion) >= 2)
+                || this.extensionNames.contains(KHRDriverProperties.VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
+        if (driverPropertiesSupported) {
+            try (MemoryStack stack = stackPush()) {
+                VkPhysicalDeviceDriverProperties driverProps = VkPhysicalDeviceDriverProperties.calloc(stack);
+                driverProps.sType$Default();
+
+                VkPhysicalDeviceProperties2 props2 = VkPhysicalDeviceProperties2.calloc(stack);
+                props2.sType$Default();
+                props2.pNext(driverProps);
+
+                vkGetPhysicalDeviceProperties2(this.physicalDevice, props2);
+                queriedDriverId = driverProps.driverID();
+                String name = driverProps.driverNameString();
+                String info = driverProps.driverInfoString();
+                queriedDriverName = name != null ? name : "";
+                queriedDriverInfo = info != null ? info : "";
+            }
+        }
+        this.driverId = queriedDriverId;
+        this.driverName = queriedDriverName;
+        this.driverInfo = queriedDriverInfo;
 
         this.availableFeatures = VkPhysicalDeviceFeatures2.calloc();
         this.availableFeatures.sType$Default();
@@ -76,8 +115,6 @@ public class Device {
         if (this.availableFeatures.features().multiDrawIndirect() && this.availableFeatures11.shaderDrawParameters())
             this.drawIndirectSupported = true;
 
-        this.extensionNames = queryExtensionNames();
-
         // The feature struct may only be chained when the extension is exposed.
         if (this.extensionNames.contains(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)) {
             try (MemoryStack stack = stackPush()) {
@@ -92,17 +129,57 @@ public class Device {
                 this.dynamicRenderingSupported = dynamicRendering.dynamicRendering();
             }
         }
+
+        this.portabilitySubsetSupported = this.extensionNames.contains(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+        if (this.portabilitySubsetSupported) {
+            try (MemoryStack stack = stackPush()) {
+                VkPhysicalDevicePortabilitySubsetFeaturesKHR portabilityFeatures =
+                        VkPhysicalDevicePortabilitySubsetFeaturesKHR.calloc(stack);
+                portabilityFeatures.sType$Default();
+
+                VkPhysicalDeviceFeatures2 features2 = VkPhysicalDeviceFeatures2.calloc(stack);
+                features2.sType$Default();
+                features2.pNext(portabilityFeatures);
+                vkGetPhysicalDeviceFeatures2(this.physicalDevice, features2);
+
+                VkPhysicalDevicePortabilitySubsetPropertiesKHR portabilityProps =
+                        VkPhysicalDevicePortabilitySubsetPropertiesKHR.calloc(stack);
+                portabilityProps.sType$Default();
+
+                VkPhysicalDeviceProperties2 props2 = VkPhysicalDeviceProperties2.calloc(stack);
+                props2.sType$Default();
+                props2.pNext(portabilityProps);
+                vkGetPhysicalDeviceProperties2(this.physicalDevice, props2);
+
+                this.portabilityInfo = PortabilityInfo.from(portabilityFeatures, portabilityProps);
+            }
+        } else {
+            this.portabilityInfo = null;
+        }
     }
 
     private Set<String> queryExtensionNames() {
         try (MemoryStack stack = stackPush()) {
             IntBuffer extensionCount = stack.ints(0);
-            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
+            int res = vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
+            if (res < VK_SUCCESS) {
+                return Set.of();
+            }
 
-            VkExtensionProperties.Buffer available = VkExtensionProperties.malloc(extensionCount.get(0), stack);
-            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, available);
+            int count = extensionCount.get(0);
+            if (count <= 0) {
+                return Set.of();
+            }
 
-            return available.stream().map(VkExtensionProperties::extensionNameString).collect(toSet());
+            try (VkExtensionProperties.Buffer available = VkExtensionProperties.malloc(count)) {
+                res = vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, available);
+                if (res < VK_SUCCESS) {
+                    return Set.of();
+                }
+                int written = Math.min(Math.max(extensionCount.get(0), 0), count);
+                available.limit(written);
+                return available.stream().map(VkExtensionProperties::extensionNameString).collect(toSet());
+            }
         }
     }
 
@@ -173,25 +250,9 @@ public class Device {
     }
 
     public Set<String> getUnsupportedExtensions(Set<String> requiredExtensions) {
-        try (MemoryStack stack = stackPush()) {
-
-            IntBuffer extensionCount = stack.ints(0);
-
-            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, null);
-
-            VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0), stack);
-
-            vkEnumerateDeviceExtensionProperties(physicalDevice, (String) null, extensionCount, availableExtensions);
-
-            Set<String> extensions = availableExtensions.stream()
-                    .map(VkExtensionProperties::extensionNameString)
-                    .collect(toSet());
-
-            Set<String> unsupportedExtensions = new HashSet<>(requiredExtensions);
-            unsupportedExtensions.removeAll(extensions);
-
-            return unsupportedExtensions;
-        }
+        Set<String> unsupportedExtensions = new HashSet<>(requiredExtensions);
+        unsupportedExtensions.removeAll(this.extensionNames);
+        return unsupportedExtensions;
     }
 
     public boolean isDrawIndirectSupported() {
@@ -210,5 +271,46 @@ public class Device {
 
     public boolean isIntel() {
         return vendorId == 0x8086;
+    }
+
+    public boolean isApple() {
+        return vendorId == 0x106B;
+    }
+
+    public boolean isMoltenVK() {
+        return driverId == VK12.VK_DRIVER_ID_MOLTENVK || driverName.contains("MoltenVK");
+    }
+
+    public boolean isTileGpu() {
+        return isApple() || vendorId == 0x13B5 || vendorId == 0x5143 || vendorId == 0x1010
+                || driverName.contains("Honeykrisp");
+    }
+
+    public boolean isPortabilitySubsetSupported() {
+        return portabilitySubsetSupported;
+    }
+
+    public PortabilityInfo getPortabilityInfo() {
+        return portabilityInfo;
+    }
+
+    public boolean hasLogicOp() {
+        return availableFeatures.features().logicOp();
+    }
+
+    public int getDriverId() {
+        return driverId;
+    }
+
+    public String getDriverName() {
+        return driverName;
+    }
+
+    public String getDriverInfo() {
+        return driverInfo;
+    }
+
+    public int getDeviceType() {
+        return properties.deviceType();
     }
 }

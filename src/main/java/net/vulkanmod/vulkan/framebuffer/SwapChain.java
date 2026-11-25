@@ -3,9 +3,10 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * configurable swapchain image count; BGRA swapchain format preferred over RGBA.
+ * configurable swapchain image count; BGRA swapchain format preferred over RGBA; log readable swapchain configuration via StartupLog.
  */
 
+import dev.voolkan.compat.StartupLog;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.util.MathUtil;
@@ -161,7 +162,17 @@ public class SwapChain extends Framebuffer {
 
             vkGetSwapchainImagesKHR(device, this.swapChainId, imageCount, pSwapchainImages);
 
-            Initializer.LOGGER.info("Swapchain: {} images (requested {}, surface min {}), present mode {}, format {}", imageCount.get(0), requestedImages, surfaceProperties.capabilities.minImageCount(), presentMode, this.format);
+            StartupLog.logSwapChain(
+                    this.format,
+                    surfaceFormat.colorSpace(),
+                    extent.width(),
+                    extent.height(),
+                    imageCount.get(0),
+                    requestedImages,
+                    surfaceProperties.capabilities.minImageCount(),
+                    surfaceProperties.capabilities.maxImageCount(),
+                    presentMode,
+                    surfaceProperties.presentModes);
 
             this.swapChainImages = new ArrayList<>(imageCount.get(0));
             this.hasImages = true;

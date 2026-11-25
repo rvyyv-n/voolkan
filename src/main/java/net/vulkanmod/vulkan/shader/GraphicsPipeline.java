@@ -3,7 +3,7 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes; release compiled SPIR-V buffers after creating shader modules; record observed states and support pipeline warm-up.
+ * legacy path: pipelines keyed by render pass compatibility, main render pass fallback, colour-less passes; release compiled SPIR-V buffers after creating shader modules; record observed states and support pipeline warm-up; guard logicOp with an alpha-blend fallback when the device lacks logicOp support.
  */
 
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -209,10 +209,23 @@ public class GraphicsPipeline extends Pipeline {
             // A depth-only pass has no colour attachment, so the blend state must have no attachments either
             final boolean hasColorAttachment = legacyPass == null || legacyPass.getColorFormat() != 0;
 
+            final boolean requestedLogicOp = PipelineState.LogicOpState.enable(state.logicOp_i);
+            final boolean logicOpSupported = DeviceManager.device != null && DeviceManager.device.hasLogicOp();
+            final boolean useLogicOpFallback = requestedLogicOp && !logicOpSupported;
+
             VkPipelineColorBlendAttachmentState.Buffer colorBlendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack);
             colorBlendAttachment.colorWriteMask(state.colorMask_i);
 
-            if (PipelineState.BlendState.enable(state.blendState_i)) {
+            if (useLogicOpFallback) {
+                colorBlendAttachment.blendEnable(true);
+                colorBlendAttachment.srcColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR);
+                colorBlendAttachment.dstColorBlendFactor(VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR);
+                colorBlendAttachment.colorBlendOp(VK_BLEND_OP_ADD);
+                colorBlendAttachment.srcAlphaBlendFactor(VK_BLEND_FACTOR_ZERO);
+                colorBlendAttachment.dstAlphaBlendFactor(VK_BLEND_FACTOR_ONE);
+                colorBlendAttachment.alphaBlendOp(VK_BLEND_OP_ADD);
+            }
+            else if (PipelineState.BlendState.enable(state.blendState_i)) {
                 colorBlendAttachment.blendEnable(true);
                 colorBlendAttachment.srcColorBlendFactor(PipelineState.BlendState.getSrcRgbFactor(state.blendState_i));
                 colorBlendAttachment.dstColorBlendFactor(PipelineState.BlendState.getDstRgbFactor(state.blendState_i));
@@ -227,8 +240,14 @@ public class GraphicsPipeline extends Pipeline {
 
             VkPipelineColorBlendStateCreateInfo colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack);
             colorBlending.sType(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
-            colorBlending.logicOpEnable(PipelineState.LogicOpState.enable(state.logicOp_i));
-            colorBlending.logicOp(PipelineState.LogicOpState.decodeFun(state.logicOp_i));
+            if (useLogicOpFallback) {
+                colorBlending.logicOpEnable(false);
+                colorBlending.logicOp(VK_LOGIC_OP_COPY);
+            }
+            else {
+                colorBlending.logicOpEnable(requestedLogicOp);
+                colorBlending.logicOp(PipelineState.LogicOpState.decodeFun(state.logicOp_i));
+            }
             if (hasColorAttachment) {
                 colorBlending.pAttachments(colorBlendAttachment);
             }

@@ -3,9 +3,10 @@ package net.vulkanmod.vulkan.device;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * choose the render path after device pick; enable dynamic rendering and VK_EXT_memory_budget only when used/supported; log capabilities (including the selectable devices) and report device setup failures readably.
+ * choose the render path after device pick; enable dynamic rendering, VK_EXT_memory_budget and VK_KHR_portability_subset only when used/supported; prefer D32_SFLOAT depth format on Apple/MoltenVK/portability GPUs; log capabilities (including the selectable devices) and report device setup failures readably.
  */
 
+import dev.voolkan.compat.PortabilityInfo;
 import dev.voolkan.compat.RenderPath;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.Initializer;
@@ -49,6 +50,7 @@ public abstract class DeviceManager {
     public static SurfaceProperties surfaceProperties;
     public static boolean fullScreenExclusiveControl = false;
     public static boolean memoryBudgetSupported = false;
+    public static boolean portabilitySubsetEnabled = false;
 
     static GraphicsQueue graphicsQueue;
     static PresentQueue presentQueue;
@@ -113,7 +115,7 @@ public abstract class DeviceManager {
 
         List<Device> devices = new ObjectArrayList<>();
         for (Device device : availableDevices) {
-            if (isDeviceSuitable(device.physicalDevice)) {
+            if (isDeviceSuitable(device)) {
                 devices.add(device);
             }
         }
@@ -227,10 +229,11 @@ public abstract class DeviceManager {
             createInfo.sType(VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO);
             createInfo.pQueueCreateInfos(queueCreateInfos);
             createInfo.pEnabledFeatures(deviceFeatures.features());
-            createInfo.pNext(deviceVulkan11Features);
+            createInfo.pNext(deviceVulkan11Features.address());
 
+            VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR = null;
             if (Vulkan.DYNAMIC_RENDERING) {
-                VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeaturesKHR = VkPhysicalDeviceDynamicRenderingFeaturesKHR.calloc(stack);
+                dynamicRenderingFeaturesKHR = VkPhysicalDeviceDynamicRenderingFeaturesKHR.calloc(stack);
                 dynamicRenderingFeaturesKHR.sType$Default();
                 dynamicRenderingFeaturesKHR.dynamicRendering(true);
 
@@ -249,14 +252,39 @@ public abstract class DeviceManager {
 
             fullScreenExclusiveControl = false;
             memoryBudgetSupported = false;
+            portabilitySubsetEnabled = false;
             Set<String> enabledExtensions = new HashSet<>(Vulkan.REQUIRED_EXTENSION);
             if (Vulkan.DYNAMIC_RENDERING) {
                 enabledExtensions.add(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
             }
 
-            Set<String> availableExtensions = getAvailableExtension(stack, physicalDevice).stream()
-                    .map(VkExtensionProperties::extensionNameString)
-                    .collect(toSet());
+            Set<String> availableExtensions = device.getExtensionNames();
+
+            if (device.isPortabilitySubsetSupported()
+                    && availableExtensions.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
+                enabledExtensions.add(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+                portabilitySubsetEnabled = true;
+
+                PortabilityInfo portability = device.getPortabilityInfo();
+                if (portability != null) {
+                    VkPhysicalDevicePortabilitySubsetFeaturesKHR portabilityFeatures =
+                            VkPhysicalDevicePortabilitySubsetFeaturesKHR.calloc(stack);
+                    portabilityFeatures.sType$Default();
+                    portabilityFeatures.constantAlphaColorBlendFactors(portability.constantAlphaColorBlendFactors());
+                    portabilityFeatures.imageViewFormatReinterpretation(portability.imageViewFormatReinterpretation());
+                    portabilityFeatures.imageViewFormatSwizzle(portability.imageViewFormatSwizzle());
+                    portabilityFeatures.mutableComparisonSamplers(portability.mutableComparisonSamplers());
+                    portabilityFeatures.samplerMipLodBias(portability.samplerMipLodBias());
+                    portabilityFeatures.triangleFans(portability.triangleFans());
+                    portabilityFeatures.vertexAttributeAccessBeyondStride(portability.vertexAttributeAccessBeyondStride());
+
+                    if (dynamicRenderingFeaturesKHR != null) {
+                        dynamicRenderingFeaturesKHR.pNext(portabilityFeatures.address());
+                    } else {
+                        deviceVulkan11Features.pNext(portabilityFeatures.address());
+                    }
+                }
+            }
 
             if (Vulkan.surfaceCapabilities2Supported
                     && Vulkan.shouldDisallowFullscreenExclusive()
@@ -307,44 +335,46 @@ public abstract class DeviceManager {
         return glfwExtensions;
     }
 
-    private static boolean isDeviceSuitable(VkPhysicalDevice device) {
+    private static boolean isDeviceSuitable(Device device) {
         try (MemoryStack stack = stackPush()) {
-            Queue.QueueFamilyIndices indices = findQueueFamilies(device);
+            Queue.QueueFamilyIndices indices = findQueueFamilies(device.physicalDevice);
 
-            VkExtensionProperties.Buffer availableExtensions = getAvailableExtension(stack, device);
-            boolean extensionsSupported = availableExtensions.stream()
-                    .map(VkExtensionProperties::extensionNameString)
-                    .collect(toSet())
-                    .containsAll(Vulkan.REQUIRED_EXTENSION);
+            boolean extensionsSupported = device.getExtensionNames().containsAll(Vulkan.REQUIRED_EXTENSION);
 
             boolean swapChainAdequate = false;
 
             if (extensionsSupported) {
-                SurfaceProperties surfaceProperties = querySurfaceProperties(device, stack);
+                SurfaceProperties surfaceProperties = querySurfaceProperties(device.physicalDevice, stack);
                 swapChainAdequate = surfaceProperties.formats.hasRemaining() && surfaceProperties.presentModes.hasRemaining();
             }
-
-            VkPhysicalDeviceFeatures supportedFeatures = VkPhysicalDeviceFeatures.malloc(stack);
-            vkGetPhysicalDeviceFeatures(device, supportedFeatures);
-            boolean anisotropicFilterSupported = supportedFeatures.samplerAnisotropy();
 
             return indices.isSuitable() && extensionsSupported && swapChainAdequate;
         }
     }
 
-    private static VkExtensionProperties.Buffer getAvailableExtension(MemoryStack stack, VkPhysicalDevice device) {
-        IntBuffer extensionCount = stack.ints(0);
-        vkEnumerateDeviceExtensionProperties(device, (String) null, extensionCount, null);
-
-        VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(extensionCount.get(0), stack);
-        vkEnumerateDeviceExtensionProperties(device, (String) null, extensionCount, availableExtensions);
-
-        return availableExtensions;
-    }
-
     // Use the optimal most performant depth format for the specific GPU
-    // Nvidia performs best with 24 bit depth, while AMD is most performant with 32-bit float
+    // Nvidia performs best with 24 bit depth, while AMD and Apple/MoltenVK perform best with 32-bit float
     public static int findDepthFormat(boolean use24BitsDepthFormat) {
+        if (device != null && (device.isApple() || device.isMoltenVK() || device.isPortabilitySubsetSupported())) {
+            int[] formats = new int[]{
+                    VK_FORMAT_D32_SFLOAT,
+                    VK_FORMAT_D32_SFLOAT_S8_UINT,
+                    VK_FORMAT_D24_UNORM_S8_UINT,
+                    VK_FORMAT_X8_D24_UNORM_PACK32
+            };
+            int depthAndSampled = findSupportedFormatOrUndefined(
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT,
+                    formats);
+            if (depthAndSampled != VK_FORMAT_UNDEFINED) {
+                return depthAndSampled;
+            }
+            return findSupportedFormat(
+                    VK_IMAGE_TILING_OPTIMAL,
+                    VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                    formats);
+        }
+
         int[] formats = use24BitsDepthFormat ? new int[]
                 {VK_FORMAT_D24_UNORM_S8_UINT, VK_FORMAT_X8_D24_UNORM_PACK32, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT}
                 : new int[]{VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT};
@@ -356,6 +386,14 @@ public abstract class DeviceManager {
     }
 
     private static int findSupportedFormat(int tiling, int features, int... formatCandidates) {
+        int format = findSupportedFormatOrUndefined(tiling, features, formatCandidates);
+        if (format != VK_FORMAT_UNDEFINED) {
+            return format;
+        }
+        throw new RuntimeException("Failed to find supported format");
+    }
+
+    private static int findSupportedFormatOrUndefined(int tiling, int features, int... formatCandidates) {
         try (MemoryStack stack = stackPush()) {
 
             VkFormatProperties props = VkFormatProperties.calloc(stack);
@@ -373,7 +411,7 @@ public abstract class DeviceManager {
             }
         }
 
-        throw new RuntimeException("Failed to find supported format");
+        return VK_FORMAT_UNDEFINED;
     }
 
     public static String getAvailableDevicesInfo() {

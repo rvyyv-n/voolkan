@@ -299,12 +299,7 @@ public final class PipelineWarmup {
     }
 
     private static boolean isStateSupportedByDevice(PipelineState state) {
-        if (PipelineState.LogicOpState.enable(state.getLogicOpStateValue())) {
-            if (DeviceManager.device == null || !DeviceManager.device.availableFeatures.features().logicOp()) {
-                return false;
-            }
-        }
-
+        // Logic-op states are allowed on all devices: GraphicsPipeline falls back to alpha blending when logicOp is unsupported.
         int polygonMode = PipelineState.AssemblyRasterState.decodePolygonMode(state.getAssemblyRasterStateValue());
         if (polygonMode != VK_POLYGON_MODE_FILL) {
             // Logical device creation does not enable fillModeNonSolid; skip non-fill modes
