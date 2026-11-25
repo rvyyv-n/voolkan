@@ -49,6 +49,7 @@ public class DefaultMainPass implements MainPass {
     private boolean mainTargetStartedThisFrame = false;
     private boolean pendingInitialClearColor = false;
     private boolean pendingInitialClearDepth = false;
+    private boolean mainDepthCleanAtOne = false;
 
     private GpuTexture[] colorAttachmentTextures;
     private GpuTextureView[] colorAttachmentTextureViews;
@@ -76,6 +77,7 @@ public class DefaultMainPass implements MainPass {
         this.mainTargetStartedThisFrame = false;
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
+        this.mainDepthCleanAtOne = false;
 
         Framebuffer framebuffer;
         if (Renderer.getInstance().getSwapChain().hasImages()) {
@@ -155,6 +157,9 @@ public class DefaultMainPass implements MainPass {
     @Override
     public void begin(VkCommandBuffer commandBuffer, MemoryStack stack) {
         if (this.worldScale.isActive()) {
+            if (MacPerfOpts.tbdrPassOpts() && !this.worldScale.isPassStartedThisFrame()) {
+                return;
+            }
             // Re-entering mid-world (e.g. Renderer.flushCmds): resume the scaled world pass preserving its contents
             Framebuffer worldFramebuffer = this.worldScale.getFramebuffer();
             Renderer.getInstance().beginRenderPass(this.worldScale.getAuxPass(), worldFramebuffer);
@@ -213,6 +218,7 @@ public class DefaultMainPass implements MainPass {
         this.mainTargetStartedThisFrame = false;
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
+        this.mainDepthCleanAtOne = false;
 
         if (this.mainFramebuffer == Renderer.getInstance().getSwapChain()) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -260,6 +266,7 @@ public class DefaultMainPass implements MainPass {
         this.mainTargetStartedThisFrame = false;
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
+        this.mainDepthCleanAtOne = false;
     }
 
     @Override
@@ -276,8 +283,13 @@ public class DefaultMainPass implements MainPass {
         RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
 
         if (this.worldScale.isActive()) {
-            if (boundRenderPass == this.worldScale.getClearPass() || boundRenderPass == this.worldScale.getAuxPass())
+            if (this.worldScale.isBoundPass(boundRenderPass))
                 return;
+
+            if (MacPerfOpts.tbdrPassOpts() && !this.worldScale.isPassStartedThisFrame()) {
+                this.worldScale.beginPassOnDemand(false, false);
+                return;
+            }
 
             Renderer.getInstance().endRenderPass(commandBuffer);
             Renderer.getInstance().beginRenderPass(this.worldScale.getAuxPass(), this.worldScale.getFramebuffer());
@@ -302,6 +314,9 @@ public class DefaultMainPass implements MainPass {
     @Override
     public boolean rebindMainTarget(boolean clearColor, boolean clearDepth) {
         if (this.worldScale.isActive()) {
+            if (MacPerfOpts.tbdrPassOpts() && !this.worldScale.isPassStartedThisFrame()) {
+                return this.worldScale.beginPassOnDemand(clearColor, clearDepth);
+            }
             rebindMainTarget();
             return false;
         }
@@ -364,21 +379,44 @@ public class DefaultMainPass implements MainPass {
         this.pendingInitialClearDepth = false;
 
         if (TileGpuOpts.isEnabled()) {
-            // Keep depth STORE_OP_STORE (mainRenderPass) because GuiRenderer.prepare() opens offscreen
-            // PiP/item-atlas FBO passes after GameRenderer's pre-GUI clearDepthTexture, then resumes
-            // swapchain drawing via auxRenderPass (LOAD_OP_LOAD).
-            Renderer.getInstance().beginRenderPass(this.mainRenderPass, this.mainFramebuffer);
+            // Keep depth STORE_OP_STORE because GuiRenderer.prepare() may open offscreen PiP/item-atlas
+            // passes before GuiRenderer.draw() resumes swapchain rendering via auxRenderPass (LOAD_OP_LOAD).
+            // On macOS TBDR, fold the upcoming pre-GUI clearDepth(1.0) into mainClearDepthPass (LOAD_OP_CLEAR)
+            // so TRACY_BLIT (depthWrite=false) leaves depth pristine at 1.0 and skips vkCmdClearAttachments.
+            RenderPass pass;
+            if (MacPerfOpts.tbdrPassOpts() && this.mainClearDepthPass != null) {
+                VRenderSystem.clearDepth(1.0);
+                pass = this.mainClearDepthPass;
+            } else {
+                pass = this.mainRenderPass;
+            }
+            Renderer.getInstance().beginRenderPass(pass, this.mainFramebuffer);
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 Renderer.setViewport(0, 0, this.mainFramebuffer.getWidth(), this.mainFramebuffer.getHeight(), stack);
             }
             Renderer.resetScissor();
             this.mainTargetStartedThisFrame = true;
+            this.mainDepthCleanAtOne = (pass == this.mainClearDepthPass);
             return;
         }
 
         VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
         Renderer.getInstance().endRenderPass(commandBuffer);
         Renderer.getInstance().beginRenderPass(this.mainRenderPass, this.mainFramebuffer);
+    }
+
+    @Override
+    public boolean consumeCleanDepthAtOne() {
+        boolean clean = this.mainDepthCleanAtOne
+                && !this.worldScale.isActive()
+                && isMainRenderPass(Renderer.getInstance().getBoundRenderPass());
+        this.mainDepthCleanAtOne = false;
+        return clean;
+    }
+
+    @Override
+    public void invalidateCleanDepth() {
+        this.mainDepthCleanAtOne = false;
     }
 
     @Override
@@ -389,7 +427,7 @@ public class DefaultMainPass implements MainPass {
         RenderPass boundRenderPass = Renderer.getInstance().getBoundRenderPass();
         Framebuffer activeFramebuffer;
         if (this.worldScale.isActive()) {
-            if (boundRenderPass == this.worldScale.getClearPass() || boundRenderPass == this.worldScale.getAuxPass())
+            if (this.worldScale.isBoundPass(boundRenderPass))
                 Renderer.getInstance().endRenderPass(commandBuffer);
             activeFramebuffer = this.worldScale.getFramebuffer();
         }

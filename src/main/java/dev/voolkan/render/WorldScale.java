@@ -10,6 +10,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.voolkan.compat.MacPerfOpts;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -98,6 +99,7 @@ public final class WorldScale {
     private int depthFormat;
 
     private boolean active;
+    private boolean passStartedThisFrame;
     private int savedTargetWidth;
     private int savedTargetHeight;
     private GpuBuffer savedGlobalsUniform;
@@ -119,6 +121,14 @@ public final class WorldScale {
 
     public boolean isActive() {
         return this.active;
+    }
+
+    public boolean isPassStartedThisFrame() {
+        return this.passStartedThisFrame;
+    }
+
+    public boolean isBoundPass(RenderPass pass) {
+        return pass != null && (pass == this.clearPass || pass == this.auxPass);
     }
 
     public Framebuffer getFramebuffer() {
@@ -198,6 +208,14 @@ public final class WorldScale {
             VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
             renderer.endRenderPass(commandBuffer);
 
+            if (MacPerfOpts.tbdrPassOpts()) {
+                // Defer opening clearPass until the first world clear/draw so LightTexture's tick
+                // pass does not break the world pass and LevelRenderer's sky clear folds into LOAD_OP_CLEAR.
+                this.active = true;
+                this.passStartedThisFrame = false;
+                return true;
+            }
+
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 VulkanImage depth = this.framebuffer.getDepthAttachment();
                 if (depth.getCurrentLayout() == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
@@ -213,6 +231,7 @@ public final class WorldScale {
             VRenderSystem.setClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             VRenderSystem.clearDepth(1.0);
             this.active = true;
+            this.passStartedThisFrame = true;
             renderer.beginRenderPass(this.clearPass, this.framebuffer);
             return true;
         } catch (Throwable t) {
@@ -221,12 +240,55 @@ public final class WorldScale {
         }
     }
 
+    /**
+     * Opens the scaled world clear pass lazily on Apple TBDR GPUs, folding the caller's color/depth
+     * clear into {@code LOAD_OP_CLEAR} and filling any unrequested attachment with default black/1.0.
+     */
+    public boolean beginPassOnDemand(boolean clearColor, boolean clearDepth) {
+        if (!this.active || this.passStartedThisFrame) {
+            return false;
+        }
+
+        Renderer renderer = Renderer.getInstance();
+        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+        renderer.endRenderPass(commandBuffer);
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VulkanImage depth = this.framebuffer.getDepthAttachment();
+            if (depth.getCurrentLayout() == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+                emitDepthReuseBarrier(stack, commandBuffer, depth);
+            }
+
+            VulkanImage color = this.framebuffer.getColorAttachment();
+            if (color.getCurrentLayout() == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+                emitColorReuseBarrier(stack, commandBuffer, color);
+            }
+        }
+
+        if (!clearColor) {
+            VRenderSystem.setClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        }
+        if (!clearDepth) {
+            VRenderSystem.clearDepth(1.0);
+        }
+
+        this.passStartedThisFrame = true;
+        renderer.beginRenderPass(this.clearPass, this.framebuffer);
+        return clearColor || clearDepth;
+    }
+
     public void end(DefaultMainPass mainPass) {
         if (!this.active) {
             return;
         }
 
         if (!Renderer.isRecording()) {
+            restoreState();
+            return;
+        }
+
+        if (MacPerfOpts.tbdrPassOpts() && !this.passStartedThisFrame) {
+            // Nothing cleared or drew into the scaled world target this frame; skip upscaling stale contents.
             restoreState();
             return;
         }
@@ -382,6 +444,7 @@ public final class WorldScale {
 
     private void restoreState() {
         this.active = false;
+        this.passStartedThisFrame = false;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc != null) {

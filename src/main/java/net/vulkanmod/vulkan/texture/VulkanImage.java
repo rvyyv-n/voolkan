@@ -400,7 +400,9 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> {
                 srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                sourceStage = MacPerfOpts.tbdrPassOpts()
+                        ? (VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                        : VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             }
             default -> throw new RuntimeException("Unexpected value:" + oldLayout);
         }
@@ -416,7 +418,11 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                // Only small lightmap textures (16x16) are sampled in vertex shaders; fullscreen and
+                // atlas render targets are fragment-only, so omitting VERTEX_SHADER_BIT unblocks Apple TBDR tiling overlap.
+                destinationStage = (MacPerfOpts.tbdrPassOpts() && (this.width > 64 || this.height > 64))
+                        ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                        : (VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             }
             case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -424,7 +430,9 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                destinationStage = MacPerfOpts.tbdrPassOpts()
+                        ? (VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                        : VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
             }
             case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                 destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;

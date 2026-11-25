@@ -7,6 +7,7 @@ package net.vulkanmod.gl;
  * add tile-GPU LOAD_OP_CLEAR render-pass variants for offscreen framebuffers.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.vulkanmod.vulkan.Renderer;
@@ -194,17 +195,25 @@ public class VkGlFramebuffer {
             return;
         }
 
-        boundFramebuffer = map.remove(id);
+        VkGlFramebuffer glFramebuffer = map.remove(id);
 
-        if (boundFramebuffer == null)
+        if (glFramebuffer == null)
             throw new NullPointerException("bound framebuffer is null");
 
-        if (readFramebuffer == boundFramebuffer) {
+        if (readFramebuffer == glFramebuffer) {
             readFramebuffer = null;
         }
 
-        boundFramebuffer.cleanUp(true);
-        boundFramebuffer = null;
+        if (MacPerfOpts.tbdrPassOpts()
+                && glFramebuffer.framebuffer != null
+                && Renderer.getInstance().getBoundFramebuffer() == glFramebuffer.framebuffer) {
+            Renderer.getInstance().endRenderPass();
+        }
+
+        glFramebuffer.cleanUp(true);
+        if (boundFramebuffer == glFramebuffer) {
+            boundFramebuffer = null;
+        }
     }
 
     public static void framebufferTexture2D(int target, int attachment, int texTarget, int texture, int level) {

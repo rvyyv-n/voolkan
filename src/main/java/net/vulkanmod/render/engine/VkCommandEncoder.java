@@ -17,6 +17,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.GpuQuery;
 import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
@@ -169,7 +170,13 @@ public class VkCommandEncoder implements CommandEncoder {
 
                     GlStateManager._viewport(0, 0, colorAttachmentView.getWidth(0), colorAttachmentView.getHeight(0));
                     this.lastPipeline = null;
-                    return new VkRenderPass(this, depthTexture != null, false);
+                    // On Apple TBDR, keep GuiRenderer.prepare() offscreen FBOs (PiP, itemsAtlas) open across
+                    // consecutive RenderType draws so multi-batch UI preparation stays in one render pass
+                    // (closed deterministically at GuiRenderer.prepare() RETURN or on FBO switch/delete).
+                    boolean keepOffscreenOpen = MacPerfOpts.tbdrPassOpts()
+                            && depthTexture != null
+                            && RenderSystem.outputColorTextureOverride != null;
+                    return new VkRenderPass(this, depthTexture != null, keepOffscreenOpen);
                 }
 
                 fbo.bind();
@@ -358,6 +365,9 @@ public class VkCommandEncoder implements CommandEncoder {
         }
         else {
             if (TileGpuOpts.isEnabled() && Minecraft.getInstance().getMainRenderTarget().getDepthTexture() == depthAttachment) {
+                if (MacPerfOpts.tbdrPassOpts() && clearDepth == 1.0 && Renderer.getInstance().getMainPass().consumeCleanDepthAtOne()) {
+                    return;
+                }
                 VRenderSystem.clearDepth(clearDepth);
                 if (!Renderer.getInstance().getMainPass().rebindMainTarget(false, true)) {
                     Renderer.clearAttachments(0x100);
@@ -574,6 +584,7 @@ public class VkCommandEncoder implements CommandEncoder {
             } else if (gpuTexture.isClosed()) {
                 throw new IllegalStateException("Destination texture is closed");
             } else {
+                endOffscreenPassIfOpen();
                 VTextureSelector.setActiveTexture(0);
                 var glTexture = VkGlTexture.getTexture(((GlTexture) gpuTexture).glId());
 //                VTextureSelector.bindTexture(((VkGpuTexture) gpuTexture).getVulkanImage());
@@ -617,6 +628,7 @@ public class VkCommandEncoder implements CommandEncoder {
                 throw new UnsupportedOperationException("Depth or layer is out of range, must be >= 0 and < " + gpuTexture.getDepthOrLayers());
             }
             else {
+                endOffscreenPassIfOpen();
                 GlStateManager._bindTexture(((VkGpuTexture)gpuTexture).id);
 
                 GlStateManager._pixelStore(3314, width);
@@ -681,6 +693,7 @@ public class VkCommandEncoder implements CommandEncoder {
             } else if (gpuBuffer.isClosed()) {
                 throw new IllegalStateException("Destination buffer is closed");
             } else {
+                endOffscreenPassIfOpen();
                 // The copy must be submitted before the buffer is read: record it on a one-off command
                 // buffer, submit and wait, then run the callback (the cherry-picked version recorded the
                 // copy on a command buffer that was never submitted, so the read saw stale data)
@@ -1094,6 +1107,17 @@ public class VkCommandEncoder implements CommandEncoder {
         this.lastPipeline = null;
         this.lastProgram = null;
         this.inRenderPass = false;
+    }
+
+    private static void endOffscreenPassIfOpen() {
+        if (!MacPerfOpts.tbdrPassOpts() || !Renderer.isRecording()) {
+            return;
+        }
+        Renderer renderer = Renderer.getInstance();
+        Framebuffer bound = renderer.getBoundFramebuffer();
+        if (bound != null && bound != renderer.getMainPass().getMainFramebuffer()) {
+            renderer.endRenderPass();
+        }
     }
 
     protected VkGpuDevice getDevice() {

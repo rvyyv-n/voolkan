@@ -45,6 +45,17 @@ public interface MainPass {
     /** Marks a deferred initial colour+depth clear at frame start on tile GPUs without opening a pass. */
     default void deferInitialClear() {}
 
+    /**
+     * Returns {@code true} (and consumes the clean flag) when the active main pass already holds a
+     * pristine {@code 1.0} depth buffer from {@code LOAD_OP_CLEAR}, avoiding a redundant fullscreen depth clear.
+     */
+    default boolean consumeCleanDepthAtOne() {
+        return false;
+    }
+
+    /** Marks the main target's depth buffer as modified so subsequent depth clears cannot be elided. */
+    default void invalidateCleanDepth() {}
+
     default void bindAsTexture() {}
 
     default void beginWorld(DeltaTracker deltaTracker, Camera camera) {}

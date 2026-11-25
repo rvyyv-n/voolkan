@@ -745,6 +745,9 @@ public class Renderer {
         this.boundDescLayout = VK_NULL_HANDLE;
         this.boundDescSet = VK_NULL_HANDLE;
         this.boundDescOffsetCount = -1;
+        if (this.mainPass != null) {
+            this.mainPass.invalidateCleanDepth();
+        }
 
         VkGlFramebuffer.resetBoundFramebuffer();
     }
@@ -921,6 +924,9 @@ public class Renderer {
         }
 
         PipelineState currentState = PipelineState.getCurrentPipelineState(boundRenderPass);
+        if (this.mainPass != null && PipelineState.DepthState.depthMask(currentState.getDepthStateValue())) {
+            this.mainPass.invalidateCleanDepth();
+        }
         final long handle = pipeline.getHandle(currentState);
 
         if (handle == 0) {
@@ -1045,6 +1051,9 @@ public class Renderer {
     }
 
     public static void clearAttachments(VkCommandBuffer commandBuffer, int attachments, int x, int y, int width, int height) {
+        if (INSTANCE != null && INSTANCE.mainPass != null && (attachments & GL_DEPTH_BUFFER_BIT) != 0) {
+            INSTANCE.mainPass.invalidateCleanDepth();
+        }
         try (MemoryStack stack = stackPush()) {
             //ClearValues have to be different for each attachment to clear,
             //it seems it uses the same buffer: color and depth values override themselves

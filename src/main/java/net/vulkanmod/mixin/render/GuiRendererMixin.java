@@ -1,11 +1,18 @@
 package net.vulkanmod.mixin.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * end lazily-kept offscreen PiP/item-atlas render passes after GuiRenderer.prepare() on Apple TBDR GPUs.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.voolkan.compat.MacPerfOpts;
 import net.minecraft.client.gui.render.GuiRenderer;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.gui.render.state.BlitRenderState;
@@ -13,6 +20,8 @@ import net.minecraft.client.gui.render.state.GuiItemRenderState;
 import net.minecraft.client.gui.render.state.GuiRenderState;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.vulkanmod.render.engine.VkRenderPass;
+import net.vulkanmod.vulkan.Renderer;
+import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -33,6 +42,18 @@ public abstract class GuiRendererMixin {
 //    private boolean forceRender(TrackingItemStackRenderState instance) {
 //        return true;
 //    }
+
+    @Inject(method = "prepare", at = @At("RETURN"))
+    private void voolkan$endOffscreenAfterPrepare(CallbackInfo ci) {
+        if (!MacPerfOpts.tbdrPassOpts() || !Renderer.isRecording()) {
+            return;
+        }
+        Renderer renderer = Renderer.getInstance();
+        Framebuffer bound = renderer.getBoundFramebuffer();
+        if (bound != null && bound != renderer.getMainPass().getMainFramebuffer()) {
+            renderer.endRenderPass();
+        }
+    }
 
     @Inject(method = "submitBlitFromItemAtlas", at = @At("HEAD"), cancellable = true)
     private void submitBlitFromItemAtlas(GuiItemRenderState guiItemRenderState, float u, float v, int size, int atlasSize,
