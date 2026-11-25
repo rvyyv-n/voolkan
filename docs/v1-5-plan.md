@@ -121,13 +121,12 @@ Chosen on 2026-10-18 from `v1-5-candidates.md`: resolution scale (P1, Pass 11), 
 
 Testers report frame rates with vanilla's F3 screen and its frame-time chart; a voolkan overlay was not chosen.
 
-Unchanged and still parked: `low-vram` (only if the R7 shows memory problems), `settings-ui`, `presentmon` and `upstream-pr` (skipped for later).
+Unchanged and still parked: `settings-ui` (first in the parked queue, along with owner-specified QoL features); `presentmon` (skipped for later).
 
 ## Waits for the 26.x ports
 
-- `port-26-1` and `port-26-2` themselves.
+- `port-26-1` and `port-26-2` themselves (`port-26-2` is parked at the very end).
 - Anything that rewrites the chunk renderer or pipeline state (occlusion culling, translucent sorting, batched uploads). The 26.1 port rewrites most of those files, so doing them now means doing them twice.
-- `upstream-pr`: upstream's pipeline-state refactor would conflict.
 - macOS work is not blocked by 26.x, but the 26.x ports will need a Mac tester round of their own.
 
 ## Licence

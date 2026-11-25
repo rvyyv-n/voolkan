@@ -43,15 +43,11 @@ Base: official VulkanMod 0.6.8 for 1.21.11 (`upstream-base`). Details: see `AGEN
 ## Phase 5: Release
 - [x] 5.0 Publish to GitHub and release 1.0.0-beta.1 as a pre-release (owner decision; `main` = this work, tag `v1.0.0-beta.1+1.21.11`)
 - [x] 5.1 LGPL pass: `LICENSE`, `COPYING`, modification notices (`tools\check-notices.ps1` clean), third-party notices, README credit, Modrinth draft (`docs/modrinth.md`, not published). Sodium-derived light code checked: it was LGPL-3.0 when VulkanMod copied it (Feb 2024), see `THIRD_PARTY_NOTICES.md`. Open (`apache-text`): the verbatim Apache-2.0 text stays out of `licenses/` because the commit hook rejects a phrase in its wording; the URL reference stays
-- [ ] `upstream-pr` (was 5.2) Later: upstream PR with render-path detection + bug fixes (plan written in `docs/upstream-pr-plan.md`; no PR opened, waits for M1 and the owner)
 - [x] 5.3 Full Release 1.0.0 (`1.0.0+1.21.11`): final distribution build, tag, modpack `.mrpack` export with zero saved credentials, and Modrinth listing ready
 
 ## Phase 6: Other Minecraft versions
 (`port-26-1` and `port-26-2` are parked, see the Parked section.)
-
-## Phase 7: Low-VRAM handling (last, only if the R7 shows memory problems)
-(`low-vram` is parked, see the Parked section.)
-Owner decisions of 2026-10-05 (recorded here, Phase 7 itself is not started): newer Minecraft versions (26.2 and later) wait for a separate plan; when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
+Owner decisions of 2026-10-05: newer Minecraft versions (26.2 and later) wait for a separate plan (parked at the very end); when `main` moves to a newer version, `1.21.11/stable` is cut so work on later versions stays possible; the 26.1 port with decompiled reference goes into the release after the first; mod versions follow `<modver>+<mc>`.
 
 ## Future: v1.5 (Post-Release)
 Scoped 2026-10-18 in `docs/v1-5-plan.md` (decisions D1-D5, testing without a Mac, QoL ranking). All v1.5 build passes land on the `plan/v1-5` branch, with Windows/base improvements first (Passes 8-13) followed by macOS support and optimisation (Passes 14-16). macOS changes are gated on driver capability or macOS, so the R7 path must not change. On headless builder runners, verification is strictly `gradlew build` (zero GUI/client window execution). In-game testing on Windows is conducted manually by the owner; Mac rounds go to the two testers (M4 and M5 MacBook Airs) with exported jars.
@@ -68,7 +64,6 @@ Scoped 2026-10-18 in `docs/v1-5-plan.md` (decisions D1-D5, testing without a Mac
 - Backlog ideas not chosen are in `docs/v1-5-candidates.md`. Out of v1.5 (see the plan for reasons): skipping unchanged uniform uploads, transforms-buffer pre-growth, translucent sorting, batched section uploads (wait for upstream), occlusion culling. Chunk-renderer rewrites wait for the 26.x ports
 
 ## Parked (owner decision, not being worked on)
-- [ ] `settings-ui` (was 4.5) Maybe: settings UI overhaul (layout, grouping, search), scope to be decided with the owner. Skipped for now by the owner (proposal in `docs/settings-ui-proposal.md`)
+- [ ] `settings-ui` (was 4.5) First in the parked queue: settings UI overhaul (layout, grouping, search) plus additional QoL features to be described by the owner when built (proposal in `docs/settings-ui-proposal.md`)
 - [ ] `port-26-1` (was 6.1) 26.1 port (ask upstream for source; otherwise decompiled reference; Java 25). Research and a compile probe are in `docs/mc-26-plus.md`: no public upstream 26.1 source, about 150 of 321 files fail to compile against 26.1.2. Owner decision: the port and the decompiled reference work belong to the release after the first one; version naming stays `<modver>+<mc>`
-- [ ] `port-26-2` (was 6.2) 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan
-- [ ] `low-vram` (was 7.1) 2 GB VRAM: VMA budget flag, out-of-memory handling, defaults, upload pacing (was 2.3)
+- [ ] `port-26-2` (was 6.2) Parked at the very end: 26.2: recheck vanilla Vulkan requirements; document OpenGL + Sodium for this GPU (notes in `docs/mc-26-plus.md`; the R7 checks remain). Owner decision: 26.2 and later are set aside until the owner writes a plan

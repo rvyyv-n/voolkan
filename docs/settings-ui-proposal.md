@@ -1,6 +1,6 @@
-# Settings UI overhaul (task `settings-ui`): scope proposal, NOT started
+# Settings UI overhaul + QoL features (task `settings-ui`): scope proposal, NOT started
 
-Waiting for the owner's decision. Nothing here is implemented.
+First in the parked queue; waiting for the owner to kick off work. Nothing here is implemented yet.
 
 ## What exists after 4.1 to 4.4
 
@@ -12,6 +12,7 @@ Four pages (Video, Graphics, Optimizations, Other), a search field, per-option t
 2. **Per-option "reset to default"** (small button or right-click) using the defaults in `Config`. New widget code in `dev.voolkan.gui`.
 3. **Search improvements**: match against block titles and show the page name per result. Small change in `VOptionScreen.performSearch`.
 4. **Scaling fixes** for large GUI scales (the options list gets tight below 600 px height; the bottom Compatibility block needs scrolling to reach).
+5. **Additional QoL features** (to be described by the owner when we build this).
 
 ## Not proposed
 
