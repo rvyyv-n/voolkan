@@ -23,6 +23,7 @@ import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.system.MemoryStack;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
@@ -30,6 +31,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.nio.IntBuffer;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -339,24 +342,43 @@ public abstract class WindowMixin {
 
         Window self = (Window) (Object) this;
         VideoModeManager.selectBestMonitor(self);
+        long monitorHandle = VideoModeManager.selectedMonitor;
         Monitor monitor = VideoModeManager.getMonitors() != null
-                ? VideoModeManager.getMonitors().get(VideoModeManager.selectedMonitor)
+                ? VideoModeManager.getMonitors().get(monitorHandle)
                 : null;
 
-        int monX = 0;
-        int monY = 0;
-        int monWidth;
-        int monHeight;
+        int targetX = 0;
+        int targetY = 0;
+        int targetWidth;
+        int targetHeight;
         if (monitor != null) {
-            monX = monitor.getX();
-            monY = monitor.getY();
+            targetX = monitor.getX();
+            targetY = monitor.getY();
             VideoMode currentMode = monitor.getCurrentMode();
-            monWidth = currentMode.getWidth();
-            monHeight = currentMode.getHeight();
+            targetWidth = currentMode.getWidth();
+            targetHeight = currentMode.getHeight();
         } else {
             VideoModeSet.VideoMode videoMode = VideoModeManager.getOsVideoMode();
-            monWidth = videoMode.width;
-            monHeight = videoMode.height;
+            targetWidth = videoMode.width;
+            targetHeight = videoMode.height;
+        }
+
+        // Fit within the monitor workarea (NSScreen.visibleFrame on macOS) so borderless fullscreen
+        // stays below the menu bar / camera notch and clear of any always-visible Dock.
+        if (monitorHandle != 0L) {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer wx = stack.mallocInt(1);
+                IntBuffer wy = stack.mallocInt(1);
+                IntBuffer ww = stack.mallocInt(1);
+                IntBuffer wh = stack.mallocInt(1);
+                GLFW.glfwGetMonitorWorkarea(monitorHandle, wx, wy, ww, wh);
+                if (ww.get(0) > 0 && wh.get(0) > 0) {
+                    targetX = wx.get(0);
+                    targetY = wy.get(0);
+                    targetWidth = ww.get(0);
+                    targetHeight = wh.get(0);
+                }
+            }
         }
 
         if (!this.wasOnFullscreen && !inNativeBefore) {
@@ -367,12 +389,13 @@ public abstract class WindowMixin {
         }
 
         GLFW.glfwSetWindowAttrib(this.handle, GLFW_DECORATED, GLFW_FALSE);
-        GLFW.glfwSetWindowMonitor(this.handle, 0L, monX, monY, monWidth, monHeight, -1);
+        GLFW.glfwSetWindowAttrib(this.handle, GLFW_RESIZABLE, GLFW_FALSE);
+        GLFW.glfwSetWindowMonitor(this.handle, 0L, targetX, targetY, targetWidth, targetHeight, -1);
 
-        this.x = monX;
-        this.y = monY;
-        this.width = monWidth;
-        this.height = monHeight;
+        this.x = targetX;
+        this.y = targetY;
+        this.width = targetWidth;
+        this.height = targetHeight;
         this.fullscreen = true;
         this.wasOnFullscreen = true;
         syncVanillaFullscreenMacOS(true);

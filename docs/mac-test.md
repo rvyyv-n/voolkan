@@ -16,7 +16,7 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
 4. [ ] **Retina sharpness & cursor scaling:** Check that text, crosshair, HUD, and menus look crisp on the Retina display, and that clicking buttons, inventory slots, and scrolling option labels matches the cursor position everywhere (no offset or clipped labels).
 5. [ ] **Window resize:** Drag window edges, maximise/zoom, and restore several times (both on title screen and in-world). No crash, no black or stretched frame, no clipped HUD.
 6. [ ] **Fullscreen modes:**
-   - Press `F11` (or choose `Windowed Fullscreen` in Options → Video): enters instant borderless fullscreen without a Space animation. Press `F11` again to return to windowed bounds.
+   - Press `F11` (or choose `Windowed Fullscreen` in Options → Video): enters instant borderless fullscreen without a Space animation, staying cleanly below the menu bar / camera notch on notched MacBooks (no clipped top menu text or FPS counter). Press `F11` again to return to windowed bounds.
    - In Options → Video, enable **Native macOS Fullscreen** and press Apply, then test `F11` and `Window Mode` switching: enters and exits a native macOS fullscreen Space cleanly, and switching back to Windowed or turning Native macOS Fullscreen off returns cleanly without getting stuck. Note which fullscreen mode feels better as a default.
 7. [ ] **Input feel & low-latency defaults:** In Options → Other, verify fresh macOS defaults: **Low latency mode** is ON, **Render queue size** is `2`, and **Swapchain images** is `Auto` (slider capped at `3`). Turn rapidly in-world for 30 s with VSync off and VSync on, and note mouse feel / latency and any stutter.
 8. [ ] **World Resolution Scale:** In Options → Video, test **World Resolution** at `75%` and `50%`, then back to `100%`. The 3D world renders upright at lower resolution while HUD, F3, crosshair, and menus stay Retina-sharp; resizing and returning to `100%` recover cleanly.
@@ -29,7 +29,7 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
 
 ## Round 3: performance & tuning comparisons
 
-Once the base checklist above passes, run these quick A/B comparisons from the **same world and viewpoint** (stand still for ~15 s per run, VSync off, same render distance, and record F3 FPS / frame times):
+Once the base checklist above passes, run these quick A/B comparisons from the **same world and viewpoint** (stand still for ~15 s per run, **VSync OFF** — confirm `present mode IMMEDIATE` in `logs/latest.log` so a 60 Hz display doesn't mask differences — same render distance, and record F3 FPS / frame times):
 
 1. [ ] **Indirect Draw OFF (macOS default) vs ON:**
    - Default on a fresh macOS config is **Indirect Draw: OFF** (`Options → Optimizations → Indirect Draw`, also restored by **Restore Defaults**).
