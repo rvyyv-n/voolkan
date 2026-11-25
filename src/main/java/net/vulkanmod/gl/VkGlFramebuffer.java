@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
 import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_CLEAR;
+import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
 import static org.lwjgl.vulkan.VK11.VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -190,6 +191,47 @@ public class VkGlFramebuffer {
         return clearedNatively;
     }
 
+    /**
+     * Binds a color-only offscreen framebuffer using {@code LOAD_OP_DONT_CARE} when a fullscreen
+     * opaque post-pass is about to overwrite 100% of color pixels.
+     */
+    public static boolean bindFramebufferDiscardColor(int target, int id) {
+        if (id == 0 || !MacPerfOpts.menuBlurOpts()) {
+            return false;
+        }
+
+        VkGlFramebuffer glFramebuffer = map.get(id);
+        if (glFramebuffer == null) {
+            throw new NullPointerException("No Framebuffer with ID: %d ".formatted(id));
+        }
+
+        if (glFramebuffer.needsUpdate) {
+            glFramebuffer.create();
+        }
+
+        if (glFramebuffer.framebuffer == null || glFramebuffer.depthAttachment != null) {
+            return false;
+        }
+
+        Renderer.getInstance().endRenderPass();
+        RenderPass discardPass = glFramebuffer.getDiscardColorRenderPass();
+        boolean begunRendering = Renderer.getInstance().beginRenderPass(discardPass, glFramebuffer.framebuffer);
+        if (begunRendering) {
+            Framebuffer framebuffer = glFramebuffer.framebuffer;
+            int viewWidth = framebuffer.getLevelWidth();
+            int viewHeight = framebuffer.getLevelHeight();
+            Renderer.setInvertedViewport(0, 0, viewWidth, viewHeight);
+            Renderer.setScissor(0, 0, viewWidth, viewHeight);
+            VRenderSystem.disableCull();
+        }
+
+        boundFramebuffer = glFramebuffer;
+        if (target == GL30.GL_FRAMEBUFFER) {
+            readFramebuffer = glFramebuffer;
+        }
+        return true;
+    }
+
     public static void deleteFramebuffer(int id) {
         if (id == 0) {
             return;
@@ -282,6 +324,7 @@ public class VkGlFramebuffer {
     RenderPass clearColorRenderPass;
     RenderPass clearDepthRenderPass;
     RenderPass clearBothRenderPass;
+    RenderPass discardColorRenderPass;
 
     VulkanImage colorAttachment;
     VulkanImage depthAttachment;
@@ -410,6 +453,13 @@ public class VkGlFramebuffer {
         }
     }
 
+    public RenderPass getDiscardColorRenderPass() {
+        if (this.discardColorRenderPass == null) {
+            this.discardColorRenderPass = buildRenderPass(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
+        }
+        return this.discardColorRenderPass;
+    }
+
     public Framebuffer getFramebuffer() {
         return framebuffer;
     }
@@ -431,6 +481,9 @@ public class VkGlFramebuffer {
             if (this.clearBothRenderPass != null) {
                 this.clearBothRenderPass.cleanUp();
             }
+            if (this.discardColorRenderPass != null) {
+                this.discardColorRenderPass.cleanUp();
+            }
         }
 
         this.framebuffer = null;
@@ -438,5 +491,6 @@ public class VkGlFramebuffer {
         this.clearColorRenderPass = null;
         this.clearDepthRenderPass = null;
         this.clearBothRenderPass = null;
+        this.discardColorRenderPass = null;
     }
 }

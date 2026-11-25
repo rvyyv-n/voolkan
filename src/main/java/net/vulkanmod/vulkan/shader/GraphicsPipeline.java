@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
 import dev.voolkan.cache.PipelineStateStore;
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.objects.Object2LongMap;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.vulkanmod.Initializer;
@@ -292,15 +293,24 @@ public class GraphicsPipeline extends Pipeline {
                 VkPipelineRenderingCreateInfoKHR renderingInfo = VkPipelineRenderingCreateInfoKHR.calloc(stack);
                 renderingInfo.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR);
 
-                Framebuffer framebuffer;
-                if (state.renderPass != null) {
-                    framebuffer = state.renderPass.getFramebuffer();
+                if (MacPerfOpts.menuBlurOpts() && (state.renderPass != null || state.colorFormat != 0)) {
+                    int colorFmt = state.renderPass != null ? state.renderPass.getColorFormat() : state.colorFormat;
+                    int depthFmt = state.renderPass != null ? state.renderPass.getDepthFormat() : state.depthFormat;
+                    if (colorFmt != 0) {
+                        renderingInfo.pColorAttachmentFormats(stack.ints(colorFmt));
+                    }
+                    renderingInfo.depthAttachmentFormat(depthFmt);
                 } else {
-                    framebuffer = Renderer.getInstance().getMainPass().getMainFramebuffer();
-                }
+                    Framebuffer framebuffer;
+                    if (state.renderPass != null) {
+                        framebuffer = state.renderPass.getFramebuffer();
+                    } else {
+                        framebuffer = Renderer.getInstance().getMainPass().getMainFramebuffer();
+                    }
 
-                renderingInfo.pColorAttachmentFormats(stack.ints(framebuffer.getFormat()));
-                renderingInfo.depthAttachmentFormat(framebuffer.getDepthFormat());
+                    renderingInfo.pColorAttachmentFormats(stack.ints(framebuffer.getFormat()));
+                    renderingInfo.depthAttachmentFormat(framebuffer.getDepthFormat());
+                }
                 pipelineInfo.pNext(renderingInfo);
             }
 

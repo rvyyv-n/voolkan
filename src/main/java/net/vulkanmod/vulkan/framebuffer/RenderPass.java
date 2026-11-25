@@ -449,5 +449,10 @@ public class RenderPass {
         public AttachmentInfo getDepthAttachmentInfo() {
             return depthAttachmentInfo;
         }
+
+        public Builder dropDepthAttachment() {
+            this.depthAttachmentInfo = null;
+            return this;
+        }
     }
 }

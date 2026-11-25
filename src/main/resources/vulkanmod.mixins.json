@@ -104,6 +104,9 @@
     "wayland.KeyboardHandlerM",
     "wayland.MinecraftMixin",
 
+    "compatibility.PostChainAccessor",
+    "compatibility.PostChainMixin",
+    "compatibility.PostPassAccessor",
     "compatibility.PostPassM",
 
     "voxel.VoxelShapeMixin",

@@ -63,7 +63,9 @@ public class PipelineState {
         depthState |= depthTest ? DepthState.DEPTH_TEST_BIT : 0;
         depthState |= depthMask ? DepthState.DEPTH_MASK_BIT : 0;
 
-        depthState |= DepthState.encodeDepthFun(glDepthFun);
+        if (depthTest || !MacPerfOpts.isPlatformEligible()) {
+            depthState |= DepthState.encodeDepthFun(glDepthFun);
+        }
 
         return depthState;
     }
@@ -73,6 +75,10 @@ public class PipelineState {
     }
 
     public static int encodeLogicOpState(boolean enabled, int glLogicOpFun) {
+        if (!enabled && MacPerfOpts.isPlatformEligible()) {
+            return 0;
+        }
+
         int logicOpState = 0;
 
         logicOpState |= enabled ? LogicOpState.ENABLE_BIT : 0;
@@ -105,6 +111,13 @@ public class PipelineState {
              renderPass != null ? renderPass.getColorFormat() : 0,
              renderPass != null ? renderPass.getDepthFormat() : 0,
              renderPass != null ? renderPass.getDependencyKind() : 0);
+    }
+
+    /** Creates a format-keyed state without a RenderPass handle (for dynamic-rendering warm-up). */
+    public static PipelineState forFormats(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                                           int colorFormat, int depthFormat, int dependencyKind) {
+        return new PipelineState(assemblyRasterState, blendState, depthState, logicOp, colorMask,
+                                 null, colorFormat, depthFormat, dependencyKind);
     }
 
     private PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
@@ -313,6 +326,10 @@ public class PipelineState {
         public static final int FACTOR_MASK = 0x1F;
 
         public static int getState(BlendInfo blendInfo) {
+            if (!blendInfo.enabled && MacPerfOpts.isPlatformEligible()) {
+                return 0;
+            }
+
             int s = 0;
             s |= blendInfo.enabled ? ENABLE_BIT : 0;
             s |= encode(blendInfo.srcRgbFactor, SRC_RGB_OFFSET, FACTOR_MASK);

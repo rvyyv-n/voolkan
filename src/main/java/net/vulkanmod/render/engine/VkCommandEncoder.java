@@ -78,6 +78,44 @@ public class VkCommandEncoder implements CommandEncoder {
         this.device = glDevice;
     }
 
+    /**
+     * Opens a color-only {@code LOAD_OP_DONT_CARE} render pass for opaque fullscreen post-processing
+     * passes (such as menu blur) on Apple TBDR GPUs, skipping depth attachment load/store and
+     * unnecessary color tile loads while leaving main depth untouched.
+     */
+    public RenderPass createOpaqueColorOnlyPostPass(Supplier<String> supplier, GpuTextureView colorAttachmentView) {
+        if (this.inRenderPass) {
+            throw new IllegalStateException("Close the existing render pass before creating a new one!");
+        }
+        if (!MacPerfOpts.menuBlurOpts()) {
+            return this.createRenderPass(supplier, colorAttachmentView, OptionalInt.empty(), null, OptionalDouble.empty());
+        }
+
+        if (Minecraft.getInstance().getMainRenderTarget().getColorTexture() == colorAttachmentView.texture()) {
+            if (Renderer.getInstance().getMainPass().rebindMainTargetColorOnlyDiscard()) {
+                this.inRenderPass = true;
+                this.lastPipeline = null;
+                // forceEnd=true on close so subsequent GUI draws cleanly rebind auxRenderPass with depth.
+                return new VkRenderPass(this, false, false);
+            }
+            return this.createRenderPass(supplier, colorAttachmentView, OptionalInt.empty(), null, OptionalDouble.empty());
+        }
+
+        if (colorAttachmentView.isClosed()) {
+            throw new IllegalStateException("Color texture is closed");
+        }
+
+        VkFbo fbo = ((VkTextureView) colorAttachmentView).getFbo(null);
+        if (fbo.bindDiscardColor()) {
+            this.inRenderPass = true;
+            GlStateManager._viewport(0, 0, colorAttachmentView.getWidth(0), colorAttachmentView.getHeight(0));
+            this.lastPipeline = null;
+            return new VkRenderPass(this, false, false);
+        }
+
+        return this.createRenderPass(supplier, colorAttachmentView, OptionalInt.empty(), null, OptionalDouble.empty());
+    }
+
     @Override
     public RenderPass createRenderPass(Supplier<String> supplier, GpuTextureView colorAttachmentView, OptionalInt optionalInt) {
         return this.createRenderPass(supplier, colorAttachmentView, optionalInt, null, OptionalDouble.empty());
@@ -229,6 +267,20 @@ public class VkCommandEncoder implements CommandEncoder {
             }
             else if (TileGpuOpts.isEnabled()) {
                 VkGpuTexture vkGpuTexture = (VkGpuTexture) colorAttachment;
+                if (MacPerfOpts.menuBlurOpts()) {
+                    // Defer offscreen color-only clears (matching clearColorAndDepthTextures) so
+                    // depth-less PostChain targets (e.g. blur swap) skip an eager full-res clear pass
+                    // right before an opaque LOAD_OP_DONT_CARE draw and avoid thrashing framebufferId.
+                    VkFbo fbo = vkGpuTexture.getFbo(null);
+                    vkGpuTexture.setClearColor(clearColor);
+
+                    Framebuffer boundFramebuffer = Renderer.getInstance().getBoundFramebuffer();
+                    if (boundFramebuffer != null && boundFramebuffer.getColorAttachment() == vkGpuTexture.getVulkanImage()) {
+                        fbo.clearAttachments();
+                    }
+                    return;
+                }
+
                 VkGlFramebuffer glFramebuffer = VkGlFramebuffer.getFramebuffer(this.framebufferId);
                 Renderer.getInstance().endRenderPass();
 

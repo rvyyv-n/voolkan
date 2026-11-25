@@ -85,6 +85,21 @@ public class VkFbo {
         return clearedNatively;
     }
 
+    /**
+     * Binds this depth-less offscreen FBO with {@code LOAD_OP_DONT_CARE} on Apple TBDR GPUs when
+     * an opaque fullscreen post-pass will overwrite 100% of color pixels.
+     */
+    public boolean bindDiscardColor() {
+        if (this.depthAttachment != null) {
+            return false;
+        }
+        if (VkGlFramebuffer.bindFramebufferDiscardColor(GL33.GL_FRAMEBUFFER, this.glId)) {
+            this.colorAttachmentView.texture().needsClear = false;
+            return true;
+        }
+        return false;
+    }
+
     protected void clearAttachments() {
         int clear = 0;
         float clearDepth;

@@ -18,6 +18,7 @@ import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.engine.VkGpuTexture;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
+import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -25,6 +26,7 @@ import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
+import org.lwjgl.vulkan.VkImageMemoryBarrier;
 import org.lwjgl.vulkan.VkRect2D;
 
 import java.util.function.IntSupplier;
@@ -45,11 +47,13 @@ public class DefaultMainPass implements MainPass {
     private RenderPass mainClearBothPass;
     private RenderPass mainClearColorPass;
     private RenderPass mainClearDepthPass;
+    private RenderPass mainColorOnlyDiscardPass;
 
     private boolean mainTargetStartedThisFrame = false;
     private boolean pendingInitialClearColor = false;
     private boolean pendingInitialClearDepth = false;
     private boolean mainDepthCleanAtOne = false;
+    private boolean mainColorNeedsReuseBarrier = false;
 
     private GpuTexture[] colorAttachmentTextures;
     private GpuTextureView[] colorAttachmentTextureViews;
@@ -78,6 +82,7 @@ public class DefaultMainPass implements MainPass {
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
         this.mainDepthCleanAtOne = false;
+        this.mainColorNeedsReuseBarrier = false;
 
         Framebuffer framebuffer;
         if (Renderer.getInstance().getSwapChain().hasImages()) {
@@ -128,6 +133,14 @@ public class DefaultMainPass implements MainPass {
             builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE);
             builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
             this.mainClearDepthPass = builder.build();
+
+            if (MacPerfOpts.menuBlurOpts()) {
+                builder = RenderPass.builder(this.mainFramebuffer);
+                builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+                builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE);
+                builder.dropDepthAttachment();
+                this.mainColorOnlyDiscardPass = builder.build();
+            }
         }
     }
 
@@ -143,6 +156,10 @@ public class DefaultMainPass implements MainPass {
         if (this.mainClearDepthPass != null) {
             this.mainClearDepthPass.cleanUp();
             this.mainClearDepthPass = null;
+        }
+        if (this.mainColorOnlyDiscardPass != null) {
+            this.mainColorOnlyDiscardPass.cleanUp();
+            this.mainColorOnlyDiscardPass = null;
         }
     }
 
@@ -175,6 +192,7 @@ public class DefaultMainPass implements MainPass {
                 // Mid-frame resume (e.g. Renderer.flushCmds): preserve swapchain contents drawn earlier this frame
                 ensureSwapChainAcquiredIfNeeded();
                 Framebuffer framebuffer = this.mainFramebuffer;
+                emitMainColorReuseBarrierIfNeeded(commandBuffer);
                 framebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
                 Renderer.getInstance().beginRenderPass(this.auxRenderPass, framebuffer);
                 Renderer.setViewport(0, 0, framebuffer.getWidth(), framebuffer.getHeight(), stack);
@@ -219,6 +237,7 @@ public class DefaultMainPass implements MainPass {
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
         this.mainDepthCleanAtOne = false;
+        this.mainColorNeedsReuseBarrier = false;
 
         if (this.mainFramebuffer == Renderer.getInstance().getSwapChain()) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -267,6 +286,7 @@ public class DefaultMainPass implements MainPass {
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
         this.mainDepthCleanAtOne = false;
+        this.mainColorNeedsReuseBarrier = false;
     }
 
     @Override
@@ -308,6 +328,7 @@ public class DefaultMainPass implements MainPass {
         }
 
         Renderer.getInstance().endRenderPass(commandBuffer);
+        emitMainColorReuseBarrierIfNeeded(commandBuffer);
         Renderer.getInstance().beginRenderPass(this.auxRenderPass, this.mainFramebuffer);
     }
 
@@ -412,6 +433,79 @@ public class DefaultMainPass implements MainPass {
                 && isMainRenderPass(Renderer.getInstance().getBoundRenderPass());
         this.mainDepthCleanAtOne = false;
         return clean;
+    }
+
+    @Override
+    public boolean rebindMainTargetColorOnlyDiscard() {
+        if (!MacPerfOpts.menuBlurOpts()
+                || this.mainColorOnlyDiscardPass == null
+                || this.worldScale.isActive()
+                || !this.mainTargetStartedThisFrame) {
+            return false;
+        }
+
+        ensureSwapChainAcquiredIfNeeded();
+
+        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+        Renderer.getInstance().endRenderPass(commandBuffer);
+        emitMainColorReuseBarrierIfNeeded(commandBuffer);
+        Renderer.getInstance().beginRenderPass(this.mainColorOnlyDiscardPass, this.mainFramebuffer);
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            Renderer.setViewport(0, 0, this.mainFramebuffer.getWidth(), this.mainFramebuffer.getHeight(), stack);
+        }
+        Renderer.resetScissor();
+        this.mainColorNeedsReuseBarrier = true;
+        return true;
+    }
+
+    /**
+     * Emits a same-layout {@code COLOR_ATTACHMENT_OPTIMAL} execution and memory barrier when
+     * resuming main color rendering under Dynamic Rendering after {@code mainColorOnlyDiscardPass}
+     * ended without a layout transition (e.g. final menu blur pass into {@code AFTER_BLUR} GUI).
+     */
+    private void emitMainColorReuseBarrierIfNeeded(VkCommandBuffer commandBuffer) {
+        if (!this.mainColorNeedsReuseBarrier) {
+            return;
+        }
+        this.mainColorNeedsReuseBarrier = false;
+        if (!Vulkan.DYNAMIC_RENDERING) {
+            return;
+        }
+        VulkanImage color = this.mainFramebuffer.getColorAttachment();
+        if (color == null || color.getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            return;
+        }
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack);
+            barrier.sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER);
+            barrier.oldLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            barrier.newLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            barrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+            barrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+            barrier.image(color.getId());
+            barrier.subresourceRange().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT);
+            barrier.subresourceRange().baseMipLevel(0);
+            barrier.subresourceRange().levelCount(1);
+            barrier.subresourceRange().baseArrayLayer(0);
+            barrier.subresourceRange().layerCount(1);
+            barrier.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            barrier.dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+            vkCmdPipelineBarrier(
+                    commandBuffer,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    0,
+                    null,
+                    null,
+                    barrier
+            );
+        }
+    }
+
+    @Override
+    public RenderPass getColorOnlyDiscardPass() {
+        return this.mainColorOnlyDiscardPass;
     }
 
     @Override

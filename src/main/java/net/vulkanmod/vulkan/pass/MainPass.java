@@ -56,6 +56,21 @@ public interface MainPass {
     /** Marks the main target's depth buffer as modified so subsequent depth clears cannot be elided. */
     default void invalidateCleanDepth() {}
 
+    /**
+     * Rebinds the main target using a color-only {@code LOAD_OP_DONT_CARE} render pass (no depth
+     * attachment) for opaque fullscreen post-processing passes on Apple TBDR GPUs.
+     *
+     * @return {@code true} if the color-only pass was bound; {@code false} if the caller should fall back
+     */
+    default boolean rebindMainTargetColorOnlyDiscard() {
+        return false;
+    }
+
+    /** Returns the color-only discard pass for pipeline warm-up, or {@code null} when unused. */
+    default RenderPass getColorOnlyDiscardPass() {
+        return null;
+    }
+
     default void bindAsTexture() {}
 
     default void beginWorld(DeltaTracker deltaTracker, Camera camera) {}

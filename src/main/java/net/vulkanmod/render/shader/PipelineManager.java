@@ -135,6 +135,14 @@ public abstract class PipelineManager {
         return terrainShaderEarlyZ;
     }
 
+    public static GraphicsPipeline getTerrainRgssShader() {
+        return terrainShaderRgss;
+    }
+
+    public static GraphicsPipeline getTerrainEarlyZRgssShader() {
+        return terrainShaderEarlyZRgss;
+    }
+
     public static GraphicsPipeline getFastBlitPipeline() {
         return fastBlitPipeline;
     }

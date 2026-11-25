@@ -10,9 +10,18 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
+import dev.voolkan.compat.MacPerfOpts;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.TextureFilteringMethod;
+import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.client.renderer.PostChain;
+import net.minecraft.client.renderer.PostPass;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.interfaces.shader.ExtendedRenderPipeline;
+import net.vulkanmod.mixin.compatibility.PostChainAccessor;
+import net.vulkanmod.mixin.compatibility.PostPassAccessor;
 import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.shader.CustomRenderPipelines;
 import net.vulkanmod.render.shader.PipelineManager;
@@ -105,6 +114,11 @@ public final class PipelineWarmup {
 
         // Step B(ii): pre-build VulkanMod's built-in PipelineManager pipelines
         warmBuiltInPipelines(mainRenderPass, counts);
+
+        // Step B(ii-b): pre-build menu blur PostChain pipelines on macOS to avoid first-ESC PSO compile hitches
+        if (MacPerfOpts.menuBlurOpts() && gpuDevice instanceof VkGpuDevice vkDevice) {
+            warmMenuBlurPipelines(vkDevice, mainPass, counts);
+        }
 
         built += counts[0];
         alreadyReady += counts[1];
@@ -238,6 +252,22 @@ public final class PipelineWarmup {
             }
         }
 
+        Minecraft mc = Minecraft.getInstance();
+        if (MacPerfOpts.isPlatformEligible() && mc != null && mc.options != null
+                && mc.options.textureFiltering().get() == TextureFilteringMethod.RGSS) {
+            GraphicsPipeline terrainRgss = PipelineManager.getTerrainRgssShader();
+            if (terrainRgss != null) {
+                recordResult(terrainRgss.warmUpState(terrainOpaque), counts);
+                recordResult(terrainRgss.warmUpState(terrainTranslucent), counts);
+            }
+            if (Initializer.CONFIG != null && !Initializer.CONFIG.uniqueOpaqueLayer) {
+                GraphicsPipeline terrainEarlyZRgss = PipelineManager.getTerrainEarlyZRgssShader();
+                if (terrainEarlyZRgss != null) {
+                    recordResult(terrainEarlyZRgss.warmUpState(terrainOpaque), counts);
+                }
+            }
+        }
+
         // Clouds: CloudRenderer uses SRC_ALPHA/ONE_MINUS_SRC_ALPHA, ONE/ZERO; cull on/off; colour mask all/none (fancy depth pre-pass)
         GraphicsPipeline clouds = PipelineManager.getCloudsPipeline();
         if (clouds != null) {
@@ -253,6 +283,73 @@ public final class PipelineWarmup {
                     triFillCull, cloudsBlend, depthLequalWrite, defaultLogicOp, colorMaskNone, mainRenderPass)), counts);
             recordResult(clouds.warmUpState(new PipelineState(
                     triFillNoCull, cloudsBlend, depthLequalWrite, defaultLogicOp, colorMaskAll, mainRenderPass)), counts);
+        }
+    }
+
+    private static void warmMenuBlurPipelines(VkGpuDevice vkDevice, MainPass mainPass, int[] counts) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getShaderManager() == null) {
+            return;
+        }
+
+        PostChain blurChain;
+        try {
+            blurChain = mc.getShaderManager().getPostChain(
+                    Identifier.withDefaultNamespace("blur"), LevelTargetBundle.MAIN_TARGETS);
+        } catch (RuntimeException e) {
+            Initializer.LOGGER.debug("Pipeline warm-up: skipped menu blur PostChain: {}", e.getMessage());
+            return;
+        }
+        if (blurChain == null) {
+            return;
+        }
+
+        RenderPass mainColorOnlyPass = mainPass.getColorOnlyDiscardPass();
+        RenderPass mainFallbackPass = mainPass.getMainRenderPass();
+        RenderPass targetMainPass = mainColorOnlyPass != null ? mainColorOnlyPass : mainFallbackPass;
+
+        List<PostPass> passes = ((PostChainAccessor) (Object) blurChain).voolkan$getPasses();
+        if (passes == null) {
+            return;
+        }
+
+        for (PostPass pass : passes) {
+            PostPassAccessor accessor = (PostPassAccessor) (Object) pass;
+            RenderPipeline rp = accessor.voolkan$getPipeline();
+            if (rp == null) {
+                continue;
+            }
+            ensureCompiled(vkDevice, List.of(rp));
+
+            Pipeline p = ExtendedRenderPipeline.of(rp).getPipeline();
+            if (!(p instanceof GraphicsPipeline gp)) {
+                continue;
+            }
+
+            Identifier outId = accessor.voolkan$getOutputTargetId();
+            if (PostChain.MAIN_TARGET_ID.equals(outId)) {
+                if (targetMainPass != null) {
+                    PipelineState state = deriveState(rp, targetMainPass);
+                    if (state != null && isStateSupportedByDevice(state)) {
+                        recordResult(gp.warmUpState(state), counts);
+                    }
+                }
+            } else if (Vulkan.DYNAMIC_RENDERING) {
+                // Warm the offscreen depth-less RGBA8 swap target state directly under dynamic rendering.
+                PipelineState base = deriveState(rp, targetMainPass);
+                if (base != null && isStateSupportedByDevice(base)) {
+                    PipelineState swapState = PipelineState.forFormats(
+                            base.getAssemblyRasterStateValue(),
+                            base.getBlendStateValue(),
+                            base.getDepthStateValue(),
+                            base.getLogicOpStateValue(),
+                            base.getColorMaskValue(),
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            0,
+                            2);
+                    recordResult(gp.warmUpState(swapState), counts);
+                }
+            }
         }
     }
 
