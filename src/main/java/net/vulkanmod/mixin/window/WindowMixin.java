@@ -89,6 +89,9 @@ public abstract class WindowMixin {
         GLFW.glfwWindowHint(GLFW_DECORATED, (b ? GLFW_FALSE : GLFW_TRUE));
 
         if (Platform.isMacOS()) {
+            // Keep Retina tracking enabled in GLFW so live toggling Reduce Resolution OFF restores
+            // native backing-scale updates across display moves; 1x mode is enforced on CAMetalLayer
+            // before initial swapchain creation and on every recreate.
             GLFW.glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
             GLFW.glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING, GLFW_FALSE);
         }
@@ -420,7 +423,18 @@ public abstract class WindowMixin {
             int prevWidth = this.getWidth();
             int prevHeight = this.getHeight();
 
-            if(width > 0 && height > 0) {
+            if (width > 0 && height > 0) {
+                if (Platform.isMacOS() && Initializer.CONFIG != null && Initializer.CONFIG.macReduceResolution) {
+                    try (MemoryStack stack = MemoryStack.stackPush()) {
+                        IntBuffer ww = stack.mallocInt(1);
+                        IntBuffer wh = stack.mallocInt(1);
+                        GLFW.glfwGetWindowSize(this.handle, ww, wh);
+                        if (ww.get(0) > 0 && wh.get(0) > 0) {
+                            width = ww.get(0);
+                            height = wh.get(0);
+                        }
+                    }
+                }
                 this.framebufferWidth = width;
                 this.framebufferHeight = height;
 

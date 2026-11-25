@@ -179,6 +179,16 @@ public abstract class Options {
                     },
                     () -> config.macNativeFullscreen)
                     .setTooltip(v -> Component.translatable("voolkan.options.macNativeFullscreen.tooltip")));
+            displayOptions.add(new SwitchOption(Component.translatable("voolkan.options.macReduceResolution"),
+                    value -> {
+                        if (config.macReduceResolution != value) {
+                            config.macReduceResolution = value;
+                            Renderer.scheduleSwapChainUpdate();
+                        }
+                    },
+                    () -> config.macReduceResolution)
+                    .setTooltip(v -> Component.translatable("voolkan.options.macReduceResolution.tooltip"))
+                    .setImpact(PerformanceImpact.HIGH));
         }
         displayOptions.add(resolutionOption);
         displayOptions.add(refreshRateOption);

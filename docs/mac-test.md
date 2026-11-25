@@ -23,7 +23,9 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
    - In Options → Optimizations: **Unique opaque layer** is OFF (enables Apple TBDR early-Z / HSR) and **Indirect Draw** is OFF.
    - Turn rapidly in-world for 30 s with VSync off and VSync on, noting mouse feel / latency and any stutter.
    - Press `ESC` (pause menu) and `E` (inventory) on first world join and repeatedly while facing dense terrain: the darkened/blurred background renders cleanly with no first-open hitch or frame-rate drop.
-8. [ ] **World Resolution Scale:** In Options → Video, test **World Resolution** at `75%` and `50%`, then back to `100%`. The 3D world renders upright at lower resolution while HUD, F3, crosshair, and menus stay Retina-sharp; resizing and returning to `100%` recover cleanly.
+8. [ ] **Reduce Resolution & World Resolution Scale:**
+   - In Options → Video, toggle **Reduce Resolution** ON and press Apply: switches live (no restart) from full Retina to 1× logical resolution (confirm `Swapchain:` drops from e.g. `2940x1846` to `1470x923` in `logs/latest.log`), cursor hitboxes and UI scaling stay aligned, and toggling it back OFF restores full Retina cleanly. Also verify quitting with it ON and relaunching boots straight into 1× resolution.
+   - In Options → Video, test **World Resolution** at `75%` and `50%`, then back to `100%`. The 3D world renders upright at lower resolution while HUD, F3, crosshair, and menus stay Retina-sharp; resizing and returning to `100%` recover cleanly.
 9. [ ] **Battery FPS Cap (MacBooks):**
    - Verify **Battery FPS Cap** is visible in Options → Video (hidden on desktop Macs without a battery).
    - Select **Preset → Battery** (stages 60 FPS cap / 60 Battery FPS Cap / 15 Background FPS Cap), press Apply (or set Battery FPS Cap to `40` manually with VSync off).
@@ -44,10 +46,12 @@ Once the base checklist above passes, run these quick A/B comparisons from the *
 3. [ ] **Unique opaque layer OFF (macOS default) vs ON:**
    - Default on a fresh macOS config is **Unique opaque layer: OFF** (`Options → Optimizations → Unique opaque layer`, splits solid terrain onto the no-`discard` early-Z shader for Apple TBDR HSR).
    - Compare uncapped FPS/frametimes looking across dense terrain with Unique opaque layer **OFF** vs **ON**.
-4. [ ] **Dynamic vs Legacy render path:**
+4. [ ] **Reduce Resolution OFF (full Retina, default) vs ON (1× non-Retina):**
+   - Toggle **Reduce Resolution** (`Options → Video`) ON and press Apply (live, no restart). Compare uncapped FPS/frametimes and menu/inventory blur smoothness against full Retina (`OFF`) and against `World Resolution` at `65%`/`50%`.
+5. [ ] **Dynamic vs Legacy render path:**
    - Default is **Dynamic** (`renderPath: "auto"`).
    - Add `-Dvoolkan.renderPath=legacy` to JVM arguments, launch into the same viewpoint, compare F3 FPS and visuals (including menu blur), then remove the flag.
-5. [ ] **Optional A/B diagnostic JVM flags (if troubleshooting or isolating gains):**
+6. [ ] **Optional A/B diagnostic JVM flags (if troubleshooting or isolating gains):**
    - `-Dvoolkan.disableTileOpts=true` — disables tile-GPU lazy swapchain start, deferred initial clear, and native `LOAD_OP_CLEAR` folding.
    - `-Dvoolkan.disableUnifiedDirectWrite=true` — reverts chunk/VBO/index uploads to the staged transfer path.
    - `-Dvoolkan.disableUnifiedGpuBuffers=true` — reverts `VkGpuBuffer` uniform writes and staging buffer sizing (16 MB → 64 MB) to staged transfer submits.
@@ -59,7 +63,7 @@ Once the base checklist above passes, run these quick A/B comparisons from the *
    - `-Dvoolkan.disableTbdrPassOpts=true` — disables narrowed TBDR fragment barriers, mip-exact dynamic rendering, `GuiRenderer.prepare()` offscreen batching, and deferred `WorldScale` pass start / clean-depth folding.
    - `-Dvoolkan.disableMenuBlurOpts=true` — disables depth-less / `LOAD_OP_DONT_CARE` post-processing passes, menu blur PSO warm-up, deferred offscreen color clears, and stale `ScreenM.clearDepth()` skip.
    - `-Dvoolkan.disableShaderOptsMac=true` — reverts macOS shaderc target-environment options to upstream behavior.
-6. [ ] **Optional MoltenVK environment variables (set in the launcher's environment settings for A/B comparison, one at a time or together):**
+7. [ ] **Optional MoltenVK environment variables (set in the launcher's environment settings for A/B comparison, one at a time or together):**
    - `MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=0`
    - `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1`
    - Active `MVK_CONFIG_*` variables, `Tile GPU opts`, `Unified direct-write`, and `macOS perf opts` status are logged automatically in the `Vulkan startup capabilities:` block of `logs/latest.log`.

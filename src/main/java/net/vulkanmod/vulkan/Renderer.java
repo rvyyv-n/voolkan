@@ -253,6 +253,7 @@ public class Renderer {
         Vulkan.createStagingBuffers();
 
         swapChain = new SwapChain();
+        syncWindowFramebufferSizeMacOS();
         mainPass = DefaultMainPass.create();
 
         drawer = new Drawer();
@@ -874,9 +875,31 @@ public class Renderer {
         this.mainPass.onResize();
 
         this.onResizeCallbacks.forEach(Runnable::run);
+        syncWindowFramebufferSizeMacOS();
         ((WindowAccessor) (Object) Minecraft.getInstance().getWindow()).getEventHandler().resizeDisplay();
 
         currentFrame = 0;
+    }
+
+    /** Keeps Minecraft's Window framebuffer size locked to the actual swapchain extent on macOS. */
+    private void syncWindowFramebufferSizeMacOS() {
+        if (!net.vulkanmod.config.Platform.isMacOS() || this.swapChain == null || !this.swapChain.hasImages()) {
+            return;
+        }
+        int swapWidth = this.swapChain.getWidth();
+        int swapHeight = this.swapChain.getHeight();
+        if (swapWidth <= 0 || swapHeight <= 0) {
+            return;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getWindow() == null) {
+            return;
+        }
+        var window = mc.getWindow();
+        if (window.getWidth() != swapWidth || window.getHeight() != swapHeight) {
+            window.setWidth(swapWidth);
+            window.setHeight(swapHeight);
+        }
     }
 
     public void cleanUpResources() {

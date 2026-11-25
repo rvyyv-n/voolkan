@@ -41,6 +41,7 @@ public final class PageDefaults {
         DEFAULTS.put("voolkan.options.preset", Preset.CUSTOM);
         DEFAULTS.put("vulkanmod.options.windowMode", WindowMode.WINDOWED);
         DEFAULTS.put("voolkan.options.macNativeFullscreen", false);
+        DEFAULTS.put("voolkan.options.macReduceResolution", false);
         DEFAULTS.put("voolkan.options.worldScale", 100);
         DEFAULTS.put("options.framerateLimit", 120);
         DEFAULTS.put("options.vsync", true);

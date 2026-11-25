@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale, blockEntityDistance, and macNativeFullscreen options, and apply macOS fresh-config defaults.
+ * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale, blockEntityDistance, macNativeFullscreen, and macReduceResolution options, and apply macOS fresh-config defaults.
  */
 
 import com.google.gson.Gson;
@@ -51,6 +51,8 @@ public class Config {
     public boolean disallowFullscreenExclusive = false;
     /** Use native macOS fullscreen Spaces instead of borderless fullscreen (macOS only). */
     public boolean macNativeFullscreen = false;
+    /** Render at 1x logical resolution instead of full Retina HiDPI on macOS (macOS only). */
+    public boolean macReduceResolution = false;
     /** Requested swapchain image count; 0 = driver minimum + 1. Clamped to the surface limits. */
     public int swapChainImages = 0;
     public int builderThreads = 0;
@@ -110,6 +112,7 @@ public class Config {
             this.frameQueueSize = 2;
             this.swapChainImages = 0;
             this.macNativeFullscreen = false;
+            this.macReduceResolution = false;
             this.indirectDraw = false;
         }
     }

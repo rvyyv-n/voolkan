@@ -9,6 +9,7 @@ package net.vulkanmod.vulkan.framebuffer;
 
 import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.StartupLog;
+import dev.voolkan.macos.MacosWindowUtil;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.config.Platform;
@@ -33,6 +34,7 @@ import static net.vulkanmod.vulkan.Vulkan.*;
 import static net.vulkanmod.vulkan.device.DeviceManager.vkDevice;
 import static net.vulkanmod.vulkan.util.VUtil.UINT32_MAX;
 import static org.lwjgl.glfw.GLFW.glfwGetFramebufferSize;
+import static org.lwjgl.glfw.GLFW.glfwGetWindowSize;
 import static org.lwjgl.system.MemoryStack.stackGet;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.KHRSurface.*;
@@ -116,6 +118,10 @@ public class SwapChain extends Framebuffer {
     }
 
     private void createSwapChain() {
+        if (Platform.isMacOS() && Initializer.CONFIG != null) {
+            MacosWindowUtil.syncMetalLayerScale(Vulkan.window, Initializer.CONFIG.macReduceResolution);
+        }
+
         try (MemoryStack stack = stackPush()) {
             VkDevice device = Vulkan.getVkDevice();
             DeviceManager.SurfaceProperties surfaceProperties = DeviceManager.querySurfaceProperties(device.getPhysicalDevice(), stack);
@@ -412,7 +418,11 @@ public class SwapChain extends Framebuffer {
         IntBuffer width = stackGet().ints(0);
         IntBuffer height = stackGet().ints(0);
 
-        glfwGetFramebufferSize(window, width, height);
+        if (Platform.isMacOS() && Initializer.CONFIG != null && Initializer.CONFIG.macReduceResolution) {
+            glfwGetWindowSize(window, width, height);
+        } else {
+            glfwGetFramebufferSize(window, width, height);
+        }
 
         VkExtent2D actualExtent = VkExtent2D.malloc(stackGet()).set(width.get(0), height.get(0));
 

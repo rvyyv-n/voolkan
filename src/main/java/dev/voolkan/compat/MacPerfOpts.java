@@ -101,6 +101,7 @@ public final class MacPerfOpts {
         joiner.add("tbdrPass=" + tbdrPassOpts());
         joiner.add("menuBlur=" + menuBlurOpts());
         joiner.add("shaderTarget=" + shaderOptsMac());
+        joiner.add("reduceRes=" + (net.vulkanmod.Initializer.CONFIG != null && net.vulkanmod.Initializer.CONFIG.macReduceResolution));
         return joiner.toString();
     }
 }

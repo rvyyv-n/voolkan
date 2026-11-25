@@ -7,8 +7,10 @@ package net.vulkanmod.vulkan;
  */
 
 import dev.voolkan.compat.StartupLog;
+import dev.voolkan.macos.MacosWindowUtil;
 import dev.voolkan.power.PowerSources;
 import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -204,6 +206,9 @@ public class Vulkan {
         KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
         vkDestroyInstance(instance, null);
         PowerSources.shutdown();
+        if (Platform.isMacOS()) {
+            MacosWindowUtil.reset();
+        }
         StartupLog.reset();
     }
 
@@ -340,6 +345,10 @@ public class Vulkan {
                         "Failed to create window surface");
 
             surface = pSurface.get(0);
+        }
+
+        if (Platform.isMacOS() && Initializer.CONFIG != null && Initializer.CONFIG.macReduceResolution) {
+            MacosWindowUtil.syncMetalLayerScale(window, true);
         }
     }
 
