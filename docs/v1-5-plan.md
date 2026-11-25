@@ -2,7 +2,7 @@
 
 Scope for voolkan v1.5 on Minecraft 1.21.11. It replaces the old `macos-perf` and `v1-5-qol` placeholders. Roadmap items are in `ROADMAP.md` under "Future: v1.5" (grep by tag); open work is in `STATUS.md`.
 
-Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Windows/base passes 8-13 are built on `plan/v1-5` (awaiting manual R7 smoke testing); macOS passes 14-16 are not started yet.
+Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Windows/base passes 8-13 and the post-Pass-13 FPS optimization sweep (`66e9675..a5ed6a4`) are merged on `plan/v1-5` and verified in-game on the R7 350; macOS passes 14-16 are next.
 
 ## Goals
 
@@ -78,19 +78,20 @@ Passes continue the existing numbering (Pass 7 was the last). All v1.5 passes la
 
 | Pass | Tag | Content | Tested by |
 |---|---|---|---|
-| 8 | `qol-upstream` | Cherry-pick (`-x`) upstream `0663824` (opt out of Windows fullscreen exclusive: fixes OBS/Discord capture and Alt-Tab freezes), `47ed9cc` (screenshot sync fix), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint for other mods) | build, R7 smoke |
-| 9 | `qol-small` | VRAM and memory use on the F3 screen; shader binary cache on disk (startup and first-load stutter, more so on Mac); hardware blit for texture copies where the format supports it | build, R7 smoke |
-| 10 | `frame-caps` | Precise frame limiter (sleep then short spin, timed to the present); lower frame cap when the window is unfocused, hidden or minimised; platform hook for optional battery cap (macOS probe wired in Pass 15); "Battery" entry in the Presets row | build, R7 smoke with frame times |
-| 11 | `res-scale` | Resolution scale: draw the world below screen resolution and scale it up with a simple filter; GUI stays at full resolution; works with post effects | build, R7 smoke |
-| 12 | `pipeline-warmup` | Build pipelines for known states from the saved caches during world load instead of on first use (needs Pass 9) | build, R7 smoke |
-| 13 | `qol-options` | Separate render distance for block entities (chests, signs, banners); restore-defaults button on each voolkan settings page | build, R7 smoke |
+| 8 | `qol-upstream` | Cherry-pick (`-x`) upstream `0663824` (opt out of Windows fullscreen exclusive: opt-in via `disallowFullscreenExclusive` / `-Dvoolkan.disallowFullscreenExclusive=true`, default `false` to preserve R7 fullscreen FPS), `47ed9cc` (screenshot sync fix), `c84950a` (multi image view formats), `796aef1` (settings registry entrypoint for other mods) | build, R7 smoke (verified) |
+| 9 | `qol-small` | VRAM and memory use on the F3 screen; shader binary cache on disk (startup and first-load stutter, more so on Mac); hardware blit for texture copies where the format supports it | build, R7 smoke (verified) |
+| 10 | `frame-caps` | Precise frame limiter (sleep then short spin, timed to the present); lower frame cap when the window is unfocused, hidden or minimised; platform hook for optional battery cap (macOS probe wired in Pass 15); "Battery" entry in the Presets row | build, R7 smoke with frame times (verified) |
+| 11 | `res-scale` | Resolution scale: draw the world below screen resolution and scale it up with a simple filter; GUI stays at full resolution; works with post effects | build, R7 smoke (verified) |
+| 12 | `pipeline-warmup` | Build pipelines for known states from the saved caches during world load instead of on first use (needs Pass 9) | build, R7 smoke (verified) |
+| 13 | `qol-options` | Separate render distance for block entities (chests, signs, banners); restore-defaults button on each voolkan settings page | build, R7 smoke (verified) |
 | 14 | `mac-boot` | Portability enumeration and subset (enabled only when offered); fix `isWindows()`; depth format order; logic-op guard plus text-highlight fallback; capability log block for portability/MoltenVK; Apple profile file and run script | build, Apple profile run clean, R7 smoke; Mac round 1 (starts, reaches a world, `vulkaninfo`) |
 | 15 | `mac-window` | Restore needed macOS window hints; Retina and cursor scaling check; fullscreen option per D2; present-mode and image-count clamps (2-3 images, no MAILBOX); low-latency defaults on macOS; wire macOS battery-cap probe from Pass 10; `docs/mac-test.md` | build, Apple profile, R7 smoke; Mac round 2 (resize, fullscreen, input feel, battery cap) |
 | 16 | `mac-perf` | Tile-friendly attachment handling on tile GPUs (don't store depth, clear instead of load at frame start); audit render-pass restarts per frame; unified-memory fast path (write directly instead of staging when memory is host-visible and device-local); MoltenVK settings through layer settings if measured to help; indirect draw on Mac by default only if round 3 shows it is faster | build, Apple profile, R7 smoke; Mac round 3 (FPS and frame times vs. R7 numbers, both render paths, indirect draw on and off) |
 
 Order and reasons:
 - **Windows/base first (Passes 8-13):** `qol-upstream` (Pass 8) goes first so cherry-picks land cleanly before later edits. `qol-small` (Pass 9) through `qol-options` (Pass 13) can all be verified directly on the R7 350 without waiting on Mac tester turnarounds. `pipeline-warmup` (Pass 12) depends on the shader binary cache from Pass 9. `res-scale` (Pass 11) is the largest base pass and gets a deep review.
-- **macOS second (Passes 14-16):** `mac-boot` (Pass 14) gets macOS starting with all base QoL/perf features already included. `mac-window` (Pass 15) handles windowing, present modes, input, and the macOS battery probe. `mac-perf` (Pass 16) comes last so frame-time measurements happen on settled windowing and present modes.
+- **macOS second (Passes 14-16):** `mac-boot` (Pass 14) gets macOS starting with all base QoL/perf features and the post-Pass-13 FPS optimizations (`66e9675..a5ed6a4`) already included. `mac-window` (Pass 15) handles windowing, present modes, input, and the macOS battery probe. `mac-perf` (Pass 16) comes last so frame-time measurements happen on settled windowing and present modes.
+  - **Integration notes from `66e9675..a5ed6a4`:** `MemoryTypes` already places small streaming buffers in `DEVICE_LOCAL | HOST_VISIBLE` (BAR) memory with automatic fallback (coordinate Pass 16 unified-memory writes with it); `DefaultMainPass` / `WorldScale` uses a legacy `DONT_CARE` swapchain discard pass when returning from scaled world (keep Pass 16 tile-GPU attachment handling aligned on both paths); `Synchronization` / `UploadManager` / `Renderer` use async semaphores for chunk uploads and `DescriptorSets` caches descriptor sets across draws (verify MoltenVK compatibility during Pass 14/16 reviews).
 - Release prep (version, changelog, tag) stays with the owner after Pass 16.
 
 Review gates: Passes 11, 14, and 16 (resolution scaling, instance/device setup, and tile-GPU attachment/memory changes) get a deep correctness review before moving on.

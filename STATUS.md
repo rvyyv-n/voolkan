@@ -2,7 +2,7 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-11-25 (v1.5 Windows/base passes 8-13 built on `plan/v1-5`; R7 smoke pending before macOS passes 14-16). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
+Last updated: 2026-11-25 (v1.5 Windows/base passes 8-13 + FPS optimization pass merged on `plan/v1-5` and verified on R7 350; ready for macOS passes 14-16). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
 
 ## Released
 - **voolkan 1.0.0+1.21.11**: Full release tag `v1.0.0+1.21.11` published with release jar, sources, and sanitized companion modpack (`.mrpack`).
@@ -31,12 +31,13 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 
 | Tag | Task | Detail |
 |---|---|---|
-| `qol-upstream` | Pass 8: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | built on `plan/v1-5`; waits for R7 smoke |
-| `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | built on `plan/v1-5`; waits for R7 smoke |
-| `frame-caps` | Pass 10: precise limiter, background cap, battery-cap hook, Battery preset | built on `plan/v1-5`; waits for R7 smoke with frame times |
-| `res-scale` | Pass 11: resolution scale for the world | built & reviewed on `plan/v1-5`; waits for R7 smoke |
-| `pipeline-warmup` | Pass 12: build pipelines during world load | built on `plan/v1-5`; waits for R7 smoke |
-| `qol-options` | Pass 13: block-entity distance, restore defaults per page | built on `plan/v1-5`; waits for R7 smoke |
+| `qol-upstream` | Pass 8: four upstream cherry-picks (fullscreen exclusive, screenshot sync, image view formats, settings registry) | built & R7-verified on `plan/v1-5` (FSE opt-out made opt-in via `disallowFullscreenExclusive`) |
+| `qol-small` | Pass 9: memory on F3, shader binary cache, hardware blit | built & R7-verified on `plan/v1-5` |
+| `frame-caps` | Pass 10: precise limiter, background cap, battery-cap hook, Battery preset | built & R7-verified on `plan/v1-5` |
+| `res-scale` | Pass 11: resolution scale for the world | built, reviewed & R7-verified on `plan/v1-5` |
+| `pipeline-warmup` | Pass 12: build pipelines during world load | built & R7-verified on `plan/v1-5` |
+| `qol-options` | Pass 13: block-entity distance, restore defaults per page | built & R7-verified on `plan/v1-5` |
+| `fps-opt` | Post-Pass 13 FPS optimization sweep (regression fixes, SPIR-V opts, state/descriptor cache, shared SectionData slab, async semaphore uploads, BAR streaming buffers, hot-path de-allocation) | merged & R7-verified on `plan/v1-5` (`66e9675..a5ed6a4`) |
 | `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | deep review; Mac round 1 |
 | `mac-window` | Pass 15: Mac window, Retina, fullscreen, present modes, latency defaults, Mac battery probe, tester checklist | Mac round 2 |
 | `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK settings | deep review; Mac round 3 |
