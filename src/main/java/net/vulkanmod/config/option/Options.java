@@ -5,7 +5,7 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block, Presets row, World Resolution, background/battery FPS caps, and block entity distance.
+ * read-only Compatibility block, Presets row, World Resolution, background/battery FPS caps, block entity distance, and macOS fullscreen/swapchain options.
  */
 
 import com.mojang.blaze3d.platform.Window;
@@ -94,9 +94,11 @@ public abstract class Options {
         var windowModeOption = new CyclingOption<>(Component.translatable("vulkanmod.options.windowMode"),
                                                    WindowMode.values(),
                                                    value -> {
-                                                       boolean exclusiveFullscreen = value == WindowMode.EXCLUSIVE_FULLSCREEN;
-                                                       mcOptions.fullscreen()
-                                                                       .set(exclusiveFullscreen);
+                                                       if (!Platform.isMacOS()) {
+                                                           boolean exclusiveFullscreen = value == WindowMode.EXCLUSIVE_FULLSCREEN;
+                                                           mcOptions.fullscreen()
+                                                                           .set(exclusiveFullscreen);
+                                                       }
 
                                                        config.windowMode = value.mode;
                                                        fullscreenDirty = true;
@@ -111,13 +113,13 @@ public abstract class Options {
                     VideoModeManager.selectedVideoMode.refreshRate = value;
                     VideoModeManager.applySelectedVideoMode();
 
-                    if (mcOptions.fullscreen().get()) {
+                    if (!Platform.isMacOS() && mcOptions.fullscreen().get()) {
                         fullscreenDirty = true;
                     }
                 },
                 () -> VideoModeManager.selectedVideoMode.refreshRate)
                 .setTranslator(refreshRate -> Component.nullToEmpty(refreshRate.toString()))
-                .setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+                .setActivationFn(() -> !Platform.isMacOS() && windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
 
         Option<VideoModeSet> resolutionOption = new CyclingOption<>(
                 Component.translatable("options.fullscreen.resolution"),
@@ -126,7 +128,7 @@ public abstract class Options {
                     VideoModeManager.selectedVideoMode = value.getVideoMode(refreshRateOption.getNewValue());
                     VideoModeManager.applySelectedVideoMode();
 
-                    if (mcOptions.fullscreen().get()) {
+                    if (!Platform.isMacOS() && mcOptions.fullscreen().get()) {
                         fullscreenDirty = true;
                     }
                 },
@@ -137,7 +139,7 @@ public abstract class Options {
                     return selectedVideoModeSet != null ? selectedVideoModeSet : VideoModeSet.getDummy();
                 })
                 .setTranslator(resolution -> Component.nullToEmpty(resolution.toString()))
-                .setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+                .setActivationFn(() -> !Platform.isMacOS() && windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
 
         resolutionOption.setOnChange(() -> {
             VideoModeSet newSet = resolutionOption.getNewValue();
@@ -161,6 +163,23 @@ public abstract class Options {
 
         List<Option<?>> displayOptions = new ArrayList<>();
         displayOptions.add(windowModeOption);
+        if (Platform.isMacOS()) {
+            displayOptions.add(new SwitchOption(Component.translatable("voolkan.options.macNativeFullscreen"),
+                    value -> {
+                        config.macNativeFullscreen = value;
+                        if (config.windowMode != WindowMode.WINDOWED.mode) {
+                            if (value) {
+                                config.windowMode = WindowMode.EXCLUSIVE_FULLSCREEN.mode;
+                            } else if (config.windowMode == WindowMode.EXCLUSIVE_FULLSCREEN.mode) {
+                                config.windowMode = WindowMode.WINDOWED_FULLSCREEN.mode;
+                            }
+                            windowModeOption.syncFromSupplier();
+                            fullscreenDirty = true;
+                        }
+                    },
+                    () -> config.macNativeFullscreen)
+                    .setTooltip(v -> Component.translatable("voolkan.options.macNativeFullscreen.tooltip")));
+        }
         displayOptions.add(resolutionOption);
         displayOptions.add(refreshRateOption);
         displayOptions.add(new RangeOption(Component.translatable("voolkan.options.worldScale"),
@@ -482,6 +501,7 @@ public abstract class Options {
     }
 
     public static OptionBlock[] getOtherOpts() {
+        int maxSwapChainImages = Platform.isMacOS() ? 3 : 6;
         return new OptionBlock[]{
                 new OptionBlock("", new Option<?>[]{
                         new RangeOption(Component.translatable("vulkanmod.options.builderThreads"),
@@ -507,12 +527,12 @@ public abstract class Options {
                                 () -> config.lowLatency)
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.lowLatency.tooltip")),
                         new RangeOption(Component.translatable("vulkanmod.options.swapChainImages"),
-                                0, 6, 1,
+                                0, maxSwapChainImages, 1,
                                 value -> {
                                     config.swapChainImages = value;
                                     Renderer.scheduleSwapChainUpdate();
                                 },
-                                () -> config.swapChainImages)
+                                () -> Math.max(0, Math.min(config.swapChainImages, maxSwapChainImages)))
                                 .setTranslator(v -> v == 0
                                 ? Component.translatable("vulkanmod.options.swapChainImages.auto")
                                 : Component.literal(String.valueOf(v)))

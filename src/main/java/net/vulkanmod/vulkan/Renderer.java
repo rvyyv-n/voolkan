@@ -6,7 +6,7 @@ package net.vulkanmod.vulkan;
  * bind guard: fall back to the main render target when a pipeline is bound with no render pass;
  * frame queue of 1, low-latency wait on the previous frame's fence, swapchain image-count option;
  * submission serials so GPU fences can wait for the frame that holds the work recorded when they were created;
- * reset world-scale mode at frame start.
+ * reset world-scale mode at frame start; clamp scissor rectangles safely to framebuffer bounds.
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
@@ -1092,29 +1092,36 @@ public class Renderer {
             return;
 
         Framebuffer framebuffer = INSTANCE.boundFramebuffer;
-        int framebufferHeight = framebuffer.getHeight();
+        int fbW = framebuffer.getWidth();
+        int fbH = framebuffer.getHeight();
 
-        int vkX = Math.max(0, x);
-        int vkY = framebufferHeight - (y + height);
-        int vkW = Math.min(width, framebuffer.getWidth());
+        long rawX0 = x;
+        long rawX1 = (long) x + Math.max(0, width);
+        long rawY0 = (long) fbH - ((long) y + Math.max(0, height));
+        long rawY1 = (long) fbH - y;
+
+        int vkX = (int) Math.max(0L, Math.min(rawX0, fbW));
+        int vkY = (int) Math.max(0L, Math.min(rawY0, fbH));
+        int vkW = (int) Math.max(vkX, Math.min(rawX1, fbW)) - vkX;
+        int vkH = (int) Math.max(vkY, Math.min(rawY1, fbH)) - vkY;
 
         if (INSTANCE.scissorValid
                 && INSTANCE.vkScissorX == vkX
                 && INSTANCE.vkScissorY == vkY
                 && INSTANCE.vkScissorW == vkW
-                && INSTANCE.vkScissorH == height) {
+                && INSTANCE.vkScissorH == vkH) {
             return;
         }
         INSTANCE.scissorValid = true;
         INSTANCE.vkScissorX = vkX;
         INSTANCE.vkScissorY = vkY;
         INSTANCE.vkScissorW = vkW;
-        INSTANCE.vkScissorH = height;
+        INSTANCE.vkScissorH = vkH;
 
         try (MemoryStack stack = stackPush()) {
             VkRect2D.Buffer scissor = VkRect2D.malloc(1, stack);
             scissor.offset().set(vkX, vkY);
-            scissor.extent().set(vkW, height);
+            scissor.extent().set(vkW, vkH);
 
             vkCmdSetScissor(INSTANCE.currentCmdBuffer, 0, scissor);
         }

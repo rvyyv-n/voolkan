@@ -11,6 +11,7 @@ import net.minecraft.client.InactivityFpsLimit;
 import net.minecraft.client.PrioritizeChunkUpdates;
 import net.minecraft.client.TextureFilteringMethod;
 import net.minecraft.server.level.ParticleStatus;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.config.option.CyclingOption;
 import net.vulkanmod.config.option.Option;
 import net.vulkanmod.config.option.OptionPage;
@@ -39,6 +40,7 @@ public final class PageDefaults {
         // Video
         DEFAULTS.put("voolkan.options.preset", Preset.CUSTOM);
         DEFAULTS.put("vulkanmod.options.windowMode", WindowMode.WINDOWED);
+        DEFAULTS.put("voolkan.options.macNativeFullscreen", false);
         DEFAULTS.put("voolkan.options.worldScale", 100);
         DEFAULTS.put("options.framerateLimit", 120);
         DEFAULTS.put("options.vsync", true);
@@ -81,7 +83,7 @@ public final class PageDefaults {
         // Other
         DEFAULTS.put("vulkanmod.options.builderThreads", 0);
         DEFAULTS.put("vulkanmod.options.frameQueue", 2);
-        DEFAULTS.put("vulkanmod.options.lowLatency", false);
+        DEFAULTS.put("vulkanmod.options.lowLatency", Platform.isMacOS());
         DEFAULTS.put("vulkanmod.options.swapChainImages", 0);
         DEFAULTS.put("vulkanmod.options.textureAnimations", true);
         DEFAULTS.put("vulkanmod.options.wayland", false);

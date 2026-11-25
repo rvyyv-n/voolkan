@@ -3,12 +3,14 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * configurable swapchain image count; BGRA swapchain format preferred over RGBA; log readable swapchain configuration via StartupLog.
+ * configurable swapchain image count; BGRA swapchain format preferred over RGBA; log readable swapchain configuration via StartupLog;
+ * macOS/MoltenVK present-mode and image-count clamps and MemoryStack fix in getExtent.
  */
 
 import dev.voolkan.compat.StartupLog;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.render.util.MathUtil;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -38,7 +40,13 @@ import static org.lwjgl.vulkan.VK10.*;
 public class SwapChain extends Framebuffer {
     // Necessary until tearing-control-unstable-v1 is fully implemented on all GPU Drivers for Wayland
     // (As Immediate Mode (and by extension Screen tearing) doesn't exist on some Wayland installations currently)
-    private static final int defUncappedMode = checkPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR);
+    private static final int defUncappedMode = isMacOrMoltenVK()
+            ? checkPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+            : checkPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR);
+
+    private static boolean isMacOrMoltenVK() {
+        return Platform.isMacOS() || (DeviceManager.device != null && DeviceManager.device.isMoltenVK());
+    }
 
     private final Long2ReferenceOpenHashMap<long[]> FBO_map = new Long2ReferenceOpenHashMap<>();
 
@@ -97,12 +105,26 @@ public class SwapChain extends Framebuffer {
                 return;
             }
 
+            int minImages = surfaceProperties.capabilities.minImageCount();
+            int maxImages = surfaceProperties.capabilities.maxImageCount();
             int configuredImages = Initializer.CONFIG.swapChainImages;
             int requestedImages = configuredImages > 0
-                    ? Math.max(configuredImages, surfaceProperties.capabilities.minImageCount())
-                    : surfaceProperties.capabilities.minImageCount() + 1;
-            if (surfaceProperties.capabilities.maxImageCount() > 0 && requestedImages > surfaceProperties.capabilities.maxImageCount()) {
-                requestedImages = surfaceProperties.capabilities.maxImageCount();
+                    ? Math.max(configuredImages, minImages)
+                    : minImages + 1;
+            if (isMacOrMoltenVK()) {
+                int lo = Math.max(2, minImages);
+                int hi = maxImages > 0 ? Math.min(3, maxImages) : 3;
+                if (hi < lo) {
+                    if (maxImages > 0 && maxImages < lo) {
+                        lo = minImages;
+                        hi = maxImages;
+                    } else {
+                        hi = lo;
+                    }
+                }
+                requestedImages = Math.max(lo, Math.min(requestedImages, hi));
+            } else if (maxImages > 0 && requestedImages > maxImages) {
+                requestedImages = maxImages;
             }
 
             IntBuffer imageCount = stack.ints(requestedImages);
@@ -284,6 +306,10 @@ public class SwapChain extends Framebuffer {
     private int getPresentMode(IntBuffer availablePresentModes) {
         int requestedMode = vsync ? VK_PRESENT_MODE_FIFO_KHR : defUncappedMode;
 
+        if (isMacOrMoltenVK() && requestedMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            requestedMode = VK_PRESENT_MODE_FIFO_KHR;
+        }
+
         // FIFO mode is the only mode that has to be supported
         if (requestedMode == VK_PRESENT_MODE_FIFO_KHR)
             return VK_PRESENT_MODE_FIFO_KHR;
@@ -319,7 +345,7 @@ public class SwapChain extends Framebuffer {
 
         glfwGetFramebufferSize(window, width, height);
 
-        VkExtent2D actualExtent = VkExtent2D.malloc(MemoryStack.stackPush()).set(width.get(0), height.get(0));
+        VkExtent2D actualExtent = VkExtent2D.malloc(stackGet()).set(width.get(0), height.get(0));
 
         VkExtent2D minExtent = capabilities.minImageExtent();
         VkExtent2D maxExtent = capabilities.maxImageExtent();

@@ -173,6 +173,12 @@ public abstract class Option<T> {
         this.setNewValue(this.value);
     }
 
+    /** Refreshes both committed and staged values from {@link #valueSupplier}. */
+    public void syncFromSupplier() {
+        this.value = this.valueSupplier.get();
+        this.newValue = this.value;
+    }
+
     public T getNewValue() {
         return this.newValue;
     }

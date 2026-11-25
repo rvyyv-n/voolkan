@@ -18,4 +18,16 @@ public interface PowerSource {
 
     /** Whether the machine is currently running on battery power. */
     boolean isOnBattery();
+
+    /**
+     * Whether this source already manages its own non-blocking asynchronous polling so
+     * {@link PowerSources#isOnBattery()} should read it directly without adding an extra cache layer.
+     */
+    default boolean isAsync() {
+        return false;
+    }
+
+    /** Releases any background resources held by this probe on shutdown. */
+    default void close() {
+    }
 }

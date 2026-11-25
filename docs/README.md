@@ -5,6 +5,7 @@
 | `dev-setup.md` | toolchain, versions, install commands |
 | `compatibility.md` | mod compatibility, conflicts, and companion recommendations |
 | `smoke-test.md` | the manual/automated smoke checklist |
+| `mac-test.md` | one-page test checklist for Apple Silicon Mac testers |
 | `upstream.md` | how to fetch/rebase/cherry-pick from upstream VulkanMod |
 | `conventions.md` | branches, tags, commits, packages, properties, LGPL notice |
 | `upstream-pr-plan.md` | plan for sending fixes to upstream VulkanMod (nothing opened) |

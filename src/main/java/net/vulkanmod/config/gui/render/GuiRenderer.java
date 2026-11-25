@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use GUI-scaled window height for scrolling label scissor height so Retina HiDPI does not clip labels.
+ */
+
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.*;
 import net.minecraft.util.Util;
@@ -95,7 +101,7 @@ public abstract class GuiRenderer {
             double scrollingOffset = Math.sin((Math.PI / 2) * Math.cos((Math.PI * 2) * currentTimeInSeconds / scrollSpeed)) / 2.0 + 0.5;
             double horizontalScroll = Mth.lerp(scrollingOffset, 0.0, scrollAmount);
 
-            enableScissor(x0 - 1, 0, x1, Minecraft.getInstance().getWindow().getScreenHeight());
+            enableScissor(x0 - 1, 0, x1, Minecraft.getInstance().getWindow().getGuiScaledHeight());
             drawString(font, component, (int) (x0 - horizontalScroll), y, color);
             disableScissor();
         }

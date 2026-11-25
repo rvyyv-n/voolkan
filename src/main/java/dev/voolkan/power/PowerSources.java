@@ -41,12 +41,22 @@ public final class PowerSources {
 
     /**
      * Register the platform {@link PowerSource} (or {@code null} to reset to {@link #UNSUPPORTED}).
-     * Invalidates the cached battery state so the next query polls the new source.
+     * Closes any previously active probe and invalidates the cached battery state so the next
+     * query polls the new source.
      */
     public static void set(PowerSource source) {
+        PowerSource prev = active;
         active = (source != null) ? source : UNSUPPORTED;
         lastPollNs = 0L;
         cachedOnBattery = false;
+        if (prev != null && prev != UNSUPPORTED && prev != active) {
+            prev.close();
+        }
+    }
+
+    /** Stops the active platform probe (if any) and resets to {@link #UNSUPPORTED}. */
+    public static void shutdown() {
+        set(UNSUPPORTED);
     }
 
     /**
@@ -58,6 +68,9 @@ public final class PowerSources {
         PowerSource source = active;
         if (!source.isSupported()) {
             return false;
+        }
+        if (source.isAsync()) {
+            return source.isOnBattery();
         }
 
         long now = System.nanoTime();

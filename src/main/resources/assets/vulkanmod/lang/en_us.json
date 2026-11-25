@@ -75,6 +75,8 @@
   "voolkan.options.preset.quality": "Quality",
   "voolkan.options.preset.battery": "Battery",
 
+  "voolkan.options.macNativeFullscreen": "Native macOS Fullscreen",
+  "voolkan.options.macNativeFullscreen.tooltip": "Uses macOS native fullscreen Spaces instead of instant borderless fullscreen. Off (borderless) avoids Space animations; toggle to test which feels better on your Mac.",
   "voolkan.options.backgroundFps": "Background FPS Cap",
   "voolkan.options.backgroundFps.tooltip": "Caps the framerate when the window is unfocused (and further when hidden or minimised). Set to Off to disable.",
   "voolkan.options.batteryFps": "Battery FPS Cap",
