@@ -2,7 +2,7 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-11-25 (v1.5 Windows/base passes 8-13 + FPS optimization pass merged on `plan/v1-5` and verified on R7 350; ready for macOS passes 14-16). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
+Last updated: 2026-11-25 (v1.5 macOS passes 14-16 built & deep-reviewed on `feat/v1-5-macos` with `voolkan-1.5.0-beta.2+1.21.11.jar` test build ready; awaiting Mac tester rounds and R7 350 regression check). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
 
 ## Released
 - **voolkan 1.0.0+1.21.11**: Full release tag `v1.0.0+1.21.11` published with release jar, sources, and sanitized companion modpack (`.mrpack`).
@@ -38,9 +38,9 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 | `pipeline-warmup` | Pass 12: build pipelines during world load | built & R7-verified on `plan/v1-5` |
 | `qol-options` | Pass 13: block-entity distance, restore defaults per page | built & R7-verified on `plan/v1-5` |
 | `fps-opt` | Post-Pass 13 FPS optimization sweep (regression fixes, SPIR-V opts, state/descriptor cache, shared SectionData slab, async semaphore uploads, BAR streaming buffers, hot-path de-allocation) | merged & R7-verified on `plan/v1-5` (`66e9675..a5ed6a4`) |
-| `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | deep review; Mac round 1 |
-| `mac-window` | Pass 15: Mac window, Retina, fullscreen, present modes, latency defaults, Mac battery probe, tester checklist | Mac round 2 |
-| `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK settings | deep review; Mac round 3 |
+| `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | built & deep-reviewed on `feat/v1-5-macos` (`1.5.0-beta.2+1.21.11`); awaiting Mac round 1 & R7 regression check |
+| `mac-window` | Pass 15: Mac window, Retina, fullscreen, present modes, latency defaults, Mac battery probe, tester checklist | built & reviewed on `feat/v1-5-macos` (`1.5.0-beta.2+1.21.11`); awaiting Mac round 2 & R7 regression check |
+| `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK diagnostics & indirect-draw default | built & deep-reviewed on `feat/v1-5-macos` (`1.5.0-beta.2+1.21.11`); awaiting Mac round 3 & R7 regression check |
 
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 5.2 `upstream-pr`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`, 7.1 `low-vram`.
