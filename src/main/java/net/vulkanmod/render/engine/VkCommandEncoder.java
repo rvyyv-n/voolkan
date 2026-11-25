@@ -22,6 +22,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.logging.LogUtils;
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.client.Minecraft;
@@ -392,6 +393,10 @@ public class VkCommandEncoder implements CommandEncoder {
                     );
                 } else {
                     long dstOffset = gpuBufferSlice.offset();
+
+                    if (vkGpuBuffer.tryUnifiedUniformWrite(dstOffset, byteBuffer)) {
+                        return;
+                    }
 
                     StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
 
@@ -818,7 +823,7 @@ public class VkCommandEncoder implements CommandEncoder {
 
                     UBO ubo = pipeline.getUBO(blockBinding);
                     ubo.setUseGlobalBuffer(false);
-                    ubo.getBufferSlice().set(gpuBuffer1.buffer, gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
+                    ubo.getBufferSlice().set(gpuBuffer1.buffer, gpuBuffer1.getDynamicBaseOffset() + gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
                 }
             };
 
@@ -974,7 +979,7 @@ public class VkCommandEncoder implements CommandEncoder {
             VkGpuBuffer gpuBuffer = (VkGpuBuffer) gpuBufferSlice.buffer();
 
             ubo.setUseGlobalBuffer(false);
-            ubo.getBufferSlice().set(gpuBuffer.buffer, gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
+            ubo.getBufferSlice().set(gpuBuffer.buffer, gpuBuffer.getDynamicBaseOffset() + gpuBufferSlice.offset(), (int) gpuBufferSlice.length());
         }
 
         List<ImageDescriptor> imageDescriptors = pipeline.getImageDescriptors();

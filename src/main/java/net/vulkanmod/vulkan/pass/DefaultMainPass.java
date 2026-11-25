@@ -9,6 +9,7 @@ package net.vulkanmod.vulkan.pass;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import dev.voolkan.render.WorldScale;
 import net.minecraft.client.Camera;
@@ -53,6 +54,7 @@ public class DefaultMainPass implements MainPass {
     private GpuTextureView[] colorAttachmentTextureViews;
     IntSupplier imageIdxSupplier;
     private GpuTexture depthAttachmentTexture;
+    private GpuTexture[] depthAttachmentTextures;
 
     private final WorldScale worldScale = new WorldScale();
 
@@ -166,6 +168,7 @@ public class DefaultMainPass implements MainPass {
         if (TileGpuOpts.isEnabled()) {
             if (this.mainTargetStartedThisFrame) {
                 // Mid-frame resume (e.g. Renderer.flushCmds): preserve swapchain contents drawn earlier this frame
+                ensureSwapChainAcquiredIfNeeded();
                 Framebuffer framebuffer = this.mainFramebuffer;
                 framebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
                 Renderer.getInstance().beginRenderPass(this.auxRenderPass, framebuffer);
@@ -191,6 +194,10 @@ public class DefaultMainPass implements MainPass {
     public void end(VkCommandBuffer commandBuffer) {
         Renderer.getInstance().endRenderPass(commandBuffer);
         this.worldScale.reset();
+        if (MacPerfOpts.inlineImageUploads()) {
+            net.vulkanmod.render.texture.ImageUploadHelper.INSTANCE.flushInlineTransitions(commandBuffer);
+        }
+        ensureSwapChainAcquiredIfNeeded();
 
         if (TileGpuOpts.isEnabled()
                 && !this.mainTargetStartedThisFrame
@@ -281,6 +288,8 @@ public class DefaultMainPass implements MainPass {
         if (isMainRenderPass(boundRenderPass))
             return;
 
+        ensureSwapChainAcquiredIfNeeded();
+
         if (TileGpuOpts.isEnabled() && !this.mainTargetStartedThisFrame) {
             rebindMainTarget(false, false);
             return;
@@ -296,6 +305,8 @@ public class DefaultMainPass implements MainPass {
             rebindMainTarget();
             return false;
         }
+
+        ensureSwapChainAcquiredIfNeeded();
 
         if (TileGpuOpts.isEnabled() && !this.mainTargetStartedThisFrame) {
             boolean effectiveClearColor = clearColor || this.pendingInitialClearColor;
@@ -347,6 +358,8 @@ public class DefaultMainPass implements MainPass {
         if (isMainRenderPass(boundRenderPass))
             return;
 
+        ensureSwapChainAcquiredIfNeeded();
+
         this.pendingInitialClearColor = false;
         this.pendingInitialClearDepth = false;
 
@@ -381,6 +394,7 @@ public class DefaultMainPass implements MainPass {
             activeFramebuffer = this.worldScale.getFramebuffer();
         }
         else {
+            ensureSwapChainAcquiredIfNeeded();
             if (isMainRenderPass(boundRenderPass))
                 Renderer.getInstance().endRenderPass(commandBuffer);
             activeFramebuffer = this.mainFramebuffer;
@@ -403,23 +417,39 @@ public class DefaultMainPass implements MainPass {
         return this.worldScale.isActive() ? this.worldScale.getClearPass() : this.mainRenderPass;
     }
 
+    private void ensureSwapChainAcquiredIfNeeded() {
+        if (MacPerfOpts.lateAcquire() && this.mainFramebuffer == Renderer.getInstance().getSwapChain()) {
+            Renderer.getInstance().ensureSwapChainImageAcquired();
+        }
+    }
+
     @Override
     public GpuTexture getColorAttachment() {
-        return this.worldScale.isActive()
-                ? this.worldScale.getColorAttachment()
-                : this.colorAttachmentTextures[this.imageIdxSupplier.getAsInt()];
+        if (this.worldScale.isActive()) {
+            return this.worldScale.getColorAttachment();
+        }
+        ensureSwapChainAcquiredIfNeeded();
+        return this.colorAttachmentTextures[this.imageIdxSupplier.getAsInt()];
     }
 
     @Override
     public GpuTextureView getColorAttachmentView() {
-        return this.worldScale.isActive()
-                ? this.worldScale.getColorAttachmentView()
-                : this.colorAttachmentTextureViews[this.imageIdxSupplier.getAsInt()];
+        if (this.worldScale.isActive()) {
+            return this.worldScale.getColorAttachmentView();
+        }
+        ensureSwapChainAcquiredIfNeeded();
+        return this.colorAttachmentTextureViews[this.imageIdxSupplier.getAsInt()];
     }
 
     @Override
     public GpuTexture getDepthAttachment() {
-        return this.worldScale.isActive() ? this.worldScale.getDepthAttachment() : this.depthAttachmentTexture;
+        if (this.worldScale.isActive()) {
+            return this.worldScale.getDepthAttachment();
+        }
+        if (this.depthAttachmentTextures != null && this.depthAttachmentTextures.length > 0) {
+            return this.depthAttachmentTextures[Renderer.getCurrentFrame() % this.depthAttachmentTextures.length];
+        }
+        return this.depthAttachmentTexture;
     }
 
     @Override
@@ -465,6 +495,16 @@ public class DefaultMainPass implements MainPass {
             this.imageIdxSupplier = () -> 0;
         }
 
-        this.depthAttachmentTexture = device.gpuTextureFromVulkanImage(this.mainFramebuffer.getDepthAttachment());
+        if (this.mainFramebuffer == swapChain && swapChain.getDepthAttachments() != null) {
+            VulkanImage[] depths = swapChain.getDepthAttachments();
+            this.depthAttachmentTextures = new GpuTexture[depths.length];
+            for (int i = 0; i < depths.length; i++) {
+                this.depthAttachmentTextures[i] = device.gpuTextureFromVulkanImage(depths[i]);
+            }
+            this.depthAttachmentTexture = this.depthAttachmentTextures[0];
+        } else {
+            this.depthAttachmentTextures = null;
+            this.depthAttachmentTexture = device.gpuTextureFromVulkanImage(this.mainFramebuffer.getDepthAttachment());
+        }
     }
 }

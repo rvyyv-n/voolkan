@@ -7,6 +7,7 @@ package net.vulkanmod.vulkan.framebuffer;
  * macOS/MoltenVK present-mode and image-count clamps and MemoryStack fix in getExtent.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.StartupLog;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
@@ -52,6 +53,7 @@ public class SwapChain extends Framebuffer {
 
     private long swapChainId = VK_NULL_HANDLE;
     private List<VulkanImage> swapChainImages;
+    private VulkanImage[] depthAttachments;
     private VkExtent2D extent2D;
     public boolean isBGRAformat;
     private boolean vsync = false;
@@ -69,10 +71,7 @@ public class SwapChain extends Framebuffer {
     }
 
     public void recreate() {
-        if (this.depthAttachment != null) {
-            this.depthAttachment.free();
-            this.depthAttachment = null;
-        }
+        freeDepthResources();
 
         if (!DYNAMIC_RENDERING) {
             this.FBO_map.forEach((pass, framebuffers) -> Arrays.stream(framebuffers).forEach(id -> vkDestroyFramebuffer(getVkDevice(), id, null)));
@@ -80,6 +79,39 @@ public class SwapChain extends Framebuffer {
         }
 
         createSwapChain();
+    }
+
+    private void freeDepthResources() {
+        if (this.depthAttachments != null) {
+            for (VulkanImage depth : this.depthAttachments) {
+                if (depth != null) {
+                    depth.free();
+                }
+            }
+            this.depthAttachments = null;
+            this.depthAttachment = null;
+        } else if (this.depthAttachment != null) {
+            this.depthAttachment.free();
+            this.depthAttachment = null;
+        }
+    }
+
+    /** Rebuilds per-frame depth attachments if the frame queue size changed during swapchain recreation. */
+    public void syncDepthAttachments(int frameSlots) {
+        if (!this.hasImages || !MacPerfOpts.perFrameDepth()) {
+            return;
+        }
+        int targetSlots = Math.max(1, frameSlots);
+        int currentSlots = this.depthAttachments != null ? this.depthAttachments.length : (this.depthAttachment != null ? 1 : 0);
+        if (currentSlots == targetSlots) {
+            return;
+        }
+        if (!DYNAMIC_RENDERING) {
+            this.FBO_map.forEach((pass, framebuffers) -> Arrays.stream(framebuffers).forEach(id -> vkDestroyFramebuffer(getVkDevice(), id, null)));
+            this.FBO_map.clear();
+        }
+        freeDepthResources();
+        createDepthResources(targetSlots);
     }
 
     private void createSwapChain() {
@@ -219,27 +251,40 @@ public class SwapChain extends Framebuffer {
     private long[] createFramebuffers(RenderPass renderPass) {
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
-
-            long[] framebuffers = new long[this.swapChainImages.size()];
+            boolean hasDepth = renderPass.getDepthFormat() != 0;
+            int depthCount = (hasDepth && this.depthAttachments != null && this.depthAttachments.length > 1)
+                    ? this.depthAttachments.length
+                    : 1;
+            long[] framebuffers = new long[this.swapChainImages.size() * depthCount];
 
             for (int i = 0; i < this.swapChainImages.size(); ++i) {
-                LongBuffer attachments = stack.longs(this.swapChainImages.get(i).getImageView(), this.depthAttachment.getImageView());
+                for (int d = 0; d < depthCount; ++d) {
+                    LongBuffer attachments;
+                    if (hasDepth) {
+                        VulkanImage depthImg = (this.depthAttachments != null && d < this.depthAttachments.length)
+                                ? this.depthAttachments[d]
+                                : this.depthAttachment;
+                        attachments = stack.longs(this.swapChainImages.get(i).getImageView(), depthImg.getImageView());
+                    } else {
+                        attachments = stack.longs(this.swapChainImages.get(i).getImageView());
+                    }
 
-                LongBuffer pFramebuffer = stack.mallocLong(1);
+                    LongBuffer pFramebuffer = stack.mallocLong(1);
 
-                VkFramebufferCreateInfo framebufferInfo = VkFramebufferCreateInfo.calloc(stack);
-                framebufferInfo.sType(VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO);
-                framebufferInfo.renderPass(renderPass.getId());
-                framebufferInfo.width(this.width);
-                framebufferInfo.height(this.height);
-                framebufferInfo.layers(1);
-                framebufferInfo.pAttachments(attachments);
+                    VkFramebufferCreateInfo framebufferInfo = VkFramebufferCreateInfo.calloc(stack);
+                    framebufferInfo.sType(VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO);
+                    framebufferInfo.renderPass(renderPass.getId());
+                    framebufferInfo.width(this.width);
+                    framebufferInfo.height(this.height);
+                    framebufferInfo.layers(1);
+                    framebufferInfo.pAttachments(attachments);
 
-                if (vkCreateFramebuffer(Vulkan.getVkDevice(), framebufferInfo, null, pFramebuffer) != VK_SUCCESS) {
-                    throw new RuntimeException("Failed to create framebuffer");
+                    if (vkCreateFramebuffer(Vulkan.getVkDevice(), framebufferInfo, null, pFramebuffer) != VK_SUCCESS) {
+                        throw new RuntimeException("Failed to create framebuffer");
+                    }
+
+                    framebuffers[i * depthCount + d] = pFramebuffer.get(0);
                 }
-
-                framebuffers[i] = pFramebuffer.get(0);
             }
 
             return framebuffers;
@@ -247,15 +292,35 @@ public class SwapChain extends Framebuffer {
     }
 
     private void createDepthResources() {
-        this.depthAttachment = VulkanImage.createDepthImage(depthFormat, this.width, this.height,
-                                                            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                                            false, false);
+        int frameSlots = Renderer.getInstance() != null ? Math.max(1, Renderer.getFramesNum()) : 1;
+        createDepthResources(frameSlots);
+    }
+
+    private void createDepthResources(int frameSlots) {
+        if (MacPerfOpts.perFrameDepth() && frameSlots > 1) {
+            this.depthAttachments = new VulkanImage[frameSlots];
+            for (int i = 0; i < frameSlots; i++) {
+                this.depthAttachments[i] = VulkanImage.createDepthImage(depthFormat, this.width, this.height,
+                                                                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                                        false, false);
+            }
+            this.depthAttachment = this.depthAttachments[0];
+        } else {
+            this.depthAttachments = null;
+            this.depthAttachment = VulkanImage.createDepthImage(depthFormat, this.width, this.height,
+                                                                VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                                false, false);
+        }
     }
 
     @Override
     protected long getFramebufferId(RenderPass renderPass) {
         long[] framebuffers = this.FBO_map.computeIfAbsent(renderPass.id, renderPass1 -> createFramebuffers(renderPass));
-        return framebuffers[Renderer.getCurrentImage()];
+        int depthCount = (renderPass.getDepthFormat() != 0 && this.depthAttachments != null && this.depthAttachments.length > 1)
+                ? this.depthAttachments.length
+                : 1;
+        int depthIdx = depthCount > 1 ? (Renderer.getCurrentFrame() % depthCount) : 0;
+        return framebuffers[Renderer.getCurrentImage() * depthCount + depthIdx];
     }
 
     public void cleanUp() {
@@ -269,7 +334,7 @@ public class SwapChain extends Framebuffer {
         vkDestroySwapchainKHR(device, this.swapChainId, null);
         this.swapChainImages.forEach(image -> vkDestroyImageView(device, image.getImageView(), null));
 
-        this.depthAttachment.free();
+        freeDepthResources();
     }
 
     private VkSurfaceFormatKHR getFormat(VkSurfaceFormatKHR.Buffer availableFormats) {
@@ -392,6 +457,23 @@ public class SwapChain extends Framebuffer {
 
     public long getColorAttachmentView() {
         return this.getColorAttachment().getImageView();
+    }
+
+    @Override
+    public VulkanImage getDepthAttachment() {
+        if (this.depthAttachments != null && this.depthAttachments.length > 0) {
+            return this.depthAttachments[Renderer.getCurrentFrame() % this.depthAttachments.length];
+        }
+        return this.depthAttachment;
+    }
+
+    @Override
+    public long getDepthImageView() {
+        return this.getDepthAttachment().getImageView();
+    }
+
+    public VulkanImage[] getDepthAttachments() {
+        return this.depthAttachments;
     }
 
     public boolean hasImages() {

@@ -156,6 +156,9 @@ public final class StartupLog {
           .append(Vulkan.layerSettingsSupported ? "advertised" : "not advertised")
           .append('\n');
         sb.append("  MVK_CONFIG env: ").append(formatMvkConfigEnv());
+        if (MacPerfOpts.isPlatformEligible()) {
+            sb.append('\n').append("  macOS perf opts: ").append(MacPerfOpts.describeActive());
+        }
 
         Initializer.LOGGER.info(sb.toString());
     }

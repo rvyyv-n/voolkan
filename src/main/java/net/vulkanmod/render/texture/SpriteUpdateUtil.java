@@ -1,5 +1,13 @@
 package net.vulkanmod.render.texture;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * support flushing sprite layout transitions directly on a caller-provided command buffer for inline macOS image uploads.
+ */
+
+import dev.voolkan.compat.MacPerfOpts;
+import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -29,16 +37,37 @@ public abstract class SpriteUpdateUtil {
             return;
         }
 
+        if (MacPerfOpts.inlineImageUploads()
+                && Renderer.isRecording()
+                && Renderer.getInstance().getBoundRenderPass() == null
+                && ImageUploadHelper.INSTANCE.getCommandBuffer() == null) {
+            transitionLayoutsOn(Renderer.getCommandBuffer());
+            return;
+        }
+
+        if (MacPerfOpts.inlineImageUploads() && Renderer.isRecording()) {
+            for (VulkanImage image : transitionedLayouts) {
+                if (ImageUploadHelper.INSTANCE.hasPendingInlineUpload(image.getId())) {
+                    Renderer.getInstance().flushCmds();
+                    break;
+                }
+            }
+        }
+
         VkCommandBuffer commandBuffer = ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().handle;
+        transitionLayoutsOn(commandBuffer);
+    }
 
-        transitionedLayouts.forEach(
-                image ->
-                {
-                    try (MemoryStack stack = MemoryStack.stackPush()) {
-                        image.readOnlyLayout(stack, commandBuffer);
-                    }
+    public static void transitionLayoutsOn(VkCommandBuffer commandBuffer) {
+        if (transitionedLayouts.isEmpty()) {
+            return;
+        }
 
-                });
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            for (VulkanImage image : transitionedLayouts) {
+                image.readOnlyLayout(stack, commandBuffer);
+            }
+        }
         transitionedLayouts.clear();
     }
 }

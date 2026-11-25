@@ -7,6 +7,7 @@ package net.vulkanmod.vulkan.texture;
  * image layouts are tracked per mip level; support BGRA and additional depth formats in formatSize.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.vulkanmod.render.texture.ImageUploadHelper;
@@ -253,6 +254,17 @@ public class VulkanImage {
 
         long uploadSize = (long) (rowLength * (height - 1) + width) * this.formatSize;
 
+        // If this image already has an unsubmitted inline upload on mainCmdBuffer and this new
+        // upload must go onto ImageUploadHelper (e.g. a render pass is now open), flush mainCmdBuffer
+        // BEFORE copying into StagingBuffer so uploads never execute out of order and StagingBuffer is not reset mid-copy.
+        if (MacPerfOpts.inlineImageUploads()
+                && ImageUploadHelper.INSTANCE.hasPendingInlineUpload(this.id)
+                && (!Renderer.isRecording()
+                    || Renderer.getInstance().getBoundRenderPass() != null
+                    || ImageUploadHelper.INSTANCE.getCommandBuffer() != null)) {
+            Renderer.getInstance().flushCmds();
+        }
+
         StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
 
         // Use a temporary staging buffer if the upload size is greater than
@@ -269,7 +281,13 @@ public class VulkanImage {
 
         long bufferId = stagingBuffer.getId();
 
-        VkCommandBuffer commandBuffer = ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().getHandle();
+        boolean inlineMainCb = MacPerfOpts.inlineImageUploads()
+                && Renderer.isRecording()
+                && Renderer.getInstance().getBoundRenderPass() == null
+                && ImageUploadHelper.INSTANCE.getCommandBuffer() == null;
+        VkCommandBuffer commandBuffer = inlineMainCb
+                ? Renderer.getCommandBuffer()
+                : ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().getHandle();
         try (MemoryStack stack = stackPush()) {
             transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -280,6 +298,9 @@ public class VulkanImage {
                                            srcOffset, rowLength, height);
 
             ImageUtil.imageTransferMemoryBarrier(stack, commandBuffer, this, mipLevel);
+        }
+        if (inlineMainCb) {
+            ImageUploadHelper.INSTANCE.addPendingInlineTransition(this, mipLevel);
         }
     }
 

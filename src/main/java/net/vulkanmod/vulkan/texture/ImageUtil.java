@@ -7,7 +7,9 @@ package net.vulkanmod.vulkan.texture;
  */
 
 import dev.voolkan.compat.FormatCaps;
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.Initializer;
+import net.vulkanmod.render.texture.ImageUploadHelper;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -54,7 +56,16 @@ public abstract class ImageUtil {
         vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
     }
 
+    private static void flushInlineUploadIfNeeded(VulkanImage image) {
+        if (MacPerfOpts.inlineImageUploads()
+                && Renderer.isRecording()
+                && ImageUploadHelper.INSTANCE.hasPendingInlineUpload(image.getId())) {
+            Renderer.getInstance().flushCmds();
+        }
+    }
+
     public static void downloadTexture(VulkanImage image, long ptr) {
+        flushInlineUploadIfNeeded(image);
         try (MemoryStack stack = stackPush()) {
             int prevLayout = image.getLevelLayout(0);
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
@@ -126,6 +137,7 @@ public abstract class ImageUtil {
                                          int width, int height, int xOffset, int yOffset,
                                          long bufferOffset, int bufferRowLength, int bufferImageHeight
     ) {
+        flushInlineUploadIfNeeded(image);
         try (MemoryStack stack = stackPush()) {
             int prevLayout = image.getLevelLayout(mipLevel);
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
@@ -277,6 +289,7 @@ public abstract class ImageUtil {
     }
 
     public static void generateMipmaps(VulkanImage image) {
+        flushInlineUploadIfNeeded(image);
         final boolean canBlit = FormatCaps.canBlit(image.format, image.format);
         if (!canBlit && WARNED_UNSUPPORTED_MIPS.add(image.format)) {
             Initializer.LOGGER.warn("Format {} does not support BLIT_SRC/BLIT_DST; skipping GPU mipmap generation", image.format);

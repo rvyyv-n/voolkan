@@ -11,6 +11,7 @@ package net.vulkanmod.vulkan;
  */
 
 import com.mojang.blaze3d.opengl.GlStateManager;
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
@@ -150,6 +151,7 @@ public class Renderer {
     private VkCommandBuffer currentCmdBuffer;
     private boolean recordingCmds = false;
     private boolean imageAvailableConsumed = false;
+    private boolean swapChainAcquireAttempted = false;
     int recursion = 0;
 
     MainPass mainPass;
@@ -396,34 +398,54 @@ public class Renderer {
 
         currentCmdBuffer = mainCommandBuffers.get(currentFrame);
         vkResetCommandBuffer(currentCmdBuffer, 0);
+        this.swapChainAcquireAttempted = false;
+        this.swapChain.setAcquired(false);
+        this.imageAvailableConsumed = false;
 
         try (MemoryStack stack = stackPush()) {
-            // Check is swapchain has images before acquiring
-            if (swapChain.hasImages()) {
-                IntBuffer pImageIndex = stack.mallocInt(1);
-                long semaphore = imageAvailableSemaphores[currentFrame];
-
-                int vkResult = vkAcquireNextImageKHR(device, swapChain.getId(), VUtil.UINT64_MAX,
-                                                     semaphore, VK_NULL_HANDLE, pImageIndex);
-
-                if (vkResult == VK_SUCCESS || vkResult == VK_SUBOPTIMAL_KHR) {
-                    imageIndex = pImageIndex.get(0);
-                    swapChain.setAcquired(true);
-                    imageAvailableConsumed = false;
-                    if (vkResult == VK_SUBOPTIMAL_KHR) {
-                        swapChainUpdate = true;
-                    }
-                } else if (vkResult == VK_ERROR_OUT_OF_DATE_KHR) {
-                    swapChainUpdate = true;
-                } else {
-                    throw new RuntimeException("Cannot acquire next swap chain image: %s".formatted(VkResult.decode(vkResult)));
-                }
+            if (!MacPerfOpts.lateAcquire()) {
+                acquireSwapChainImage(stack);
             }
 
             this.beginMainRenderPass(stack);
         }
 
         p.pop();
+    }
+
+    private void acquireSwapChainImage(MemoryStack stack) {
+        this.swapChainAcquireAttempted = true;
+        // Check is swapchain has images before acquiring
+        if (swapChain.hasImages()) {
+            IntBuffer pImageIndex = stack.mallocInt(1);
+            long semaphore = imageAvailableSemaphores[currentFrame];
+
+            int vkResult = vkAcquireNextImageKHR(device, swapChain.getId(), VUtil.UINT64_MAX,
+                                                 semaphore, VK_NULL_HANDLE, pImageIndex);
+
+            if (vkResult == VK_SUCCESS || vkResult == VK_SUBOPTIMAL_KHR) {
+                imageIndex = pImageIndex.get(0);
+                swapChain.setAcquired(true);
+                imageAvailableConsumed = false;
+                if (vkResult == VK_SUBOPTIMAL_KHR) {
+                    swapChainUpdate = true;
+                }
+            } else if (vkResult == VK_ERROR_OUT_OF_DATE_KHR) {
+                swapChainUpdate = true;
+            } else {
+                throw new RuntimeException("Cannot acquire next swap chain image: %s".formatted(VkResult.decode(vkResult)));
+            }
+        }
+    }
+
+    /** Acquires the swapchain image lazily on macOS once the frame actually accesses the swapchain. */
+    public void ensureSwapChainImageAcquired() {
+        if (!this.recordingCmds || this.swapChainAcquireAttempted || !this.swapChain.hasImages()) {
+            return;
+        }
+        try (MemoryStack stack = stackPush()) {
+            acquireSwapChainImage(stack);
+        }
     }
 
     private void beginMainRenderPass(MemoryStack stack) {
@@ -539,6 +561,7 @@ public class Renderer {
 
             lastSubmittedFence = inFlightFences[currentFrame];
             slotSerials[currentFrame] = ++submitSerial;
+            ImageUploadHelper.INSTANCE.onMainCmdBufferSubmitted();
 
             // Semaphore waited command buffers will be reset right after waiting this command buffer's fence
             Synchronization.INSTANCE.scheduleCbReset();
@@ -568,6 +591,7 @@ public class Renderer {
             currentFrame = (currentFrame + 1) % framesNum;
             swapChain.setAcquired(false);
             imageAvailableConsumed = false;
+            swapChainAcquireAttempted = false;
         }
     }
 
@@ -582,6 +606,9 @@ public class Renderer {
             int vkResult;
 
             this.endRenderPass(currentCmdBuffer);
+            if (MacPerfOpts.inlineImageUploads()) {
+                ImageUploadHelper.INSTANCE.flushInlineTransitions(currentCmdBuffer);
+            }
             vkEndCommandBuffer(currentCmdBuffer);
 
             submitUploads();
@@ -628,6 +655,7 @@ public class Renderer {
             }
 
             slotSerials[currentFrame] = ++submitSerial;
+            ImageUploadHelper.INSTANCE.onMainCmdBufferSubmitted();
             Synchronization.INSTANCE.scheduleCbReset();
 
             vkWaitForFences(device, inFlightFences[currentFrame], true, VUtil.UINT64_MAX);
@@ -728,8 +756,15 @@ public class Renderer {
             recordingCmds = true;
         }
 
+        if (MacPerfOpts.lateAcquire() && framebuffer == this.swapChain) {
+            this.ensureSwapChainImageAcquired();
+        }
+
         if (this.boundFramebuffer != framebuffer) {
             this.endRenderPass(currentCmdBuffer);
+            if (MacPerfOpts.inlineImageUploads()) {
+                ImageUploadHelper.INSTANCE.flushInlineTransitions(currentCmdBuffer);
+            }
 
             try (MemoryStack stack = stackPush()) {
                 framebuffer.beginRenderPass(currentCmdBuffer, renderPass, stack);
@@ -798,8 +833,11 @@ public class Renderer {
         Synchronization.INSTANCE.clearSemaphoresAfterIdle();
 
         mainCommandBuffers.forEach(commandBuffer -> vkResetCommandBuffer(commandBuffer, 0));
+        ImageUploadHelper.INSTANCE.clearInlineTransitions();
         recordingCmds = false;
         imageAvailableConsumed = false;
+        swapChainAcquireAttempted = false;
+        imageIndex = 0;
 
         swapChain.recreate();
 
@@ -812,6 +850,7 @@ public class Renderer {
             framesNum = newFramesNum;
             MemoryManager.getInstance().freeAllBuffers();
             MemoryManager.createInstance(newFramesNum);
+            swapChain.syncDepthAttachments(newFramesNum);
             createStagingBuffers();
             allocateCommandBuffers();
 

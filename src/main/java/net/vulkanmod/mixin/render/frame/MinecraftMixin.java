@@ -9,6 +9,7 @@ package net.vulkanmod.mixin.render.frame;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.textures.GpuTexture;
+import dev.voolkan.compat.MacPerfOpts;
 import dev.voolkan.compat.TileGpuOpts;
 import net.minecraft.client.Minecraft;
 import net.vulkanmod.render.texture.ImageUploadHelper;
@@ -42,6 +43,9 @@ public class MinecraftMixin {
     private void beginRender(CommandEncoder instance, GpuTexture gpuTexture, int i, GpuTexture gpuTexture2, double v) {
         // Remove framebuffer clear
 
+        if (MacPerfOpts.inlineImageUploads() && Renderer.isRecording() && Renderer.getInstance().getBoundRenderPass() == null) {
+            ImageUploadHelper.INSTANCE.flushInlineTransitions(Renderer.getCommandBuffer());
+        }
         ImageUploadHelper.INSTANCE.submitCommands();
     }
 

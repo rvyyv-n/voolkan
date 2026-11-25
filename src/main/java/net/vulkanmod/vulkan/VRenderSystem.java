@@ -165,8 +165,9 @@ public abstract class VRenderSystem {
     }
 
     public static void applyProjectionMatrix(GpuBufferSlice bufferSlice) {
-        long ptr = ((VkGpuBuffer) bufferSlice.buffer()).getBuffer().getDataPtr();
-        MemoryUtil.memCopy(ptr + bufferSlice.offset(), projectionMatrix.ptr, 64L);
+        VkGpuBuffer gpuBuffer = (VkGpuBuffer) bufferSlice.buffer();
+        long ptr = gpuBuffer.getBuffer().getDataPtr();
+        MemoryUtil.memCopy(ptr + gpuBuffer.getDynamicBaseOffset() + bufferSlice.offset(), projectionMatrix.ptr, 64L);
     }
 
     public static void calculateMVP() {
