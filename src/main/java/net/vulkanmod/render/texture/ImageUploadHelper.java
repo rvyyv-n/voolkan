@@ -55,7 +55,7 @@ public class ImageUploadHelper {
     }
 
     public void flushInlineTransitions(VkCommandBuffer commandBuffer) {
-        SpriteUpdateUtil.transitionLayoutsOn(commandBuffer);
+        SpriteUpdateUtil.transitionInlineLayoutsOn(commandBuffer);
         int size = this.pendingInlineImages.size();
         if (size == 0) {
             return;

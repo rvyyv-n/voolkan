@@ -658,7 +658,13 @@ public class Renderer {
             ImageUploadHelper.INSTANCE.onMainCmdBufferSubmitted();
             Synchronization.INSTANCE.scheduleCbReset();
 
-            vkWaitForFences(device, inFlightFences[currentFrame], true, VUtil.UINT64_MAX);
+            if (MacPerfOpts.unifiedGpuBuffers()) {
+                // Ensure all frame slots are retired on a mid-frame flush so ringed uniform cursors
+                // advancing on submitSerial can never wrap onto an earlier in-flight frame slot.
+                vkWaitForFences(device, inFlightFences, true, VUtil.UINT64_MAX);
+            } else {
+                vkWaitForFences(device, inFlightFences[currentFrame], true, VUtil.UINT64_MAX);
+            }
             Vulkan.getStagingBuffer().reset();
 
             this.beginMainRenderPass(stack);

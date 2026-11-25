@@ -11,6 +11,7 @@ import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.vulkanmod.render.texture.ImageUploadHelper;
+import net.vulkanmod.render.texture.SpriteUpdateUtil;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -254,6 +255,10 @@ public class VulkanImage {
 
         long uploadSize = (long) (rowLength * (height - 1) + width) * this.formatSize;
 
+        // Preserve SpriteUpdateUtil tracking across any flushCmds() / staging overflow below.
+        boolean wasTrackedForSpriteTransition = MacPerfOpts.inlineImageUploads()
+                && SpriteUpdateUtil.containsTransitionedLayout(this);
+
         // If this image already has an unsubmitted inline upload on mainCmdBuffer and this new
         // upload must go onto ImageUploadHelper (e.g. a render pass is now open), flush mainCmdBuffer
         // BEFORE copying into StagingBuffer so uploads never execute out of order and StagingBuffer is not reset mid-copy.
@@ -301,6 +306,8 @@ public class VulkanImage {
         }
         if (inlineMainCb) {
             ImageUploadHelper.INSTANCE.addPendingInlineTransition(this, mipLevel);
+        } else if (wasTrackedForSpriteTransition) {
+            SpriteUpdateUtil.addTransitionedLayout(this);
         }
     }
 

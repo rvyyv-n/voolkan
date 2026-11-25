@@ -32,6 +32,10 @@ public abstract class SpriteUpdateUtil {
         transitionedLayouts.add(image);
     }
 
+    public static boolean containsTransitionedLayout(VulkanImage image) {
+        return transitionedLayouts.contains(image);
+    }
+
     public static void transitionLayouts() {
         if (transitionedLayouts.isEmpty()) {
             return;
@@ -65,9 +69,35 @@ public abstract class SpriteUpdateUtil {
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             for (VulkanImage image : transitionedLayouts) {
-                image.readOnlyLayout(stack, commandBuffer);
+                if (image.getId() != 0L) {
+                    image.readOnlyLayout(stack, commandBuffer);
+                }
             }
         }
         transitionedLayouts.clear();
+    }
+
+    /**
+     * Transitions only images with an unsubmitted inline upload on {@code commandBuffer}, leaving
+     * out-of-band {@link ImageUploadHelper} uploads in {@code transitionedLayouts} so they are
+     * transitioned on {@code ImageUploadHelper}'s own command buffer before submit.
+     */
+    public static void transitionInlineLayoutsOn(VkCommandBuffer commandBuffer) {
+        if (transitionedLayouts.isEmpty()) {
+            return;
+        }
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            var it = transitionedLayouts.iterator();
+            while (it.hasNext()) {
+                VulkanImage image = it.next();
+                if (ImageUploadHelper.INSTANCE.hasPendingInlineUpload(image.getId())) {
+                    if (image.getId() != 0L) {
+                        image.readOnlyLayout(stack, commandBuffer);
+                    }
+                    it.remove();
+                }
+            }
+        }
     }
 }

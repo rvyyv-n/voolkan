@@ -18,7 +18,6 @@ import net.vulkanmod.render.engine.VkGpuDevice;
 import net.vulkanmod.render.engine.VkGpuTexture;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
-import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -460,7 +459,7 @@ public class DefaultMainPass implements MainPass {
 
     /**
      * Emits a same-layout {@code COLOR_ATTACHMENT_OPTIMAL} execution and memory barrier when
-     * resuming main color rendering under Dynamic Rendering after {@code mainColorOnlyDiscardPass}
+     * resuming main color rendering (Dynamic or Legacy) after {@code mainColorOnlyDiscardPass}
      * ended without a layout transition (e.g. final menu blur pass into {@code AFTER_BLUR} GUI).
      */
     private void emitMainColorReuseBarrierIfNeeded(VkCommandBuffer commandBuffer) {
@@ -468,9 +467,6 @@ public class DefaultMainPass implements MainPass {
             return;
         }
         this.mainColorNeedsReuseBarrier = false;
-        if (!Vulkan.DYNAMIC_RENDERING) {
-            return;
-        }
         VulkanImage color = this.mainFramebuffer.getColorAttachment();
         if (color == null || color.getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
             return;
