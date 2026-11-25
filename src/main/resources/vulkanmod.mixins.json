@@ -42,6 +42,7 @@
     "profiling.TimerQueryM",
 
     "render.BlockEntityRenderDispatcherMixin",
+    "render.DynamicUniformsMixin",
     "render.FogRendererMixin",
     "render.GameRendererMixin",
     "render.GuiRendererMixin",

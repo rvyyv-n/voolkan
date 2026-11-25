@@ -17,6 +17,7 @@ import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.queue.Queue;
+import net.vulkanmod.vulkan.shader.DescriptorSets;
 import net.vulkanmod.vulkan.texture.SamplerManager;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
@@ -128,6 +129,7 @@ public class SwapChain extends Framebuffer {
                     this.swapChainImages.forEach(image -> vkDestroyImageView(device, image.getImageView(), null));
                     vkDestroySwapchainKHR(device, this.swapChainId, null);
                     this.swapChainId = VK_NULL_HANDLE;
+                    DescriptorSets.bumpResourceEpoch();
                 }
 
                 this.width = 0;
@@ -201,6 +203,7 @@ public class SwapChain extends Framebuffer {
             if (this.swapChainId != VK_NULL_HANDLE) {
                 this.swapChainImages.forEach(image -> vkDestroyImageView(device, image.getImageView(), null));
                 vkDestroySwapchainKHR(device, this.swapChainId, null);
+                DescriptorSets.bumpResourceEpoch();
             }
 
             LongBuffer pSwapChain = stack.longs(VK_NULL_HANDLE);
@@ -333,6 +336,7 @@ public class SwapChain extends Framebuffer {
 
         vkDestroySwapchainKHR(device, this.swapChainId, null);
         this.swapChainImages.forEach(image -> vkDestroyImageView(device, image.getImageView(), null));
+        DescriptorSets.bumpResourceEpoch();
 
         freeDepthResources();
     }

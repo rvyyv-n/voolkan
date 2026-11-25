@@ -14,6 +14,7 @@ import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.buffer.Buffer;
 import net.vulkanmod.vulkan.queue.Queue;
+import net.vulkanmod.vulkan.shader.DescriptorSets;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import net.vulkanmod.vulkan.util.Pair;
 import net.vulkanmod.vulkan.util.VkResult;
@@ -251,6 +252,7 @@ public class MemoryManager {
         vmaDestroyBuffer(ALLOCATOR, buffer, allocation);
 
         buffers.remove(buffer);
+        DescriptorSets.bumpResourceEpoch();
     }
 
     private static void freeBuffer(Buffer.BufferInfo bufferInfo) {
@@ -264,6 +266,7 @@ public class MemoryManager {
         }
 
         buffers.remove(bufferInfo.id());
+        DescriptorSets.bumpResourceEpoch();
     }
 
     public static void freeImage(long imageId, long allocation) {
@@ -271,6 +274,7 @@ public class MemoryManager {
 
         VulkanImage image = images.remove(imageId);
         deviceMemory -= image.size;
+        DescriptorSets.bumpResourceEpoch();
     }
 
     public synchronized void addToFreeable(Buffer buffer) {

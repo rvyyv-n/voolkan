@@ -799,8 +799,10 @@ public class Renderer {
     }
 
     private void resetDescriptors() {
-        for (Pipeline pipeline : usedPipelines) {
-            pipeline.resetDescriptorPool(currentFrame);
+        if (!MacPerfOpts.persistentDescriptorCache()) {
+            for (Pipeline pipeline : usedPipelines) {
+                pipeline.resetDescriptorPool(currentFrame);
+            }
         }
 
         usedPipelines.clear();

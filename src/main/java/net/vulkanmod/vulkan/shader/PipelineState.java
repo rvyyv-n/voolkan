@@ -6,6 +6,7 @@ package net.vulkanmod.vulkan.shader;
  * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity; expose state encoders and accessors for pipeline warm-up.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import org.lwjgl.opengl.GL11;
@@ -24,6 +25,7 @@ public class PipelineState {
     public static final PipelineState DEFAULT = new PipelineState(getAssemblyRasterState(), getBlendState(), getDepthState(), getLogicOpState(), VRenderSystem.getColorMask(), null);
 
     public static PipelineState currentState = DEFAULT;
+    private static final PipelineState LOOKUP_STATE = new PipelineState(0, 0, 0, 0, 0, null);
 
     public static PipelineState getCurrentPipelineState(RenderPass renderPass) {
         int assemblyRasterState = getAssemblyRasterState();
@@ -31,6 +33,11 @@ public class PipelineState {
         int currentColorMask = VRenderSystem.getColorMask();
         int depthState = getDepthState();
         int logicOp = getLogicOpState();
+
+        if (MacPerfOpts.drawCoalescing()) {
+            LOOKUP_STATE.setLookup(assemblyRasterState, blendState, depthState, logicOp, currentColorMask, renderPass);
+            return LOOKUP_STATE;
+        }
 
         if (currentState.checkEquals(assemblyRasterState, blendState, depthState, logicOp, currentColorMask, renderPass))
             return currentState;
@@ -80,17 +87,17 @@ public class PipelineState {
      * compatible with any render pass that has the same attachment formats and subpass dependencies, so they are keyed by those.
      * May be null: the main render pass is used then.
      */
-    final RenderPass renderPass;
-    final int colorFormat;
-    final int depthFormat;
-    final int dependencyKind;
+    RenderPass renderPass;
+    int colorFormat;
+    int depthFormat;
+    int dependencyKind;
 
     int assemblyRasterState;
     int blendState_i;
     int depthState_i;
     int colorMask_i;
     int logicOp_i;
-    private final int cachedHash;
+    private int cachedHash;
 
     public PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
                          RenderPass renderPass) {
@@ -112,7 +119,32 @@ public class PipelineState {
         this.depthState_i = depthState;
         this.colorMask_i = colorMask;
         this.logicOp_i = logicOp;
+        this.cachedHash = computeHash(assemblyRasterState, blendState, depthState, logicOp, colorMask,
+                colorFormat, depthFormat, dependencyKind);
+    }
 
+    private void setLookup(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                           RenderPass renderPass) {
+        if (checkEquals(assemblyRasterState, blendState, depthState, logicOp, colorMask, renderPass)) {
+            return;
+        }
+        int cf = renderPass != null ? renderPass.getColorFormat() : 0;
+        int df = renderPass != null ? renderPass.getDepthFormat() : 0;
+        int dk = renderPass != null ? renderPass.getDependencyKind() : 0;
+        this.renderPass = renderPass;
+        this.colorFormat = cf;
+        this.depthFormat = df;
+        this.dependencyKind = dk;
+        this.assemblyRasterState = assemblyRasterState;
+        this.blendState_i = blendState;
+        this.depthState_i = depthState;
+        this.colorMask_i = colorMask;
+        this.logicOp_i = logicOp;
+        this.cachedHash = computeHash(assemblyRasterState, blendState, depthState, logicOp, colorMask, cf, df, dk);
+    }
+
+    private static int computeHash(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                                   int colorFormat, int depthFormat, int dependencyKind) {
         int h = blendState;
         h = 31 * h + depthState;
         h = 31 * h + logicOp;
@@ -121,7 +153,7 @@ public class PipelineState {
         h = 31 * h + colorFormat;
         h = 31 * h + depthFormat;
         h = 31 * h + dependencyKind;
-        this.cachedHash = h;
+        return h;
     }
 
     private boolean checkEquals(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,

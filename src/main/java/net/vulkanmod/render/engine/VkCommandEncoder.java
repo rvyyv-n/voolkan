@@ -802,7 +802,12 @@ public class VkCommandEncoder implements CommandEncoder {
             Collection<String> collection2,
             T object
     ) {
-        if (this.trySetup(renderPass)) {
+        boolean skipInitialDescriptorBind = false;
+        if (MacPerfOpts.drawCoalescing() && !collection.isEmpty()) {
+            RenderPass.Draw<T> first = collection.iterator().next();
+            skipInitialDescriptorBind = first.uniformUploaderConsumer() != null;
+        }
+        if (this.trySetup(renderPass, !skipInitialDescriptorBind)) {
             if (indexType == null) {
                 indexType = VertexFormat.IndexType.SHORT;
             }
@@ -932,6 +937,10 @@ public class VkCommandEncoder implements CommandEncoder {
     }
 
     public boolean trySetup(VkRenderPass renderPass) {
+        return trySetup(renderPass, true);
+    }
+
+    public boolean trySetup(VkRenderPass renderPass, boolean bindDescriptors) {
         if (VkRenderPass.VALIDATION) {
             if (renderPass.pipeline == null) {
                 throw new IllegalStateException("Can't draw without a render pipeline");
@@ -958,7 +967,7 @@ public class VkCommandEncoder implements CommandEncoder {
             GlStateManager._disableScissorTest();
         }
 
-        return bindPipeline(renderPass.pipeline);
+        return bindPipeline(renderPass.pipeline, bindDescriptors);
     }
 
     public void setupUniforms(VkRenderPass renderPass) {
@@ -1004,6 +1013,10 @@ public class VkCommandEncoder implements CommandEncoder {
     }
 
     public boolean bindPipeline(RenderPipeline renderPipeline) {
+        return bindPipeline(renderPipeline, true);
+    }
+
+    public boolean bindPipeline(RenderPipeline renderPipeline, boolean bindDescriptors) {
         Pipeline pipeline = ExtendedRenderPipeline.of(renderPipeline).getPipeline();
 
         if (pipeline == null) {
@@ -1014,7 +1027,9 @@ public class VkCommandEncoder implements CommandEncoder {
         renderer.bindGraphicsPipeline((GraphicsPipeline) pipeline);
 //        VTextureSelector.bindShaderTextures(pipeline);
 
-        renderer.uploadAndBindUBOs(pipeline);
+        if (bindDescriptors) {
+            renderer.uploadAndBindUBOs(pipeline);
+        }
 
         return true;
     }

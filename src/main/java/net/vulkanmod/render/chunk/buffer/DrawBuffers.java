@@ -6,6 +6,7 @@ package net.vulkanmod.render.chunk.buffer;
  * route terrain buffer binds through Renderer state caching and optimize terrain draw submission.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import net.minecraft.util.Mth;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.shader.PipelineManager;
@@ -172,6 +173,12 @@ public class DrawBuffers {
             DrawParametersBuffer.setBaseInstance(paramPtr, baseInstance);
         }
 
+        if (MacPerfOpts.drawCoalescing() && doUpload && buffer.autoIndices && offset > 0) {
+            // Coalescing across empty culled facings can merge all non-empty facings of a section
+            // into one draw call, so ensure the shared quad index buffer covers the full section.
+            Renderer.getDrawer().getQuadsIndexBuffer().checkCapacity(offset / vertexSize);
+        }
+
         updateUniformData(section);
 
         buffer.release();
@@ -288,6 +295,7 @@ public class DrawBuffers {
                 return 0;
             }
 
+            final boolean coalesceEmpty = MacPerfOpts.drawCoalescing();
             long ptr = bufferPtr;
 
             for (int j = 0; j < count; ++j) {
@@ -303,6 +311,10 @@ public class DrawBuffers {
 
                 for (int i = 0; i < QuadFacing.COUNT; i++) {
                     if ((mask & (1 << i)) == 0) {
+                        if (coalesceEmpty && DrawParametersBuffer.getIndexCount(drawParamsBasePtr2) == 0) {
+                            drawParamsBasePtr2 += DrawParametersBuffer.STRIDE;
+                            continue;
+                        }
                         drawParamsBasePtr2 += DrawParametersBuffer.STRIDE;
 
                         if (indexCount > 0) {
@@ -454,6 +466,7 @@ public class DrawBuffers {
         final long facingsStride = DrawParametersBuffer.FACINGS * DrawParametersBuffer.STRIDE;
 
         if (backFaceCulling) {
+            final boolean coalesceEmpty = MacPerfOpts.drawCoalescing();
             for (int j = 0; j < count; ++j) {
                 final int sectionIdx = sectionIndices[j];
                 final int mask = masks[j];
@@ -467,6 +480,10 @@ public class DrawBuffers {
 
                 for (int i = 0; i < QuadFacing.COUNT; i++) {
                     if ((mask & (1 << i)) == 0) {
+                        if (coalesceEmpty && DrawParametersBuffer.getIndexCount(drawParamsBasePtr2) == 0) {
+                            drawParamsBasePtr2 += DrawParametersBuffer.STRIDE;
+                            continue;
+                        }
                         drawParamsBasePtr2 += DrawParametersBuffer.STRIDE;
 
                         if (indexCount > 0) {

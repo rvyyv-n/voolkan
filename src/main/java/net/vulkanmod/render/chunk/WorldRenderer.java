@@ -10,6 +10,7 @@ import com.google.common.collect.Sets;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.voolkan.cache.PipelineWarmup;
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Camera;
@@ -143,11 +144,13 @@ public class WorldRenderer {
         this.taskDispatcher = new TaskDispatcher();
 
         ChunkTask.setTaskDispatcher(this.taskDispatcher);
-        allocateIndirectBuffers();
+        if (!MacPerfOpts.drawCoalescing() || Initializer.CONFIG.indirectDraw) {
+            allocateIndirectBuffers();
+        }
         TerrainRenderType.updateMapping();
 
         Renderer.getInstance().addOnResizeCallback(() -> {
-            if (this.indirectBuffers.length != Renderer.getFramesNum())
+            if (this.indirectBuffers != null && this.indirectBuffers.length != Renderer.getFramesNum())
                 allocateIndirectBuffers();
         });
     }
@@ -231,7 +234,9 @@ public class WorldRenderer {
             }
         }
 
-        this.indirectBuffers[Renderer.getCurrentFrame()].reset();
+        if (this.indirectBuffers != null) {
+            this.indirectBuffers[Renderer.getCurrentFrame()].reset();
+        }
 
         mcProfiler.pop();
         profiler.pop();
@@ -411,7 +416,15 @@ public class WorldRenderer {
         Renderer.getDrawer().bindIndexBuffer(commandBuffer, indexBuffer, indexBuffer.indexType.value);
 
         int currentFrame = Renderer.getCurrentFrame();
-        IndirectBuffer indirectBuffer = indirectBuffers[currentFrame];
+        IndirectBuffer indirectBuffer = null;
+        if (indirectDraw) {
+            if (this.indirectBuffers == null || this.indirectBuffers.length != Renderer.getFramesNum()) {
+                allocateIndirectBuffers();
+            }
+            indirectBuffer = this.indirectBuffers[currentFrame];
+        } else if (this.indirectBuffers != null) {
+            indirectBuffer = this.indirectBuffers[currentFrame];
+        }
         renderType.setCutoutUniform();
 
         UBO ubo0 = pipeline.getUBO(0);
@@ -473,13 +486,13 @@ public class WorldRenderer {
             }
         }
 
-        if (renderType == TerrainRenderType.CUTOUT || renderType == TerrainRenderType.TRIPWIRE) {
+        if (indirectBuffer != null && (renderType == TerrainRenderType.CUTOUT || renderType == TerrainRenderType.TRIPWIRE)) {
             indirectBuffer.submitUploads();
 //            uniformBuffers.submitUploads();
         }
 
         // Need to reset push constants in case the pipeline will still be used for rendering
-        if (!indirectDraw) {
+        if (!indirectDraw && !MacPerfOpts.drawCoalescing()) {
             VRenderSystem.setModelOffset(0, 0, 0);
             renderer.pushConstants(pipeline);
         }

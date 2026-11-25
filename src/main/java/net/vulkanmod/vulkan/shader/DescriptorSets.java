@@ -3,9 +3,11 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * cache descriptor sets within each frame and elide redundant descriptor binds and stack pushes.
+ * cache descriptor sets within each frame and elide redundant descriptor binds and stack pushes;
+ * persist per-frame-slot descriptor caches across frames on macOS/MoltenVK with global resource-destruction epoch invalidation.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
@@ -30,6 +32,15 @@ import static org.lwjgl.vulkan.VK10.vkDestroyDescriptorPool;
 
 public class DescriptorSets {
     private static final VkDevice DEVICE = Vulkan.getVkDevice();
+    private static long resourceEpoch = 1L;
+
+    /**
+     * Bumps the global descriptor-cache invalidation epoch whenever a VkBuffer, VkImageView, or
+     * swapchain image view is destroyed so persistent caches never alias recycled native handles.
+     */
+    public static void bumpResourceEpoch() {
+        resourceEpoch++;
+    }
 
     private final Pipeline pipeline;
     private final int uboCount;
@@ -40,6 +51,9 @@ public class DescriptorSets {
     private long currentSet;
     private int currentIdx = -1;
     private int usedCount = 0;
+    private long cachedEpoch = 0L;
+    private long activeSubmitSerial = -1L;
+    private int usedThisSerial = 0;
 
     private final long[] boundUBs;
     private final ImageDescriptor.State[] boundTextures;
@@ -188,6 +202,30 @@ public class DescriptorSets {
     }
 
     private void resolveDescriptorSet(UniformBuffer uniformBuffer) {
+        final boolean persist = MacPerfOpts.persistentDescriptorCache();
+        if (persist) {
+            long currentSerial = Renderer.getInstance().nextSubmitSerial();
+            if (currentSerial != this.activeSubmitSerial) {
+                this.activeSubmitSerial = currentSerial;
+                this.usedThisSerial = 0;
+                if (this.cachedEpoch != resourceEpoch) {
+                    this.currentIdx = -1;
+                    this.usedCount = 0;
+                    this.frameSetCache.clear();
+                    this.cachedEpoch = resourceEpoch;
+                }
+            } else if (this.cachedEpoch != resourceEpoch) {
+                // A resource was destroyed mid-frame: drop cache lookups immediately without
+                // overwriting any descriptor set already bound earlier in this command buffer.
+                this.currentIdx = -1;
+                this.frameSetCache.clear();
+                if (this.usedThisSerial == 0) {
+                    this.usedCount = 0;
+                }
+                this.cachedEpoch = resourceEpoch;
+            }
+        }
+
         for (int j = 0; j < this.texCount; ++j) {
             ImageDescriptor imageDescriptor = pipeline.imageDescriptors.get(j);
             VulkanImage image = imageDescriptor.getImage();
@@ -216,6 +254,9 @@ public class DescriptorSets {
         }
 
         if (this.currentIdx != -1 && matchesCurrent()) {
+            if (persist) {
+                this.usedThisSerial++;
+            }
             return;
         }
 
@@ -223,7 +264,17 @@ public class DescriptorSets {
         int cachedSlot = this.frameSetCache.get(hash);
         if (cachedSlot >= 0 && slotMatches(cachedSlot)) {
             syncBoundState(cachedSlot);
+            if (persist) {
+                this.usedThisSerial++;
+            }
             return;
+        }
+
+        if (persist && this.usedCount >= this.poolSize && this.usedThisSerial == 0) {
+            // Reclaim idle cross-frame entries in place once this frame slot's fence has completed.
+            this.frameSetCache.clear();
+            this.usedCount = 0;
+            this.currentIdx = -1;
         }
 
         int slot = this.usedCount++;
@@ -295,6 +346,9 @@ public class DescriptorSets {
         }
         this.frameSetCache.put(hash, slot);
         syncBoundState(slot);
+        if (persist) {
+            this.usedThisSerial++;
+        }
     }
 
     private void createDescriptorSets(MemoryStack stack) {
