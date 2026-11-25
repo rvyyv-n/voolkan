@@ -11,14 +11,18 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
 ## Checklist
 
 1. [ ] **Boot & title screen:** Launch the game. The title screen, panorama, logo, and buttons render with normal colours and no flicker.
-2. [ ] **F3 & startup capability log:** Open `logs/latest.log` and confirm the `Vulkan startup capabilities:` block and `Swapchain:` line appear (Apple GPU, MoltenVK version, `VK_KHR_portability_subset=enabled`, `BGRA8`, 2 or 3 swapchain images, `IMMEDIATE` or `FIFO` present mode — never `MAILBOX`).
+2. [ ] **F3 & startup capability log:** Open `logs/latest.log` and confirm the `Vulkan startup capabilities:` block (including `macOS perf opts:`) and `Swapchain:` line appear (Apple GPU, MoltenVK version, `VK_KHR_portability_subset=enabled`, `BGRA8`, 2 or 3 swapchain images, `IMMEDIATE` or `FIFO` present mode — never `MAILBOX`).
 3. [ ] **World load & text-selection highlight:** Load a singleplayer world. Terrain, sky, hand, and HUD render normally. Open chat (`T`), type a few words, and press `Cmd+A` / `Shift+Left` to select text: the selection highlight is clearly visible (verifies the logic-op fallback).
 4. [ ] **Retina sharpness & cursor scaling:** Check that text, crosshair, HUD, and menus look crisp on the Retina display, and that clicking buttons, inventory slots, and scrolling option labels matches the cursor position everywhere (no offset or clipped labels).
 5. [ ] **Window resize:** Drag window edges, maximise/zoom, and restore several times (both on title screen and in-world). No crash, no black or stretched frame, no clipped HUD.
 6. [ ] **Fullscreen modes:**
    - Press `F11` (or choose `Windowed Fullscreen` in Options → Video): enters instant borderless fullscreen without a Space animation, staying cleanly below the menu bar / camera notch on notched MacBooks (no clipped top menu text or FPS counter). Press `F11` again to return to windowed bounds.
    - In Options → Video, enable **Native macOS Fullscreen** and press Apply, then test `F11` and `Window Mode` switching: enters and exits a native macOS fullscreen Space cleanly, and switching back to Windowed or turning Native macOS Fullscreen off returns cleanly without getting stuck. Note which fullscreen mode feels better as a default.
-7. [ ] **Input feel & low-latency defaults:** In Options → Other, verify fresh macOS defaults: **Low latency mode** is ON, **Render queue size** is `2`, and **Swapchain images** is `Auto` (slider capped at `3`). Turn rapidly in-world for 30 s with VSync off and VSync on, and note mouse feel / latency and any stutter.
+7. [ ] **Input feel, macOS defaults & menu blur:** Verify fresh macOS defaults:
+   - In Options → Other: **Low latency mode** is OFF (enables CPU/GPU overlap with per-frame depth attachments), **Render queue size** is `2`, and **Swapchain images** is `Auto` (slider capped at `3`).
+   - In Options → Optimizations: **Unique opaque layer** is OFF (enables Apple TBDR early-Z / HSR) and **Indirect Draw** is OFF.
+   - Turn rapidly in-world for 30 s with VSync off and VSync on, noting mouse feel / latency and any stutter.
+   - Press `ESC` (pause menu) and `E` (inventory) on first world join and repeatedly while facing dense terrain: the darkened/blurred background renders cleanly with no first-open hitch or frame-rate drop.
 8. [ ] **World Resolution Scale:** In Options → Video, test **World Resolution** at `75%` and `50%`, then back to `100%`. The 3D world renders upright at lower resolution while HUD, F3, crosshair, and menus stay Retina-sharp; resizing and returning to `100%` recover cleanly.
 9. [ ] **Battery FPS Cap (MacBooks):**
    - Verify **Battery FPS Cap** is visible in Options → Video (hidden on desktop Macs without a battery).
@@ -34,16 +38,31 @@ Once the base checklist above passes, run these quick A/B comparisons from the *
 1. [ ] **Indirect Draw OFF (macOS default) vs ON:**
    - Default on a fresh macOS config is **Indirect Draw: OFF** (`Options → Optimizations → Indirect Draw`, also restored by **Restore Defaults**).
    - Measure FPS/frametimes with Indirect Draw **OFF**, then toggle it **ON**, press Apply, and measure the exact same viewpoint. Note whether ON is faster, slower, or causes any visual issues.
-2. [ ] **Dynamic vs Legacy render path:**
+2. [ ] **Low latency mode OFF (macOS default) vs ON:**
+   - Default on a fresh macOS config is **Low latency mode: OFF** (`Options → Other → Low latency mode`) with **Render queue size: 2**.
+   - Compare uncapped FPS/frametimes and mouse feel with Low latency mode **OFF** vs **ON** from the same viewpoint.
+3. [ ] **Unique opaque layer OFF (macOS default) vs ON:**
+   - Default on a fresh macOS config is **Unique opaque layer: OFF** (`Options → Optimizations → Unique opaque layer`, splits solid terrain onto the no-`discard` early-Z shader for Apple TBDR HSR).
+   - Compare uncapped FPS/frametimes looking across dense terrain with Unique opaque layer **OFF** vs **ON**.
+4. [ ] **Dynamic vs Legacy render path:**
    - Default is **Dynamic** (`renderPath: "auto"`).
-   - Add `-Dvoolkan.renderPath=legacy` to JVM arguments, launch into the same viewpoint, compare F3 FPS and visuals, then remove the flag.
-3. [ ] **Optional A/B diagnostic JVM flags (if troubleshooting or measuring gains):**
+   - Add `-Dvoolkan.renderPath=legacy` to JVM arguments, launch into the same viewpoint, compare F3 FPS and visuals (including menu blur), then remove the flag.
+5. [ ] **Optional A/B diagnostic JVM flags (if troubleshooting or isolating gains):**
    - `-Dvoolkan.disableTileOpts=true` — disables tile-GPU lazy swapchain start, deferred initial clear, and native `LOAD_OP_CLEAR` folding.
    - `-Dvoolkan.disableUnifiedDirectWrite=true` — reverts chunk/VBO/index uploads to the staged transfer path.
-4. [ ] **Optional MoltenVK environment variables (set in the launcher's environment settings for A/B comparison, one at a time or together):**
+   - `-Dvoolkan.disableUnifiedGpuBuffers=true` — reverts `VkGpuBuffer` uniform writes and staging buffer sizing (16 MB → 64 MB) to staged transfer submits.
+   - `-Dvoolkan.disableInlineImageUploads=true` — reverts pre-pass texture uploads to the separate `ImageUploadHelper` command buffer + semaphore submit.
+   - `-Dvoolkan.disablePerFrameDepth=true` — reverts swapchain depth to a single shared attachment instead of per-frame-slot depth attachments.
+   - `-Dvoolkan.disableLateAcquire=true` — acquires the swapchain image at frame start instead of deferring until swapchain access.
+   - `-Dvoolkan.disableDescriptorCachePersist=true` — resets per-frame descriptor set caches every frame instead of persisting across frames with epoch invalidation.
+   - `-Dvoolkan.disableDrawCoalescing=true` — disables empty-facing terrain draw coalescing, lazy indirect buffer allocation, zero-alloc `PipelineState` lookup, and `DynamicUniforms` pre-sizing.
+   - `-Dvoolkan.disableTbdrPassOpts=true` — disables narrowed TBDR fragment barriers, mip-exact dynamic rendering, `GuiRenderer.prepare()` offscreen batching, and deferred `WorldScale` pass start / clean-depth folding.
+   - `-Dvoolkan.disableMenuBlurOpts=true` — disables depth-less / `LOAD_OP_DONT_CARE` post-processing passes, menu blur PSO warm-up, deferred offscreen color clears, and stale `ScreenM.clearDepth()` skip.
+   - `-Dvoolkan.disableShaderOptsMac=true` — reverts macOS shaderc target-environment options to upstream behavior.
+6. [ ] **Optional MoltenVK environment variables (set in the launcher's environment settings for A/B comparison, one at a time or together):**
    - `MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=0`
    - `MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1`
-   - Active `MVK_CONFIG_*` variables, `Tile GPU opts`, and `Unified direct-write` status are logged automatically in the `Vulkan startup capabilities:` block of `logs/latest.log`.
+   - Active `MVK_CONFIG_*` variables, `Tile GPU opts`, `Unified direct-write`, and `macOS perf opts` status are logged automatically in the `Vulkan startup capabilities:` block of `logs/latest.log`.
 
 ## What to send back
 

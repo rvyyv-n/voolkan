@@ -2,7 +2,7 @@
 
 Read this file first. It is the short list; `ROADMAP.md` is the full history, so grep it by tag instead of reading it. Update this file whenever an item opens, closes or changes owner.
 
-Last updated: 2026-11-25 (first real Apple Silicon test passed on M3 MacBook Air / macOS Tahoe 26.6.2 / MoltenVK 1.2.6 across ~1h45m with zero crashes; notched-MacBook borderless fullscreen top cutoff fixed and `apple-m.json` calibrated from M3 startup log on `feat/v1-5-macos`; next: dedicated macOS deep performance pass, borderless + uncapped Round 3 re-test, and R7 350 regression check before v1.5 release). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
+Last updated: 2026-11-25 (deep macOS / Apple Silicon / MoltenVK performance optimization sweep `44e066f..13dfb20` built and review-verified on `feat/v1-5-macos` with per-optimization JVM opt-out flags and zero Windows/R7 path changes; next: Mac tester Round 3 re-test for borderless fullscreen, uncapped A/B benchmarks, and menu blur, plus Windows R7 350 regression check before v1.5 release). Milestone `first-world`, `r7-checklist`, `vulkaninfo`, `harness-final`, `modpack`, and `release-1.0` (v1.0.0+1.21.11) complete.
 
 ## Released
 - **voolkan 1.0.0+1.21.11**: Full release tag `v1.0.0+1.21.11` published with release jar, sources, and sanitized companion modpack (`.mrpack`).
@@ -38,7 +38,7 @@ Plan: `docs/v1-5-plan.md`. Owner decisions D1-D5 there are defaults until confir
 | `fps-opt` | Post-Pass 13 FPS optimization sweep (regression fixes, SPIR-V opts, state/descriptor cache, shared SectionData slab, async semaphore uploads, BAR streaming buffers, hot-path de-allocation) | merged & R7-verified on `plan/v1-5` (`66e9675..a5ed6a4`) |
 | `mac-boot` | Pass 14: macOS starts (portability, depth format, logic-op guard, Apple profile) | M3 MacBook Air verified (MoltenVK 1.2.6 / Vulkan 1.2.261, 1h45m zero crashes, `apple-m.json` calibrated from startup log); awaiting `vulkaninfo` & R7 regression check |
 | `mac-window` | Pass 15: Mac window, Retina, fullscreen, present modes, latency defaults, Mac battery probe, tester checklist | M3 MacBook Air tested; fixed notched-MacBook borderless fullscreen top cutoff via `glfwGetMonitorWorkarea` + non-resizable borderless; awaiting re-test & R7 regression check |
-| `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK diagnostics & indirect-draw default | M3 MacBook Air smoke-verified (60+ FPS VSync / 80-100 FPS tuned at full Retina 16-chunk; Indirect Draw OFF slightly ahead); awaiting uncapped VSync-off A/B, macOS deep perf sweep & R7 regression check |
+| `mac-perf` | Pass 16: tile-GPU attachment handling, unified-memory writes, MoltenVK diagnostics, deep macOS perf sweep (`44e066f..13dfb20`) & macOS tuning defaults | deep sweep built & review-verified on `feat/v1-5-macos` (unified `VkGpuBuffer` rings, inline image uploads, per-frame depth, late acquire, persistent descriptor cache, empty-facing coalescing, TBDR barriers/batching/WorldScale, Retina menu blur pass opts & PSO warm-up, early-Z + overlap defaults, macOS shaderc Vulkan 1.2 target env); awaiting Mac Round 3 uncapped A/B re-test & R7 regression check |
 
 ## Old number to tag
 0.5 `harness-final`, 0.6 `vulkaninfo`, 1.7 `r7-checklist`, M1 `first-world`, 3.3 `presentmon`, 4.5 `settings-ui`, 6.1 `port-26-1`, 6.2 `port-26-2`.
