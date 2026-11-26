@@ -2,7 +2,7 @@
 
 Scope for voolkan v1.5 on Minecraft 1.21.11. It replaces the old `macos-perf` and `v1-5-qol` placeholders. Roadmap items are in `ROADMAP.md` under "Future: v1.5" (grep by tag); open work is in `STATUS.md`.
 
-Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Windows/base passes 8-13 and the post-Pass-13 FPS optimization sweep (`66e9675..a5ed6a4`) are merged on `plan/v1-5` and verified in-game on the R7 350; macOS passes 14-16, the deep Apple Silicon / MoltenVK optimization sweep (`44e066f..13dfb20`), and live Reduce Resolution (`40dd9b3`) are verified in-game on an M3 MacBook Air (**180 FPS** full 2× Retina, **250 FPS** live 1× Reduce Resolution, notch-safe borderless fullscreen, zero Vulkan errors).
+Written 2026-10-18 from three read-only scouts (code, MoltenVK, candidate features) whose main claims were checked against the code. Windows/base passes 8-13 and the post-Pass-13 FPS optimization sweep (`66e9675..a5ed6a4`) are merged and verified in-game on the R7 350; macOS passes 14-16, the deep Apple Silicon / MoltenVK optimization sweep (`44e066f..13dfb20`), and live Reduce Resolution (`40dd9b3`) are verified in-game on an M3 MacBook Air (**180 FPS** full 2× Retina, **250 FPS** live 1× Reduce Resolution, notch-safe borderless fullscreen, zero Vulkan errors); Pass 17 (`v1-5-qol-ui`, covering P4/P7/P9/Q1/Q2/Q3/Q5 and the Settings UI overhaul) is verified on the R7 350 and prepared for `1.5.0+1.21.11`.
 
 ## Goals
 
@@ -19,7 +19,7 @@ The R7 350 on Windows stays the main target. Every macOS change is switched on o
 | D2 | Mac fullscreen | Keep our borderless fullscreen (instant switching), plus an option for native macOS fullscreen. Testers judge which is the better default |
 | D3 | Which QoL items | Four upstream cherry-picks, three small items, and the extras approved on 2026-10-18 (see "QoL ranking" and "Approved extras"). Large renderer items wait |
 | D4 | Render path on Mac | Dynamic rendering (the upstream path). The repaired legacy render-pass path stays available through the existing render-path option and is measured on Mac as a comparison |
-| D5 | Version | Decided by the owner at release time (likely `1.5.0+1.21.11`) |
+| D5 | Version | Confirmed by the owner: `1.5.0+1.21.11` (mod jar + sources jar) |
 
 ## What the code does today on a Mac
 
@@ -70,7 +70,7 @@ Not used: GitHub's macOS CI runners have Apple Silicon but no reliable GPU displ
 - **Input feel and fullscreen.** These are subjective. Tester feedback decides D2 and the latency defaults.
 - **Slow turnaround.** Each Mac bug costs a tester round. Mitigation: keep Mac rounds to four, and make the startup log detailed enough to diagnose a failure from one run.
 - **Profile accuracy.** The Apple profile approximates the hardware. Real driver bugs (shader translation, synchronisation) only show on a Mac.
-- **Tile-GPU tuning.** Changing load/store operations touches rendering correctness on the R7 too. These changes are gated to tile GPUs and reviewed by Opus.
+- **Tile-GPU tuning.** Changing load/store operations touches rendering correctness on the R7 too. These changes are gated to tile GPUs and get a deep correctness review.
 
 ## Build passes
 
@@ -121,7 +121,7 @@ Chosen on 2026-10-18 from `v1-5-candidates.md`: resolution scale (P1, Pass 11), 
 
 Testers report frame rates with vanilla's F3 screen and its frame-time chart; a voolkan overlay was not chosen.
 
-Unchanged and still parked: `settings-ui` (first in the parked queue, along with owner-specified QoL features); `presentmon` (skipped for later).
+Completed in Pass 17 (`v1-5-qol-ui`): `settings-ui` plus the approved QoL/telemetry extras (P4, P7, P9, Q1, Q2, Q3, Q5). Still skipped for later: `presentmon`.
 
 ## Waits for the 26.x ports
 

@@ -5,7 +5,7 @@ One-page test pass for Apple Silicon Macs (M1 and later; Intel Macs are untested
 ## Setup
 
 1. Install **Minecraft 1.21.11** with **Fabric Loader 0.18.4** (or newer) in **Prism Launcher** or the official **Minecraft Launcher**. Both launchers add `-XstartOnFirstThread` automatically on macOS.
-2. Drop `voolkan-1.5.0-beta.2+1.21.11.jar` into the instance's `mods/` folder. Remove any other rendering mods (Sodium, Iris, upstream VulkanMod) for this test.
+2. Drop `voolkan-1.5.0+1.21.11.jar` into the instance's `mods/` folder. Remove any other rendering mods (Sodium, Iris, upstream VulkanMod) for this test.
 3. For a clean defaults test, delete or move any old `config/vulkanmod_settings.json` before launching.
 
 ## Checklist
