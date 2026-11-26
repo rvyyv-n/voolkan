@@ -12,7 +12,7 @@ voolkan is an unofficial, private (for now) **LGPL-3.0** fork of [VulkanMod](htt
 - Upstream code stays in `net.vulkanmod`; new voolkan-only code goes in `dev.voolkan`. Changed upstream files get the LGPL modification notice.
 
 ## Build, run, test
-Use JDK 21 and the Gradle wrapper only (no global Gradle). `JAVA_HOME` = `C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`.
+Use JDK 21 and the Gradle wrapper only (no global Gradle). `JAVA_HOME` = any JDK 21: `C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot` on the R7 PC, `jdk-21.0.9.10-hotspot` (already the user `JAVA_HOME`) on WAGAY.
 ```powershell
 .\gradlew build
 .\gradlew runClient
@@ -22,7 +22,7 @@ tools\run-lavapipe.ps1
 tools\summarise-vk-log.ps1 [path] # group validation messages by VUID
 tools\make-test-world.ps1 -AcceptEula   # owner accepts the Mojang EULA
 ```
-Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. This PC's only GPU is the R7, so on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1.
+Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. On the R7 PC (its only GPU), on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1. WAGAY has an RX 9070 XT, so reproduce the R7's limits there with `tools\run-r7-profile.ps1`.
 
 ### Headless builder runner policy
 Automated builder runners operating in headless or multi-project environments must NOT run `runClient`, interactive test worlds, or any scripts that spawn GLFW/GUI windows. Verification on headless builder runners is strictly non-GUI: `.\gradlew build` (and offline compiler/test checks). In-game testing on Windows (R7 350) is done manually by the owner; macOS in-game testing (Rounds 1-4) is done manually by the Mac tester with exported jars.
