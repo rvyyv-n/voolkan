@@ -74,3 +74,17 @@ Once the base checklist above passes, run these quick A/B comparisons from the *
 - `vulkaninfo` output if you have the Vulkan SDK installed (`vulkaninfo --summary` or full `vulkaninfo`)
 - Mac model & chip (e.g. MacBook Air M4) and macOS version
 - Short notes on: FPS & frame times (F3), input feel, Retina sharpness, and whether Borderless or Native macOS Fullscreen feels better
+
+## Verified results (Round 3 — 2026-11-26)
+
+- **Hardware & stack:** Apple M3 MacBook Air (16 GB unified memory), macOS Tahoe 26.6.2, MoltenVK 1.2.6 / Vulkan 1.2.261 (`VK_KHR_portability_subset=enabled`, `VK_FORMAT_B8G8R8A8_UNORM`, `VK_FORMAT_D32_SFLOAT`, 3 swapchain images, supported present modes `[FIFO, IMMEDIATE]`).
+- **Build & modpack:** `voolkan-1.5.0-beta.2+1.21.11` (`40dd9b3`), 75 active mods, 16-chunk view distance. All 9 `macOS perf opts` (`unifiedGpuBuf`, `inlineImgUp`, `perFrameDepth`, `lateAcquire`, `persistDesc`, `drawCoalesce`, `tbdrPass`, `menuBlur`, `shaderTarget`), `Tile GPU opts`, and `Unified direct-write` confirmed active in `logs/latest.log`.
+- **Uncapped FPS (VSync OFF / `IMMEDIATE`):**
+  - **Full 2× Retina (`2940x1846`, Reduce Resolution OFF):** **180 FPS** (`5.56 ms/frame`, +50% over ~120 FPS beta 1 peak)
+  - **1× Logical (`1470x923`, Reduce Resolution ON):** **250 FPS** (`4.00 ms/frame`, 2.1× beta 1 peak / +39% over full Retina)
+- **Windowing, live scaling & stability:**
+  - Notch-safe borderless fullscreen (`F11`) confirmed cleanly below the camera notch (`2940x1790`, zero top UI cutoff).
+  - Live **Reduce Resolution** toggled cleanly without restart (`2940x1846 → 1470x923 → 2940x1846`), with all menus working and smoother overall feel.
+  - Pipeline warm-up built 95 pipelines in `2705 ms` and saved a `458 KB` pipeline cache (`182` shader cache hits / `198` misses on first run).
+  - Survived a 25-minute session including a stress test spawning 5,507 Chickens and 4,621 Primed TNT with zero crashes, zero Vulkan errors, and a clean exit.
+- **Note for future uncapped tests:** The `Balanced`, `Quality`, and `Battery` presets re-enable VSync (`FIFO`, locking to 60 Hz even when Max Framerate is set to Unlimited). Always switch **VSync: OFF → Apply** (confirming `present mode IMMEDIATE` in `logs/latest.log`) before measuring uncapped FPS.
