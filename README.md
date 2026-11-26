@@ -1,15 +1,13 @@
-<p align="center">
-  <img src="./docs/gallery/voolkan-banner.png" alt="voolkan 1.5 banner" width="100%"/>
-</p>
+# voolkan
 
-<p align="center">
-  <a href="https://minecraft.net/"><img src="https://img.shields.io/badge/Minecraft-1.21.11-brightgreen.svg" alt="Minecraft 1.21.11"/></a>
-  <a href="https://fabricmc.net/"><img src="https://img.shields.io/badge/Loader-Fabric-blue.svg" alt="Fabric Loader"/></a>
-  <a href="https://www.vulkan.org/"><img src="https://img.shields.io/badge/Vulkan-1.2%2B-red.svg" alt="Vulkan 1.2+"/></a>
-  <a href="https://github.com/rvyyv-n/voolkan"><img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-informational.svg" alt="Windows and macOS"/></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-LGPL--3.0-orange.svg" alt="LGPL-3.0 License"/></a>
-  <a href="https://github.com/rvyyv-n/voolkan/releases/tag/v1.5.0%2B1.21.11"><img src="https://img.shields.io/badge/Release-v1.5.0%2B1.21.11-brightgreen.svg" alt="Release v1.5.0+1.21.11"/></a>
-</p>
+<img src="./icon.png" width="125" alt="voolkan logo"/>
+
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-brightgreen.svg)](https://minecraft.net/)
+[![Fabric](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
+[![Vulkan](https://img.shields.io/badge/Vulkan-1.2%2B-red.svg)](https://www.vulkan.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-informational.svg)](https://github.com/rvyyv-n/voolkan)
+[![License](https://img.shields.io/badge/License-LGPL--3.0-orange.svg)](./LICENSE)
+[![Release](https://img.shields.io/badge/Release-v1.5.0%2B1.21.11-brightgreen.svg)](https://github.com/rvyyv-n/voolkan/releases/tag/v1.5.0%2B1.21.11)
 
 **voolkan** is a high-performance Vulkan renderer for Minecraft 1.21.11 (Fabric) on **Windows** and **Apple Silicon macOS**, built for high frame rates, low input latency, and steady frame pacing — including on older GPUs and budget systems that other Vulkan renderers cannot run on.
 
