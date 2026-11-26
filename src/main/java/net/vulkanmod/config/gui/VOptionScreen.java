@@ -215,6 +215,7 @@ public class VOptionScreen extends Screen {
     }
 
     private void performSearch(String query) {
+        this.clearListFocus();
         if (query == null || query.trim().isEmpty()) {
             this.isSearchActive = false;
             this.searchResultsPage = null;
@@ -360,9 +361,18 @@ public class VOptionScreen extends Screen {
             this.searchField.setFocused(true);
             this.searchField.setSelected(true);
             this.setFocused(this.searchField);
+        } else {
+            this.setFocused(null);
         }
 
         this.updateState();
+    }
+
+    private void clearListFocus() {
+        VOptionList list = this.getActiveOptionList();
+        if (list != null) {
+            list.setFocused(false);
+        }
     }
 
     @SuppressWarnings("DuplicatedCode")
@@ -739,6 +749,7 @@ public class VOptionScreen extends Screen {
     }
 
     private void setOptionList(int i) {
+        this.clearListFocus();
         this.currentListIdx = i;
         this.isSearchActive = false;
         this.searchResultsPage = null;
@@ -794,7 +805,8 @@ public class VOptionScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent keyEvent) {
-        if (keyEvent.hasControlDown() && keyEvent.key() == GLFW.GLFW_KEY_L) {
+        if (keyEvent.hasControlDownWithQuirk() && keyEvent.key() == GLFW.GLFW_KEY_L) {
+            this.clearListFocus();
             this.setFocused(searchField);
             searchField.setFocused(true);
             searchField.setSelected(true);
@@ -803,6 +815,7 @@ public class VOptionScreen extends Screen {
         }
 
         if (keyEvent.key() == GLFW.GLFW_KEY_ESCAPE && this.isSearchActive) {
+            this.clearListFocus();
             this.isSearchActive = false;
             this.searchResultsPage = null;
             this.searchField.setInput("");

@@ -23,13 +23,15 @@ import java.util.regex.Pattern;
 public final class DiagnosticSanitizer {
     private static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B\\[[0-9;]*[A-Za-z]");
 
+    private static final String USER_SEG_MARKER = "__VOOLKAN_USER_SEG__";
+
     // Directory segment allowing up to 3 spaces (e.g. "John Doe", "My Secret Drive", "Program Files (x86)")
     // only when terminated by a path separator so matches never swallow surrounding log prose.
     private static final String SEG = "[^\\s\\\\/\"'<>|\\]\\),;:]+(?:\\s+[^\\s\\\\/\"'<>|\\]\\),;:]+){0,3}";
     private static final String TAIL = "[^\\s\\\\/\"'<>|\\]\\),;]*";
 
     private static final Pattern FILE_URI = Pattern.compile(
-            "(?i)file:/+(?:" + SEG + "[\\\\/])*" + TAIL);
+            "(?i)(?:jar:)?file:/+(?:[A-Za-z0-9._-]+[\\\\/])?(?:[A-Z]:[\\\\/])?(?:" + SEG + "[\\\\/])*" + TAIL);
     private static final Pattern WIN_USER_PATH = Pattern.compile(
             "(?i)[A-Z]:[\\\\/]+Users[\\\\/]+(?:" + SEG + "[\\\\/])*" + TAIL);
     private static final Pattern WIN_DRIVE_PATH = Pattern.compile(
@@ -92,11 +94,14 @@ public final class DiagnosticSanitizer {
             text = root.pattern.matcher(text).replaceAll(Matcher.quoteReplacement(root.token));
         }
 
-        // Replace literal OS username inside any remaining path segments before generic path regexes
-        // so space-containing usernames without a trailing separator cannot leak trailing words.
+        // Replace literal OS username inside any remaining path segments using a regex-safe marker
+        // so generic path regexes still consume the entire path without splitting at '<'/'>'.
         String rawUser = getRawUsername();
+        boolean markedUser = false;
         if (rawUser != null && rawUser.length() >= 3) {
-            text = scrubUsernameInPaths(text, rawUser);
+            String replaced = scrubUsernameInPaths(text, rawUser);
+            markedUser = !replaced.equals(text);
+            text = replaced;
         }
 
         text = WIN_USER_PATH.matcher(text).replaceAll("<USER_PATH>");
@@ -104,6 +109,10 @@ public final class DiagnosticSanitizer {
         text = WIN_DRIVE_PATH.matcher(text).replaceAll("<PATH>");
         text = UNIX_USER_PATH.matcher(text).replaceAll("<USER_PATH>");
         text = UNIX_SYS_PATH.matcher(text).replaceAll("<PATH>");
+
+        if (markedUser) {
+            text = text.replace(USER_SEG_MARKER, "<USER>");
+        }
 
         return text;
     }
@@ -126,7 +135,7 @@ public final class DiagnosticSanitizer {
     private static String scrubUsernameInPaths(String text, String rawUser) {
         Pattern p = Pattern.compile(
                 "(?i)(?<=[\\\\/])" + Pattern.quote(rawUser) + "(?=[\\\\/\\s\"'<>|\\]\\),;:]|$)");
-        return p.matcher(text).replaceAll("<USER>");
+        return p.matcher(text).replaceAll(USER_SEG_MARKER);
     }
 
     private static List<RootReplacement> getRootReplacements() {

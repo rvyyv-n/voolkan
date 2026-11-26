@@ -17,6 +17,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.vulkanmod.config.gui.render.GuiRenderer;
 import net.vulkanmod.config.gui.widget.OptionWidget;
+import net.vulkanmod.config.gui.widget.RangeOptionWidget;
 import net.vulkanmod.config.gui.widget.VAbstractWidget;
 import net.vulkanmod.config.option.Option;
 import net.vulkanmod.vulkan.util.ColorUtil;
@@ -126,6 +127,15 @@ public class VOptionList extends GuiElement {
     }
 
     @Override
+    public void setFocused(boolean bl) {
+        if (!bl) {
+            this.draggingEntry = null;
+            this.scrolling = false;
+            this.setFocused((Entry) null);
+        }
+    }
+
+    @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean bl) {
         this.updateScrollingState(event.x(), event.y(), event.button());
         if (this.scrolling) {
@@ -138,9 +148,13 @@ public class VOptionList extends GuiElement {
             Entry entry = this.getEntryAtPos(event.x(), event.y());
             if (entry != null && entry.mouseClicked(event, bl)) {
                 if (event.button() == 0) {
-                    setFocused(entry);
-                    entry.setFocused(true);
                     this.draggingEntry = entry;
+                    if (entry.widget instanceof RangeOptionWidget) {
+                        setFocused(entry);
+                        entry.setFocused(true);
+                    } else {
+                        setFocused(null);
+                    }
                 } else {
                     this.draggingEntry = null;
                     setFocused(null);

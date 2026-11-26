@@ -71,7 +71,7 @@ public final class VulkanStartupFailure {
 
     public static Guidance classify(Throwable failure) {
         String combined = collectCauseChain(failure);
-        String lower = stripDeviceListing(combined).toLowerCase(Locale.ROOT);
+        String lower = combined.toLowerCase(Locale.ROOT);
         String technical = buildTechnicalSummary(failure);
         String rootLower = technical.toLowerCase(Locale.ROOT);
 
@@ -405,7 +405,8 @@ public final class VulkanStartupFailure {
         while (cur != null && depth++ < 16) {
             sb.append(cur.getClass().getName()).append(": ");
             if (cur.getMessage() != null) {
-                sb.append(cur.getMessage());
+                // Strip per-throwable device capability listings so nested causes remain intact.
+                sb.append(stripDeviceListing(cur.getMessage()));
             }
             sb.append('\n');
             cur = cur.getCause();

@@ -63,10 +63,12 @@ public class VButtonWidget extends VAbstractWidget {
                     textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
         }
         else {
-            GuiRenderer.drawString(Minecraft.getInstance().font,
-                                   this.message,
-                                   this.x + this.margin, (this.y + this.height / 2) - 4,
-                                   textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
+            GuiRenderer.drawScrollingLeftString(
+                    Minecraft.getInstance().font,
+                    this.message,
+                    this.x + this.margin, (this.y + this.height / 2) - 4,
+                    Math.max(12, this.width - this.margin - 4),
+                    textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
         }
 
     }

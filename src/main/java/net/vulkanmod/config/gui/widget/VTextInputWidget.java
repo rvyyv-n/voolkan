@@ -146,7 +146,6 @@ public class VTextInputWidget extends VAbstractWidget {
         if (!this.focused && !this.selected) return false;
 
         boolean shift = keyEvent.hasShiftDown();
-        boolean ctrl = keyEvent.hasControlDown();
         this.clampCursor();
 
         if (keyEvent.key() == GLFW.GLFW_KEY_ENTER || keyEvent.key() == GLFW.GLFW_KEY_KP_ENTER) {
@@ -154,7 +153,7 @@ public class VTextInputWidget extends VAbstractWidget {
             return true;
         }
 
-        if (ctrl && keyEvent.key() == GLFW.GLFW_KEY_V) {
+        if (keyEvent.isPaste()) {
             String clip = Minecraft.getInstance().keyboardHandler.getClipboard();
             if (clip != null && !clip.isEmpty()) {
                 String clean = clip.replace('\r', ' ').replace('\n', ' ');
@@ -163,7 +162,7 @@ public class VTextInputWidget extends VAbstractWidget {
             return true;
         }
 
-        if (ctrl && keyEvent.key() == GLFW.GLFW_KEY_C) {
+        if (keyEvent.isCopy()) {
             if (cursorPos != selectionEnd) {
                 int start = Math.min(cursorPos, selectionEnd);
                 int end = Math.max(cursorPos, selectionEnd);
@@ -206,9 +205,8 @@ public class VTextInputWidget extends VAbstractWidget {
             return true;
         }
 
-        if (ctrl && keyEvent.key() == GLFW.GLFW_KEY_A) {
-            cursorPos = text.length();
-            selectionEnd = 0;
+        if (keyEvent.isSelectAll()) {
+            this.selectAll();
             return true;
         }
 
