@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.frapi.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * cache useAO per section, add pre-resolved layer overload, and reuse occlusion lookup key on cache hits.
+ */
+
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import it.unimi.dsi.fastutil.objects.Object2ByteLinkedOpenHashMap;
 import net.fabricmc.fabric.api.renderer.v1.Renderer;
@@ -66,6 +72,7 @@ public abstract class AbstractBlockRenderContext extends AbstractRenderContext {
 		protected void rehash(int i) {
 		}
 	};
+	private final ShapePairKey lookupKey = new ShapePairKey(null, null);
 
 	protected final QuadLightData quadLightData = new QuadLightData();
 	protected LightPipeline smoothLightPipeline;
@@ -95,14 +102,19 @@ public abstract class AbstractBlockRenderContext extends AbstractRenderContext {
 	public void prepareForWorld(BlockAndTintGetter blockView, boolean enableCulling) {
 		this.renderRegion = blockView;
 		this.enableCulling = enableCulling;
+		this.useAO = Minecraft.useAmbientOcclusion();
 	}
 
 	public void prepareForBlock(BlockState blockState, BlockPos blockPos, boolean modelAo) {
+		this.useAO = Minecraft.useAmbientOcclusion();
+		this.prepareForBlock(blockState, blockPos, ItemBlockRenderTypes.getChunkRenderType(blockState), modelAo);
+	}
+
+	public void prepareForBlock(BlockState blockState, BlockPos blockPos, ChunkSectionLayer defaultLayer, boolean modelAo) {
 		this.blockPos = blockPos;
 		this.blockState = blockState;
-		this.defaultLayer = ItemBlockRenderTypes.getChunkRenderType(blockState);
+		this.defaultLayer = defaultLayer;
 
-		this.useAO = Minecraft.useAmbientOcclusion();
 		this.defaultAO = this.useAO && modelAo && blockState.getLightEmission() == 0;
 
 		this.cullCompletionFlags = 0;
@@ -159,9 +171,11 @@ public abstract class AbstractBlockRenderContext extends AbstractRenderContext {
 				return false;
 			}
 
-			ShapePairKey blockStatePairKey = new ShapePairKey(shape, adjShape);
+			ShapePairKey key = this.lookupKey;
+			key.first = shape;
+			key.second = adjShape;
 
-			byte b = occlusionCache.getAndMoveToFirst(blockStatePairKey);
+			byte b = occlusionCache.getAndMoveToFirst(key);
 			if (b != 127) {
 				return b != 0;
 			} else {
@@ -171,7 +185,7 @@ public abstract class AbstractBlockRenderContext extends AbstractRenderContext {
 					occlusionCache.removeLastByte();
 				}
 
-				occlusionCache.putAndMoveToFirst(blockStatePairKey, (byte) (bl ? 1 : 0));
+				occlusionCache.putAndMoveToFirst(new ShapePairKey(shape, adjShape), (byte) (bl ? 1 : 0));
 				return bl;
 			}
 		}
@@ -269,15 +283,23 @@ public abstract class AbstractBlockRenderContext extends AbstractRenderContext {
 	}
 
 	// TODO move elsewhere
-	record ShapePairKey(VoxelShape first, VoxelShape second) {
-		public boolean equals(Object object) {
-			if (object instanceof ShapePairKey shapePairKey && this.first == shapePairKey.first && this.second == shapePairKey.second) {
-				return true;
-			}
+	static final class ShapePairKey {
+		VoxelShape first;
+		VoxelShape second;
 
-			return false;
+		ShapePairKey(VoxelShape first, VoxelShape second) {
+			this.first = first;
+			this.second = second;
 		}
 
+		@Override
+		public boolean equals(Object object) {
+			return object instanceof ShapePairKey shapePairKey
+					&& this.first == shapePairKey.first
+					&& this.second == shapePairKey.second;
+		}
+
+		@Override
 		public int hashCode() {
 			return System.identityHashCode(this.first) * 31 + System.identityHashCode(this.second);
 		}

@@ -3,9 +3,10 @@ package net.vulkanmod.vulkan.framebuffer;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; mip level layouts are tracked per level.
+ * legacy render pass: fix attachment indexing for colour-only/depth-only/both, clear value slots and mip-level render area; expose attachment formats; mip level layouts are tracked per level; use VRenderSystem.clearDepthValue for LOAD_OP_CLEAR depth clears.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.Vulkan;
@@ -181,7 +182,7 @@ public class RenderPass {
             clearValues.get(clearIdx++).color().float32(VRenderSystem.clearColor);
         }
         if (depthAttachmentInfo != null) {
-            clearValues.get(clearIdx).depthStencil().set(1.0f, 0);
+            clearValues.get(clearIdx).depthStencil().set(VRenderSystem.clearDepthValue, 0);
         }
 
         renderPassInfo.pClearValues(clearValues);
@@ -196,17 +197,32 @@ public class RenderPass {
             KHRDynamicRendering.vkCmdEndRenderingKHR(commandBuffer);
 
             try (MemoryStack stack = MemoryStack.stackPush()) {
-                if (colorAttachmentInfo != null
-                    && framebuffer.getColorAttachment().getCurrentLayout() != this.colorAttachmentInfo.finalLayout)
-                {
-                    framebuffer.getColorAttachment()
-                               .transitionImageLayout(stack, commandBuffer, this.colorAttachmentInfo.finalLayout);
-                }
-                if (depthAttachmentInfo != null
-                    && framebuffer.getDepthAttachment().getCurrentLayout() != this.depthAttachmentInfo.finalLayout)
-                {
-                    framebuffer.getDepthAttachment()
-                               .transitionImageLayout(stack, commandBuffer, this.depthAttachmentInfo.finalLayout);
+                if (MacPerfOpts.tbdrPassOpts()) {
+                    if (colorAttachmentInfo != null
+                        && framebuffer.getColorAttachment().getLevelLayout(this.activeColorLevel) != this.colorAttachmentInfo.finalLayout)
+                    {
+                        framebuffer.getColorAttachment()
+                                   .transitionLevelLayout(stack, commandBuffer, this.activeColorLevel, this.colorAttachmentInfo.finalLayout);
+                    }
+                    if (depthAttachmentInfo != null
+                        && framebuffer.getDepthAttachment().getLevelLayout(this.activeDepthLevel) != this.depthAttachmentInfo.finalLayout)
+                    {
+                        framebuffer.getDepthAttachment()
+                                   .transitionLevelLayout(stack, commandBuffer, this.activeDepthLevel, this.depthAttachmentInfo.finalLayout);
+                    }
+                } else {
+                    if (colorAttachmentInfo != null
+                        && framebuffer.getColorAttachment().getCurrentLayout() != this.colorAttachmentInfo.finalLayout)
+                    {
+                        framebuffer.getColorAttachment()
+                                   .transitionImageLayout(stack, commandBuffer, this.colorAttachmentInfo.finalLayout);
+                    }
+                    if (depthAttachmentInfo != null
+                        && framebuffer.getDepthAttachment().getCurrentLayout() != this.depthAttachmentInfo.finalLayout)
+                    {
+                        framebuffer.getDepthAttachment()
+                                   .transitionImageLayout(stack, commandBuffer, this.depthAttachmentInfo.finalLayout);
+                    }
                 }
             }
 
@@ -226,26 +242,43 @@ public class RenderPass {
     }
 
     public void beginDynamicRendering(VkCommandBuffer commandBuffer, MemoryStack stack) {
-        if (colorAttachmentInfo != null
-            && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
-        {
-            framebuffer.getColorAttachment()
-                       .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        }
-        if (depthAttachmentInfo != null
-            && framebuffer.getDepthAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-        {
-            framebuffer.getDepthAttachment()
-                       .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        if (MacPerfOpts.tbdrPassOpts()) {
+            if (colorAttachmentInfo != null) {
+                this.activeColorLevel = framebuffer.getLevel();
+                framebuffer.getColorAttachment()
+                           .transitionLevelLayout(stack, commandBuffer, this.activeColorLevel, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            }
+            if (depthAttachmentInfo != null) {
+                this.activeDepthLevel = framebuffer.getDepthLevel();
+                framebuffer.getDepthAttachment()
+                           .transitionLevelLayout(stack, commandBuffer, this.activeDepthLevel, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
+        } else {
+            if (colorAttachmentInfo != null
+                && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+            {
+                framebuffer.getColorAttachment()
+                           .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            }
+            if (depthAttachmentInfo != null
+                && framebuffer.getDepthAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+            {
+                framebuffer.getDepthAttachment()
+                           .transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
         }
 
         VkRect2D renderArea = VkRect2D.malloc(stack);
         renderArea.offset().set(0, 0);
-        renderArea.extent().set(framebuffer.getWidth(), framebuffer.getHeight());
+        if (MacPerfOpts.tbdrPassOpts()) {
+            renderArea.extent().set(framebuffer.getLevelWidth(), framebuffer.getLevelHeight());
+        } else {
+            renderArea.extent().set(framebuffer.getWidth(), framebuffer.getHeight());
+        }
 
         VkClearValue.Buffer clearValues = VkClearValue.malloc(2, stack);
         clearValues.get(0).color().float32(VRenderSystem.clearColor);
-        clearValues.get(1).depthStencil().set(1.0f, 0);
+        clearValues.get(1).depthStencil().set(VRenderSystem.clearDepthValue, 0);
 
         VkRenderingInfo renderingInfo = VkRenderingInfo.calloc(stack);
         renderingInfo.sType(KHRDynamicRendering.VK_STRUCTURE_TYPE_RENDERING_INFO_KHR);
@@ -415,6 +448,11 @@ public class RenderPass {
 
         public AttachmentInfo getDepthAttachmentInfo() {
             return depthAttachmentInfo;
+        }
+
+        public Builder dropDepthAttachment() {
+            this.depthAttachmentInfo = null;
+            return this;
         }
     }
 }

@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * reuse per-worker BlockState scratch buffer, replace Function lambda with boolean branch, and tighten section unpack loop.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -23,7 +29,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.Map;
-import java.util.function.Function;
 
 public class RenderRegion implements BlockAndTintGetter {
     public static final int WIDTH = 3;
@@ -42,7 +47,7 @@ public class RenderRegion implements BlockAndTintGetter {
     private final int blendRadius;
 
     private final PalettedContainer<BlockState>[] blockDataContainers;
-    private final BlockState[] blockData;
+    private BlockState[] blockData;
     private final DataLayer[][] lightData;
 
     private BiomeData biomeData;
@@ -50,7 +55,7 @@ public class RenderRegion implements BlockAndTintGetter {
 
     private final Map<BlockPos, BlockEntity> blockEntityMap;
 
-    private final Function<BlockPos, BlockState> blockStateGetter;
+    private final boolean isDebug;
 
     RenderRegion(Level level, int x, int y, int z, PalettedContainer<BlockState>[] blockData, DataLayer[][] lightData,
                  BiomeData biomeData, Map<BlockPos, BlockEntity> blockEntityMap) {
@@ -71,15 +76,21 @@ public class RenderRegion implements BlockAndTintGetter {
         this.biomeData = biomeData;
         this.blockEntityMap = blockEntityMap;
 
-        this.blockData = new BlockState[BLOCK_COUNT];
-
-        this.blockStateGetter = level.isDebug() ? this::debugBlockState : this::defaultBlockState;
+        this.isDebug = level.isDebug();
 
         this.blendRadius = Minecraft.getInstance().options.biomeBlendRadius().get();
     }
 
     public void loadBlockStates() {
-        Arrays.fill(blockData, Blocks.AIR.defaultBlockState());
+        if (this.blockData == null) {
+            this.blockData = new BlockState[BLOCK_COUNT];
+        }
+        loadBlockStates(this.blockData);
+    }
+
+    public void loadBlockStates(BlockState[] scratch) {
+        this.blockData = scratch;
+        Arrays.fill(scratch, AIR_BLOCK_STATE);
 
         for (int x = 0; x <= 2; ++x) {
             for (int z = 0; z <= 2; ++z) {
@@ -103,7 +114,7 @@ public class RenderRegion implements BlockAndTintGetter {
                     int tMaxY = Math.min(maxY, absBlockY + 16);
                     int tMaxZ = Math.min(maxZ, absBlockZ + 16);
 
-                    loadSectionBlockStates(container, blockData,
+                    loadSectionBlockStates(container, scratch,
                                            tMinX, tMinY, tMinZ, tMaxX, tMaxY, tMaxZ);
 
                 }
@@ -113,15 +124,18 @@ public class RenderRegion implements BlockAndTintGetter {
 
     void loadSectionBlockStates(PalettedContainer<BlockState> container, BlockState[] blockStates,
                                 int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        final int originX = this.minX;
+        final int originY = this.minY;
+        final int originZ = this.minZ;
 
         for (int y = minY; y < maxY; ++y) {
+            final int yBase = REGION_BLOCK_WIDTH * (y - originY);
+            final int ly = y & 15;
             for (int z = minZ; z < maxZ; ++z) {
+                final int rowBase = REGION_BLOCK_WIDTH * (yBase + (z - originZ)) - originX;
+                final int lz = z & 15;
                 for (int x = minX; x < maxX; ++x) {
-                    final int idx = getBlockIdx(x - this.minX, y - this.minY, z - this.minZ);
-
-                    blockStates[idx] = container != null ?
-                            container.get(x & 15, y & 15, z & 15)
-                            : Blocks.AIR.defaultBlockState();
+                    blockStates[rowBase + x] = container.get(x & 15, ly, lz);
                 }
             }
         }
@@ -133,7 +147,7 @@ public class RenderRegion implements BlockAndTintGetter {
     }
 
     public BlockState getBlockState(BlockPos blockPos) {
-        return blockStateGetter.apply(blockPos);
+        return this.isDebug ? debugBlockState(blockPos) : defaultBlockState(blockPos);
     }
 
     public FluidState getFluidState(BlockPos blockPos) {

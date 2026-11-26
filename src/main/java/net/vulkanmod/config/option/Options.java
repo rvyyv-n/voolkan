@@ -5,16 +5,23 @@ package net.vulkanmod.config.option;
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * disable the indirect draw option when the device does not support it;
  * frame queue of 1, low-latency and swapchain image-count options;
- * read-only Compatibility block and a Presets row on the Video page.
+ * regroup latency controls onto a dedicated Latency block on the Video page, add block titles across all pages,
+ * read-only Compatibility block, Presets row (including Competitive & Battery), World Resolution, background/battery FPS caps,
+ * block entity distance, chunk upload budget, particle limit, adaptive VSync, F3 frame-time toggle, and macOS fullscreen/swapchain options.
  */
 
 import com.mojang.blaze3d.platform.Window;
 import dev.voolkan.compat.CompatInfo;
 import dev.voolkan.gui.InfoOption;
 import dev.voolkan.gui.Preset;
+import dev.voolkan.power.PowerSources;
+import dev.voolkan.render.ChunkUploadBudget;
+import dev.voolkan.render.ParticleCap;
+import dev.voolkan.render.WorldScale;
 import net.minecraft.client.*;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ParticleStatus;
+import net.minecraft.util.Mth;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.config.Config;
 import net.vulkanmod.config.Platform;
@@ -25,6 +32,7 @@ import net.vulkanmod.render.chunk.build.light.LightMode;
 import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.device.DeviceManager;
+import net.vulkanmod.vulkan.framebuffer.SwapChain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -91,9 +99,11 @@ public abstract class Options {
         var windowModeOption = new CyclingOption<>(Component.translatable("vulkanmod.options.windowMode"),
                                                    WindowMode.values(),
                                                    value -> {
-                                                       boolean exclusiveFullscreen = value == WindowMode.EXCLUSIVE_FULLSCREEN;
-                                                       mcOptions.fullscreen()
-                                                                       .set(exclusiveFullscreen);
+                                                       if (!Platform.isMacOS()) {
+                                                           boolean exclusiveFullscreen = value == WindowMode.EXCLUSIVE_FULLSCREEN;
+                                                           mcOptions.fullscreen()
+                                                                           .set(exclusiveFullscreen);
+                                                       }
 
                                                        config.windowMode = value.mode;
                                                        fullscreenDirty = true;
@@ -108,13 +118,13 @@ public abstract class Options {
                     VideoModeManager.selectedVideoMode.refreshRate = value;
                     VideoModeManager.applySelectedVideoMode();
 
-                    if (mcOptions.fullscreen().get()) {
+                    if (!Platform.isMacOS() && mcOptions.fullscreen().get()) {
                         fullscreenDirty = true;
                     }
                 },
                 () -> VideoModeManager.selectedVideoMode.refreshRate)
                 .setTranslator(refreshRate -> Component.nullToEmpty(refreshRate.toString()))
-                .setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+                .setActivationFn(() -> !Platform.isMacOS() && windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
 
         Option<VideoModeSet> resolutionOption = new CyclingOption<>(
                 Component.translatable("options.fullscreen.resolution"),
@@ -123,7 +133,7 @@ public abstract class Options {
                     VideoModeManager.selectedVideoMode = value.getVideoMode(refreshRateOption.getNewValue());
                     VideoModeManager.applySelectedVideoMode();
 
-                    if (mcOptions.fullscreen().get()) {
+                    if (!Platform.isMacOS() && mcOptions.fullscreen().get()) {
                         fullscreenDirty = true;
                     }
                 },
@@ -134,7 +144,7 @@ public abstract class Options {
                     return selectedVideoModeSet != null ? selectedVideoModeSet : VideoModeSet.getDummy();
                 })
                 .setTranslator(resolution -> Component.nullToEmpty(resolution.toString()))
-                .setActivationFn(() -> windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
+                .setActivationFn(() -> !Platform.isMacOS() && windowModeOption.getNewValue() == WindowMode.EXCLUSIVE_FULLSCREEN);
 
         resolutionOption.setOnChange(() -> {
             VideoModeSet newSet = resolutionOption.getNewValue();
@@ -148,45 +158,168 @@ public abstract class Options {
             refreshRateOption.updateActiveState();
         });
 
-        var presetOption = new CyclingOption<>(Component.translatable("voolkan.options.preset"),
-                                               Preset.values(),
-                                               value -> {},
-                                               () -> Preset.CUSTOM)
+        // Preset is a staging trigger: committed value stays CUSTOM so Undo never re-applies an earlier preset.
+        CyclingOption<Preset> presetOption = new CyclingOption<>(
+                Component.translatable("voolkan.options.preset"),
+                Preset.values(),
+                value -> {},
+                () -> Preset.CUSTOM
+        ) {
+            @Override
+            public boolean isChanged() {
+                return false;
+            }
+
+            @Override
+            public void apply() {
+                this.syncFromSupplier();
+            }
+
+            @Override
+            public void onPostApply() {
+                this.syncFromSupplier();
+            }
+        };
+        presetOption
                 .setTranslator(Preset::displayName)
                 .setTooltip(value -> Component.translatable("voolkan.options.preset.tooltip"));
         presetOption.setOnChange(() -> presetOption.getNewValue().stage(currentPages));
+
+        // Display block
+        List<Option<?>> displayOptions = new ArrayList<>();
+        displayOptions.add(windowModeOption);
+        if (Platform.isMacOS()) {
+            displayOptions.add(new SwitchOption(Component.translatable("voolkan.options.macNativeFullscreen"),
+                    value -> {
+                        config.macNativeFullscreen = value;
+                        if (config.windowMode != WindowMode.WINDOWED.mode) {
+                            if (value) {
+                                config.windowMode = WindowMode.EXCLUSIVE_FULLSCREEN.mode;
+                            } else if (config.windowMode == WindowMode.EXCLUSIVE_FULLSCREEN.mode) {
+                                config.windowMode = WindowMode.WINDOWED_FULLSCREEN.mode;
+                            }
+                            windowModeOption.syncFromSupplier();
+                            fullscreenDirty = true;
+                        }
+                    },
+                    () -> config.macNativeFullscreen)
+                    .setTooltip(v -> Component.translatable("voolkan.options.macNativeFullscreen.tooltip")));
+            displayOptions.add(new SwitchOption(Component.translatable("voolkan.options.macReduceResolution"),
+                    value -> {
+                        if (config.macReduceResolution != value) {
+                            config.macReduceResolution = value;
+                            Renderer.scheduleSwapChainUpdate();
+                        }
+                    },
+                    () -> config.macReduceResolution)
+                    .setTooltip(v -> Component.translatable("voolkan.options.macReduceResolution.tooltip"))
+                    .setImpact(PerformanceImpact.HIGH));
+        }
+        displayOptions.add(resolutionOption);
+        displayOptions.add(refreshRateOption);
+        displayOptions.add(new RangeOption(Component.translatable("voolkan.options.worldScale"),
+                WorldScale.MIN_SCALE, WorldScale.MAX_SCALE, WorldScale.STEP,
+                value -> Component.literal(value + "%"),
+                value -> config.worldScale = value,
+                () -> WorldScale.clampScale(config.worldScale))
+                .setTooltip(v -> Component.translatable("voolkan.options.worldScale.tooltip"))
+                .setImpact(PerformanceImpact.HIGH));
+
+        // Dedicated Latency block
+        int maxSwapChainImages = Platform.isMacOS() ? 3 : 6;
+        List<Option<?>> latencyOptions = new ArrayList<>();
+        var vsyncOption = new SwitchOption(Component.translatable("options.vsync"),
+                value -> {
+                    mcOptions.enableVsync().set(value);
+                    window.updateVsync(value);
+                },
+                () -> mcOptions.enableVsync().get());
+        latencyOptions.add(vsyncOption);
+        if (SwapChain.isAdaptiveVsyncSupported()) {
+            var adaptiveVsyncOption = new SwitchOption(Component.translatable("voolkan.options.adaptiveVsync"),
+                    value -> {
+                        if (config.adaptiveVsync != value) {
+                            config.adaptiveVsync = value;
+                            SwapChain swapChain = Renderer.getInstance() != null
+                                    ? Renderer.getInstance().getSwapChain()
+                                    : null;
+                            if (mcOptions.enableVsync().get() || (swapChain != null && swapChain.isVsync())) {
+                                Renderer.scheduleSwapChainUpdate();
+                            }
+                        }
+                    },
+                    () -> config.adaptiveVsync)
+                    .setTooltip(v -> Component.translatable("voolkan.options.adaptiveVsync.tooltip"))
+                    .setActivationFn(() -> Boolean.TRUE.equals(vsyncOption.getNewValue()));
+            vsyncOption.setOnChange(adaptiveVsyncOption::updateActiveState);
+            latencyOptions.add(adaptiveVsyncOption);
+        }
+        latencyOptions.add(new RangeOption(Component.translatable("options.framerateLimit"),
+                10, 260, 10,
+                value -> Component.nullToEmpty(value == 260
+                        ? Component.translatable("options.framerateLimit.max").getString()
+                        : String.valueOf(value)),
+                value -> {
+                    mcOptions.framerateLimit().set(value);
+                    minecraft.getFramerateLimitTracker().setFramerateLimit(value);
+                },
+                () -> mcOptions.framerateLimit().get()));
+        latencyOptions.add(new CyclingOption<>(Component.translatable("options.inactivityFpsLimit"),
+                InactivityFpsLimit.values(),
+                value -> mcOptions.inactivityFpsLimit().set(value),
+                () -> mcOptions.inactivityFpsLimit().get())
+                .setTranslator(InactivityFpsLimit::caption));
+        latencyOptions.add(new RangeOption(Component.translatable("voolkan.options.backgroundFps"),
+                0, 60, 5,
+                value -> value == 0
+                        ? Component.translatable("options.off")
+                        : Component.literal(String.valueOf(value)),
+                value -> config.backgroundFps = value,
+                () -> config.backgroundFps)
+                .setTooltip(v -> Component.translatable("voolkan.options.backgroundFps.tooltip")));
+        if (PowerSources.get().isSupported()) {
+            latencyOptions.add(new RangeOption(Component.translatable("voolkan.options.batteryFps"),
+                    0, 120, 10,
+                    value -> value == 0
+                            ? Component.translatable("options.off")
+                            : Component.literal(String.valueOf(value)),
+                    value -> config.batteryFps = value,
+                    () -> config.batteryFps)
+                    .setTooltip(v -> Component.translatable("voolkan.options.batteryFps.tooltip")));
+        }
+        latencyOptions.add(new SwitchOption(Component.translatable("vulkanmod.options.lowLatency"),
+                v -> config.lowLatency = v,
+                () -> config.lowLatency)
+                .setTooltip(v -> Component.translatable("vulkanmod.options.lowLatency.tooltip")));
+        latencyOptions.add(new RangeOption(Component.translatable("vulkanmod.options.frameQueue"),
+                1, 5, 1,
+                value -> {
+                    config.frameQueueSize = value;
+                    Renderer.scheduleSwapChainUpdate();
+                },
+                () -> config.frameQueueSize)
+                .setTooltip(v -> Component.translatable("vulkanmod.options.frameQueue.tooltip")));
+        latencyOptions.add(new RangeOption(Component.translatable("vulkanmod.options.swapChainImages"),
+                0, maxSwapChainImages, 1,
+                value -> {
+                    config.swapChainImages = value;
+                    Renderer.scheduleSwapChainUpdate();
+                },
+                () -> Math.max(0, Math.min(config.swapChainImages, maxSwapChainImages)))
+                .setTranslator(v -> v == 0
+                        ? Component.translatable("vulkanmod.options.swapChainImages.auto")
+                        : Component.literal(String.valueOf(v)))
+                .setTooltip(v -> Component.translatable("vulkanmod.options.swapChainImages.tooltip")));
 
         return new OptionBlock[]{
                 new OptionBlock("", new Option<?>[]{
                         presetOption
                 }),
-                new OptionBlock("", new Option<?>[]{
-                        windowModeOption,
-                        resolutionOption,
-                        refreshRateOption,
-                        new RangeOption(Component.translatable("options.framerateLimit"),
-                                10, 260, 10,
-                                value -> Component.nullToEmpty(value == 260
-                                        ? Component.translatable("options.framerateLimit.max").getString()
-                                        : String.valueOf(value)),
-                                value -> {
-                                    mcOptions.framerateLimit().set(value);
-                                    minecraft.getFramerateLimitTracker().setFramerateLimit(value);
-                                },
-                                () -> mcOptions.framerateLimit().get()),
-                        new SwitchOption(Component.translatable("options.vsync"),
-                                value -> {
-                                    mcOptions.enableVsync().set(value);
-                                    window.updateVsync(value);
-                                },
-                                () -> mcOptions.enableVsync().get()),
-                        new CyclingOption<>(Component.translatable("options.inactivityFpsLimit"),
-                                            InactivityFpsLimit.values(),
-                                            value -> mcOptions.inactivityFpsLimit().set(value),
-                                            () -> mcOptions.inactivityFpsLimit().get())
-                                .setTranslator(InactivityFpsLimit::caption)
-                }),
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.display").getString(),
+                        displayOptions.toArray(new Option<?>[0])),
+                new OptionBlock(Component.translatable("voolkan.options.block.latency").getString(),
+                        latencyOptions.toArray(new Option<?>[0])),
+                new OptionBlock(Component.translatable("voolkan.options.block.interface").getString(), new Option<?>[]{
                         new RangeOption(Component.translatable("options.guiScale"),
                                 0, Math.max(window.calculateScale(0, minecraft.isEnforceUnicode()), mcOptions.guiScale().get()), 1,
                                 value -> Component.translatable(value == 0 ? "options.guiScale.auto" : String.valueOf(value)),
@@ -204,9 +337,7 @@ public abstract class Options {
                                     default -> String.valueOf(value);
                                 }),
                                 value -> mcOptions.gamma().set(value * 0.01),
-                                () -> (int) (mcOptions.gamma().get() * 100.0))
-                }),
-                new OptionBlock("", new Option<?>[]{
+                                () -> (int) (mcOptions.gamma().get() * 100.0)),
                         new CyclingOption<>(Component.translatable("options.attackIndicator"),
                                             AttackIndicatorStatus.values(),
                                             value -> mcOptions.attackIndicator().set(value),
@@ -254,8 +385,6 @@ public abstract class Options {
                 })
                 .setImpact(PerformanceImpact.MEDIUM);
 
-
-
         var maxAnisotropyOption = new RangeOption(Component.translatable("options.maxAnisotropy"),
                                                   1, 3, 1,
                                                   value -> {
@@ -281,7 +410,7 @@ public abstract class Options {
         texFilteringOption.setOnChange(maxAnisotropyOption::updateActiveState);
 
         return new OptionBlock[]{
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.chunks").getString(), new Option<?>[]{
                         new RangeOption(Component.translatable("options.renderDistance"),
                                 2, 32, 1,
                                 value -> mcOptions.renderDistance().set(value),
@@ -298,7 +427,7 @@ public abstract class Options {
                                 () -> mcOptions.prioritizeChunkUpdates().get())
                                 .setTranslator(PrioritizeChunkUpdates::caption)
                 }),
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.visuals").getString(), new Option<?>[]{
                         new CyclingOption<>(Component.translatable("options.graphics.preset"),
                                 new GraphicsPreset[]{GraphicsPreset.FAST, GraphicsPreset.FANCY, GraphicsPreset.CUSTOM},
                                 value -> mcOptions.graphicsPreset().set(value),
@@ -312,6 +441,15 @@ public abstract class Options {
                                             () -> mcOptions.particles().get())
                                 .setImpact(PerformanceImpact.MEDIUM)
                                 .setTranslator(ParticleStatus::caption),
+                        new CyclingOption<>(Component.translatable("voolkan.options.maxParticles"),
+                                            ParticleCap.OPTION_VALUES,
+                                            value -> config.maxParticles = value,
+                                            () -> ParticleCap.normalizeOptionValue(config.maxParticles))
+                                .setTranslator(v -> v == ParticleCap.UNLIMITED
+                                        ? Component.translatable("voolkan.options.maxParticles.unlimited")
+                                        : Component.literal(String.valueOf(v)))
+                                .setTooltip(v -> Component.translatable("voolkan.options.maxParticles.tooltip"))
+                                .setImpact(PerformanceImpact.MEDIUM),
                         new CyclingOption<>(Component.translatable("options.renderClouds"),
                                             CloudStatus.values(),
                                             value -> mcOptions.cloudStatus().set(value),
@@ -331,11 +469,6 @@ public abstract class Options {
                                         () -> (int) (mcOptions.chunkSectionFadeInTime().get() * 20))
                                 .setTranslator(value -> Component.literal(String.valueOf(value / 20.0f)))
                                 .setTooltip(v -> Component.translatable("options.chunkFade.tooltip")),
-                        // TODO: improved transparency
-//                        new SwitchOption(Component.translatable("options.improvedTransparency"),
-//                                         value -> minecraftOptions.improvedTransparency().set(value),
-//                                         () -> minecraftOptions.improvedTransparency().get())
-//                                .setTooltip(Component.translatable("options.improvedTransparency.tooltip")),
                         new CyclingOption<>(Component.translatable("options.ao"),
                                 new Integer[]{LightMode.FLAT, LightMode.SMOOTH, LightMode.SUB_BLOCK},
                                 value -> {
@@ -363,7 +496,7 @@ public abstract class Options {
                                 },
                                 () -> mcOptions.biomeBlendRadius().get())
                 }),
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.entities").getString(), new Option<?>[]{
                         new SwitchOption(Component.translatable("options.entityShadows"),
                                 value -> mcOptions.entityShadows().set(value),
                                 () -> mcOptions.entityShadows().get())
@@ -374,6 +507,13 @@ public abstract class Options {
                                         () -> (int) (mcOptions.entityDistanceScaling().get() * 4.0))
                                         .setImpact(PerformanceImpact.HIGH)
                                         .setTranslator(value -> Component.literal(String.valueOf(value / 4.0))),
+                        new RangeOption(Component.translatable("voolkan.options.blockEntityDistance"),
+                                        16, 128, 8,
+                                        value -> Component.translatable("voolkan.options.blockEntityDistance.value", value),
+                                        value -> config.blockEntityDistance = value,
+                                        () -> Mth.clamp(config.blockEntityDistance, 16, 128))
+                                        .setTooltip(v -> Component.translatable("voolkan.options.blockEntityDistance.tooltip"))
+                                        .setImpact(PerformanceImpact.MEDIUM),
                         new CyclingOption<>(Component.translatable("options.mipmapLevels"),
                                 new Integer[]{0,1,2,3,4},
                                 value -> {
@@ -399,7 +539,7 @@ public abstract class Options {
 
     public static OptionBlock[] getOptimizationOpts() {
         return new OptionBlock[]{
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.performance").getString(), new Option<?>[]{
                         new CyclingOption<>(Component.translatable("vulkanmod.options.advCulling"),
                                 new Integer[]{1, 2, 3, 10},
                                 value -> config.advCulling = value,
@@ -440,52 +580,48 @@ public abstract class Options {
                                 () -> config.indirectDraw)
                                 .setTooltip(v -> Component.translatable("vulkanmod.options.indirectDraw.tooltip"))
                                 .setActivationFn(() -> DeviceManager.device.isDrawIndirectSupported())
-                                .setImpact(PerformanceImpact.HIGH)
+                                .setImpact(PerformanceImpact.HIGH),
+                        new RangeOption(Component.translatable("voolkan.options.chunkUploadBudget"),
+                                ChunkUploadBudget.AUTO, ChunkUploadBudget.UNLIMITED, ChunkUploadBudget.STEP,
+                                value -> {
+                                    if (value == ChunkUploadBudget.AUTO) {
+                                        return Component.translatable("voolkan.options.chunkUploadBudget.auto");
+                                    }
+                                    if (value >= ChunkUploadBudget.UNLIMITED) {
+                                        return Component.translatable("voolkan.options.chunkUploadBudget.unlimited");
+                                    }
+                                    return Component.translatable("voolkan.options.chunkUploadBudget.value", value);
+                                },
+                                value -> config.chunkUploadBudget = value,
+                                () -> ChunkUploadBudget.normalizeOptionValue(config.chunkUploadBudget))
+                                .setTooltip(v -> Component.translatable("voolkan.options.chunkUploadBudget.tooltip"))
+                                .setImpact(PerformanceImpact.MEDIUM)
                 })
         };
     }
 
     public static OptionBlock[] getOtherOpts() {
         return new OptionBlock[]{
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.engine").getString(), new Option<?>[]{
                         new RangeOption(Component.translatable("vulkanmod.options.builderThreads"),
-                                0, Runtime.getRuntime().availableProcessors() - 1, 1,
+                                0, Math.max(0, Runtime.getRuntime().availableProcessors() - 1), 1,
                                 value -> {
                                     config.builderThreads = value;
                                     WorldRenderer.getInstance().getTaskDispatcher().createThreads(value);
                                 },
                                 () -> config.builderThreads)
                                 .setTranslator(v -> v == 0
-                                ? Component.translatable("vulkanmod.options.builderThreads.auto")
-                                : Component.literal(String.valueOf(v))),
-                        new RangeOption(Component.translatable("vulkanmod.options.frameQueue"),
-                                1, 5, 1,
-                                value -> {
-                                    config.frameQueueSize = value;
-                                    Renderer.scheduleSwapChainUpdate();
-                                },
-                                () -> config.frameQueueSize)
-                                .setTooltip(v -> Component.translatable("vulkanmod.options.frameQueue.tooltip")),
-                        new SwitchOption(Component.translatable("vulkanmod.options.lowLatency"),
-                                v -> config.lowLatency = v,
-                                () -> config.lowLatency)
-                                .setTooltip(v -> Component.translatable("vulkanmod.options.lowLatency.tooltip")),
-                        new RangeOption(Component.translatable("vulkanmod.options.swapChainImages"),
-                                0, 6, 1,
-                                value -> {
-                                    config.swapChainImages = value;
-                                    Renderer.scheduleSwapChainUpdate();
-                                },
-                                () -> config.swapChainImages)
-                                .setTranslator(v -> v == 0
-                                ? Component.translatable("vulkanmod.options.swapChainImages.auto")
-                                : Component.literal(String.valueOf(v)))
-                                .setTooltip(v -> Component.translatable("vulkanmod.options.swapChainImages.tooltip")),
+                                        ? Component.translatable("vulkanmod.options.builderThreads.auto")
+                                        : Component.literal(String.valueOf(v))),
                         new SwitchOption(Component.translatable("vulkanmod.options.textureAnimations"),
                                 v -> config.textureAnimations = v,
-                                () -> config.textureAnimations)
+                                () -> config.textureAnimations),
+                        new SwitchOption(Component.translatable("voolkan.options.showFrameTimeF3"),
+                                v -> config.showFrameTimeF3 = v,
+                                () -> config.showFrameTimeF3)
+                                .setTooltip(v -> Component.translatable("voolkan.options.showFrameTimeF3.tooltip"))
                 }),
-                new OptionBlock("", new Option<?>[]{
+                new OptionBlock(Component.translatable("voolkan.options.block.system").getString(), new Option<?>[]{
                         new SwitchOption(Component.translatable("vulkanmod.options.wayland"),
                                          v -> config.useWayland = v,
                                          () -> config.useWayland)
@@ -501,8 +637,8 @@ public abstract class Options {
                                         v == -1 ? "vulkanmod.options.deviceSelector.auto"
                                                 : DeviceManager.suitableDevices.get(v).deviceName))
                                 .setTooltip(v -> Component.literal(
-                                Component.translatable("vulkanmod.options.deviceSelector.tooltip").getString() + ": " +
-                                        DeviceManager.device.deviceName))
+                                        Component.translatable("vulkanmod.options.deviceSelector.tooltip").getString() + ": " +
+                                                DeviceManager.device.deviceName))
                 })
         };
     }

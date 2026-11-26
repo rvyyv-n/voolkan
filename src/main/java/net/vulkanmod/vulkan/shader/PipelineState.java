@@ -3,9 +3,10 @@ package net.vulkanmod.vulkan.shader;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity.
+ * pipelines are keyed by render pass compatibility (attachment formats, dependency kind) instead of RenderPass identity; expose state encoders and accessors for pipeline warm-up.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.framebuffer.RenderPass;
 import org.lwjgl.opengl.GL11;
@@ -24,6 +25,7 @@ public class PipelineState {
     public static final PipelineState DEFAULT = new PipelineState(getAssemblyRasterState(), getBlendState(), getDepthState(), getLogicOpState(), VRenderSystem.getColorMask(), null);
 
     public static PipelineState currentState = DEFAULT;
+    private static final PipelineState LOOKUP_STATE = new PipelineState(0, 0, 0, 0, 0, null);
 
     public static PipelineState getCurrentPipelineState(RenderPass renderPass) {
         int assemblyRasterState = getAssemblyRasterState();
@@ -31,6 +33,11 @@ public class PipelineState {
         int currentColorMask = VRenderSystem.getColorMask();
         int depthState = getDepthState();
         int logicOp = getLogicOpState();
+
+        if (MacPerfOpts.drawCoalescing()) {
+            LOOKUP_STATE.setLookup(assemblyRasterState, blendState, depthState, logicOp, currentColorMask, renderPass);
+            return LOOKUP_STATE;
+        }
 
         if (currentState.checkEquals(assemblyRasterState, blendState, depthState, logicOp, currentColorMask, renderPass))
             return currentState;
@@ -47,22 +54,36 @@ public class PipelineState {
     }
 
     public static int getDepthState() {
+        return encodeDepthState(VRenderSystem.depthTest, VRenderSystem.depthMask, VRenderSystem.depthFun);
+    }
+
+    public static int encodeDepthState(boolean depthTest, boolean depthMask, int glDepthFun) {
         int depthState = 0;
 
-        depthState |= VRenderSystem.depthTest ? DepthState.DEPTH_TEST_BIT : 0;
-        depthState |= VRenderSystem.depthMask ? DepthState.DEPTH_MASK_BIT : 0;
+        depthState |= depthTest ? DepthState.DEPTH_TEST_BIT : 0;
+        depthState |= depthMask ? DepthState.DEPTH_MASK_BIT : 0;
 
-        depthState |= DepthState.encodeDepthFun(VRenderSystem.depthFun);
+        if (depthTest || !MacPerfOpts.isPlatformEligible()) {
+            depthState |= DepthState.encodeDepthFun(glDepthFun);
+        }
 
         return depthState;
     }
 
     public static int getLogicOpState() {
+        return encodeLogicOpState(VRenderSystem.logicOp, VRenderSystem.logicOpFun);
+    }
+
+    public static int encodeLogicOpState(boolean enabled, int glLogicOpFun) {
+        if (!enabled && MacPerfOpts.isPlatformEligible()) {
+            return 0;
+        }
+
         int logicOpState = 0;
 
-        logicOpState |= VRenderSystem.logicOp ? LogicOpState.ENABLE_BIT : 0;
+        logicOpState |= enabled ? LogicOpState.ENABLE_BIT : 0;
 
-        logicOpState |= LogicOpState.encodeLogicOpFun(VRenderSystem.logicOpFun);
+        logicOpState |= LogicOpState.encodeLogicOpFun(glLogicOpFun);
 
         return logicOpState;
     }
@@ -72,16 +93,17 @@ public class PipelineState {
      * compatible with any render pass that has the same attachment formats and subpass dependencies, so they are keyed by those.
      * May be null: the main render pass is used then.
      */
-    final RenderPass renderPass;
-    final int colorFormat;
-    final int depthFormat;
-    final int dependencyKind;
+    RenderPass renderPass;
+    int colorFormat;
+    int depthFormat;
+    int dependencyKind;
 
     int assemblyRasterState;
     int blendState_i;
     int depthState_i;
     int colorMask_i;
     int logicOp_i;
+    private int cachedHash;
 
     public PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
                          RenderPass renderPass) {
@@ -89,6 +111,13 @@ public class PipelineState {
              renderPass != null ? renderPass.getColorFormat() : 0,
              renderPass != null ? renderPass.getDepthFormat() : 0,
              renderPass != null ? renderPass.getDependencyKind() : 0);
+    }
+
+    /** Creates a format-keyed state without a RenderPass handle (for dynamic-rendering warm-up). */
+    public static PipelineState forFormats(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                                           int colorFormat, int depthFormat, int dependencyKind) {
+        return new PipelineState(assemblyRasterState, blendState, depthState, logicOp, colorMask,
+                                 null, colorFormat, depthFormat, dependencyKind);
     }
 
     private PipelineState(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
@@ -103,6 +132,41 @@ public class PipelineState {
         this.depthState_i = depthState;
         this.colorMask_i = colorMask;
         this.logicOp_i = logicOp;
+        this.cachedHash = computeHash(assemblyRasterState, blendState, depthState, logicOp, colorMask,
+                colorFormat, depthFormat, dependencyKind);
+    }
+
+    private void setLookup(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                           RenderPass renderPass) {
+        if (checkEquals(assemblyRasterState, blendState, depthState, logicOp, colorMask, renderPass)) {
+            return;
+        }
+        int cf = renderPass != null ? renderPass.getColorFormat() : 0;
+        int df = renderPass != null ? renderPass.getDepthFormat() : 0;
+        int dk = renderPass != null ? renderPass.getDependencyKind() : 0;
+        this.renderPass = renderPass;
+        this.colorFormat = cf;
+        this.depthFormat = df;
+        this.dependencyKind = dk;
+        this.assemblyRasterState = assemblyRasterState;
+        this.blendState_i = blendState;
+        this.depthState_i = depthState;
+        this.colorMask_i = colorMask;
+        this.logicOp_i = logicOp;
+        this.cachedHash = computeHash(assemblyRasterState, blendState, depthState, logicOp, colorMask, cf, df, dk);
+    }
+
+    private static int computeHash(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
+                                   int colorFormat, int depthFormat, int dependencyKind) {
+        int h = blendState;
+        h = 31 * h + depthState;
+        h = 31 * h + logicOp;
+        h = 31 * h + assemblyRasterState;
+        h = 31 * h + colorMask;
+        h = 31 * h + colorFormat;
+        h = 31 * h + depthFormat;
+        h = 31 * h + dependencyKind;
+        return h;
     }
 
     private boolean checkEquals(int assemblyRasterState, int blendState, int depthState, int logicOp, int colorMask,
@@ -117,6 +181,38 @@ public class PipelineState {
     PipelineState withoutRenderPass() {
         return new PipelineState(assemblyRasterState, blendState_i, depthState_i, logicOp_i, colorMask_i,
                                  null, colorFormat, depthFormat, dependencyKind);
+    }
+
+    public int getAssemblyRasterStateValue() {
+        return assemblyRasterState;
+    }
+
+    public int getBlendStateValue() {
+        return blendState_i;
+    }
+
+    public int getDepthStateValue() {
+        return depthState_i;
+    }
+
+    public int getLogicOpStateValue() {
+        return logicOp_i;
+    }
+
+    public int getColorMaskValue() {
+        return colorMask_i;
+    }
+
+    public int getColorFormat() {
+        return colorFormat;
+    }
+
+    public int getDepthFormat() {
+        return depthFormat;
+    }
+
+    public int getDependencyKind() {
+        return dependencyKind;
     }
 
     @Override
@@ -137,7 +233,7 @@ public class PipelineState {
 
     @Override
     public int hashCode() {
-        return Objects.hash(blendState_i, depthState_i, logicOp_i, assemblyRasterState, colorMask_i, colorFormat, depthFormat, dependencyKind);
+        return this.cachedHash;
     }
 
     public static BlendInfo defaultBlendInfo() {
@@ -230,6 +326,10 @@ public class PipelineState {
         public static final int FACTOR_MASK = 0x1F;
 
         public static int getState(BlendInfo blendInfo) {
+            if (!blendInfo.enabled && MacPerfOpts.isPlatformEligible()) {
+                return 0;
+            }
+
             int s = 0;
             s |= blendInfo.enabled ? ENABLE_BIT : 0;
             s |= encode(blendInfo.srcRgbFactor, SRC_RGB_OFFSET, FACTOR_MASK);

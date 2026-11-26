@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.khronos.org/vulkan/profiles-0.8.2-276.json#",
+  "_comment": "PARTIAL / PROVISIONAL. Core API, extensions, features, and portability subset flags updated from real Apple M3 + MoltenVK 1.2.6 startup log (Vulkan 1.2.261, VK_KHR_portability_subset, VK_KHR_dynamic_rendering, VK_EXT_memory_budget, triangleFans=true, no logicOp / wideLines / geometryShader / shaderFloat64). Rebuild from a full Mac vulkaninfo dump before relying on exact limits or format support. SIMULATE_FORMATS_BIT is intentionally NOT enabled in tools/run-apple-profile.ps1 because this file omits a complete VkFormat feature table. Note: khronos_profiles.emulate_portability requires Vulkan SDK < 1.4.363; on 1.4.363+ the profile still simulates API 1.2.261 and missing logicOp/wideLines/geometryShader/shaderFloat64.",
+  "capabilities": {
+    "baseline": {
+      "extensions": {
+        "VK_KHR_swapchain": 1,
+        "VK_KHR_dynamic_rendering": 1,
+        "VK_KHR_portability_subset": 1,
+        "VK_EXT_memory_budget": 1
+      },
+      "features": {
+        "VkPhysicalDeviceFeatures": {
+          "logicOp": false,
+          "wideLines": false,
+          "geometryShader": false,
+          "shaderFloat64": false,
+          "samplerAnisotropy": true,
+          "multiDrawIndirect": true
+        },
+        "VkPhysicalDeviceVulkan11Features": {
+          "shaderDrawParameters": true
+        },
+        "VkPhysicalDeviceDynamicRenderingFeatures": {
+          "dynamicRendering": true
+        },
+        "VkPhysicalDevicePortabilitySubsetFeaturesKHR": {
+          "constantAlphaColorBlendFactors": true,
+          "events": true,
+          "imageViewFormatReinterpretation": true,
+          "imageViewFormatSwizzle": true,
+          "imageView2DOn3DImage": true,
+          "multisampleArrayImage": false,
+          "mutableComparisonSamplers": true,
+          "pointPolygons": false,
+          "samplerMipLodBias": false,
+          "separateStencilMaskRef": true,
+          "shaderSampleRateInterpolationFunctions": true,
+          "tessellationIsolines": false,
+          "tessellationPointMode": false,
+          "triangleFans": true,
+          "vertexAttributeAccessBeyondStride": true
+        }
+      },
+      "properties": {
+        "VkPhysicalDeviceProperties": {
+          "apiVersion": 4202757
+        },
+        "VkPhysicalDevicePortabilitySubsetPropertiesKHR": {
+          "minVertexInputBindingStrideAlignment": 4
+        }
+      }
+    }
+  },
+  "profiles": {
+    "VP_VOOLKAN_APPLE_M": {
+      "version": 1,
+      "api-version": "1.2.261",
+      "label": "voolkan Apple Silicon / MoltenVK (M3 log-calibrated)",
+      "description": "Apple Silicon + MoltenVK 1.2.6 profile (calibrated from Apple M3 startup log): Vulkan 1.2.261, portability subset, dynamic rendering, memory budget, no logicOp / wideLines / geometryShader / shaderFloat64.",
+      "capabilities": ["baseline"]
+    }
+  }
+}

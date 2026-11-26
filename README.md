@@ -5,38 +5,41 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.11-brightgreen.svg)](https://minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Loader-Fabric-blue.svg)](https://fabricmc.net/)
 [![Vulkan](https://img.shields.io/badge/Vulkan-1.2+-red.svg)](https://www.vulkan.org/)
-[![Platform](https://img.shields.io/badge/Platform-Windows-informational.svg)](https://www.microsoft.com/windows)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-informational.svg)](https://github.com/rvyyv-n/voolkan)
 [![License](https://img.shields.io/badge/License-LGPL--3.0-orange.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/Release-v1.0.0+1.21.11-brightgreen.svg)](https://github.com/rvyyv-n/voolkan/releases/tag/v1.0.0%2B1.21.11)
+[![Release](https://img.shields.io/badge/Release-v1.5.0+1.21.11-brightgreen.svg)](https://github.com/rvyyv-n/voolkan/releases/tag/v1.5.0%2B1.21.11)
 
-**voolkan** is a next-generation Vulkan renderer for Minecraft 1.21.11 (Fabric), built for high frame rates, low input latency and steady frame pacing, including on older GPUs and budget systems that other Vulkan renderers cannot run on.
+**voolkan** is a high-performance Vulkan renderer for Minecraft 1.21.11 (Fabric) on **Windows** and **Apple Silicon macOS**, built for high frame rates, low input latency, and steady frame pacing — including on older GPUs and budget systems that other Vulkan renderers cannot run on.
 
 ## What voolkan solves
 
 - **Driver bottlenecks:** Minecraft's OpenGL renderer is limited by driver overhead and single-threaded draw submission. voolkan replaces it with a native Vulkan engine that cuts CPU draw-call cost and submits GPU work more efficiently.
-- **Older GPUs left behind:** Most Vulkan renderers require `VK_KHR_dynamic_rendering`. voolkan automatically falls back to a classic `VkRenderPass` path when that extension is missing, so hardware such as **AMD GCN 1 (Radeon R7 350)** and other Vulkan 1.2 devices gets full Vulkan rendering instead of a startup error.
-- **Stutter and input lag:** chunk uploads are budgeted per frame, the presentation queue is kept to a single frame, and compiled pipelines are cached on disk.
+- **Older GPUs left behind:** Most Vulkan renderers require `VK_KHR_dynamic_rendering`. voolkan automatically falls back to a repaired classic `VkRenderPass` path when that extension is missing, so hardware such as **AMD GCN 1 (Radeon R7 350)** and other Vulkan 1.2 devices gets full Vulkan rendering instead of a startup error.
+- **Apple Silicon macOS via MoltenVK:** Full Vulkan portability support, tile-based GPU (TBDR) pass optimizations, zero-staging unified-memory writes, notch-safe borderless and native macOS fullscreen modes, and a live 1× **Reduce Resolution** toggle (verified at **180 FPS** full 2× Retina and **250 FPS** at 1× on an M3 MacBook Air).
+- **Stutter and input lag:** Configurable per-frame chunk upload budgeting, async chunk uploads, a precise sleep-then-spin frame limiter, disk-cached SPIR-V shaders and pipelines, and world-load pipeline warm-up keep frame times smooth.
 
 ## Highlights
 
-- **Early-Z depth pre-pass:** opaque geometry is depth-tested first, cutting pixel shader work and overdraw on fillrate-limited GPUs.
-- **Chunk upload budgeting:** chunk geometry uploads are capped at 2.5 ms per frame, removing micro-stutter while chunks load.
-- **Ultra-low latency:** a single-frame queue (`Frame Queue: 1`) and configurable swapchain image count keep input response tight.
-- **Disk-cached pipelines:** compiled pipelines are saved to disk, so later launches skip most shader compilation hitches.
-- **Video presets:** in-game Performance, Balanced and Quality presets, with hardware capability logging and compatibility diagnostics.
-- **Native borderless windowed mode:** built in, no extra mod needed.
+- **Legacy & modern Vulkan paths:** Automatic `VkRenderPass` fallback on older GPUs without dynamic rendering, plus deep performance optimizations (Early-Z pre-pass, descriptor/state caching, shared section slab, and BAR streaming buffers) across Windows and macOS.
+- **Apple Silicon tuning:** Tile-GPU attachment folding, unified-memory direct writes, automatic battery FPS cap, and live Retina / 1× **Reduce Resolution** switching without restarting.
+- **Frame pacing & latency controls:** Dedicated **Latency** settings group with precise frame limiting, Adaptive VSync (`FIFO_RELAXED` where supported), configurable render queue and swapchain images, background/battery FPS caps, and **Performance / Balanced / Quality / Battery / Competitive** presets.
+- **Scalability & burst control:** World Resolution scaling (50–100% with crisp HUD), configurable per-frame chunk upload budget (immediate player edits bypass the cap), per-frame particle limit, and separate block-entity render distance.
+- **Faster loads & diagnostics:** On-disk shader and pipeline caches, world-load pipeline warm-up with a live progress bar, F3 VRAM + average / 1% low frame-time stats, one-click privacy-sanitized **Copy Diagnostics**, and plain-English startup failure guidance.
+- **Overhauled Settings UI:** Multi-word search across tabs, sections, options, tooltips, and values, plus per-option and per-page reset to platform defaults.
 
 ## Download
 
-Release [v1.0.0+1.21.11](https://github.com/rvyyv-n/voolkan/releases/tag/v1.0.0%2B1.21.11):
+Release [v1.5.0+1.21.11](https://github.com/rvyyv-n/voolkan/releases/tag/v1.5.0%2B1.21.11):
 
 | File | What it is |
 |---|---|
-| [`voolkan-1.0.0+1.21.11.jar`](https://github.com/rvyyv-n/voolkan/releases/download/v1.0.0%2B1.21.11/voolkan-1.0.0%2B1.21.11.jar) | The mod. Drop it into your Fabric `mods` folder. |
-| [`voolkan-1.21.11.mrpack`](https://github.com/rvyyv-n/voolkan/releases/download/v1.0.0%2B1.21.11/voolkan-1.21.11.mrpack) | Modrinth companion modpack (voolkan plus compatible companion mods). |
-| [`voolkan-1.21.11-modpack-full.zip`](https://github.com/rvyyv-n/voolkan/releases/download/v1.0.0%2B1.21.11/voolkan-1.21.11-modpack-full.zip) | Full offline bundle, usable without a network connection. |
+| [`voolkan-1.5.0+1.21.11.jar`](https://github.com/rvyyv-n/voolkan/releases/download/v1.5.0%2B1.21.11/voolkan-1.5.0%2B1.21.11.jar) | The mod. Drop it into your Fabric `mods` folder. |
+| [`voolkan-1.5.0+1.21.11-sources.jar`](https://github.com/rvyyv-n/voolkan/releases/download/v1.5.0%2B1.21.11/voolkan-1.5.0%2B1.21.11-sources.jar) | Corresponding source archive (LGPL-3.0). |
 
-Requirements: Windows, Minecraft 1.21.11, Fabric Loader, Fabric API, and a GPU with Vulkan 1.2 drivers.
+Requirements:
+- **Minecraft 1.21.11** and **Fabric Loader** (`0.14.14+`; tested with `0.18.4`). Required Fabric API modules and LWJGL/MoltenVK natives are bundled inside the mod jar.
+- **Windows:** A GPU and driver supporting Vulkan 1.2 (works with or without `VK_KHR_dynamic_rendering`).
+- **macOS:** Apple Silicon (M1 or later; Intel Macs are untested) using Prism Launcher or the official Minecraft Launcher (for `-XstartOnFirstThread`).
 
 ## Compatibility
 

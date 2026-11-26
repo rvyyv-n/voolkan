@@ -1,14 +1,23 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * skip empty command-buffer reset scheduling in scheduleCbReset.
+ */
+
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryManager;
 import net.vulkanmod.vulkan.queue.CommandPool;
 import net.vulkanmod.vulkan.util.VUtil;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.VkDevice;
+import org.lwjgl.vulkan.VkSubmitInfo;
 
+import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 
 import static org.lwjgl.vulkan.VK10.*;
@@ -88,6 +97,9 @@ public class Synchronization {
     }
 
     public void scheduleCbReset() {
+        if (this.semaphoreCbs.isEmpty()) {
+            return;
+        }
         final var frameSemaphoreCbs = this.semaphoreCbs.clone();
         MemoryManager.getInstance().addFrameOp(
                 () -> {
@@ -95,6 +107,34 @@ public class Synchronization {
                 }
         );
 
+        this.semaphoreCbs.clear();
+    }
+
+    public synchronized void clearSemaphoresAfterIdle() {
+        if (!this.semaphores.isEmpty()) {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                int count = this.semaphores.size();
+                LongBuffer waitSemaphores = stack.mallocLong(count);
+                IntBuffer waitDstStageMask = stack.mallocInt(count);
+                waitSemaphores.put(this.semaphores.elements(), 0, count);
+                waitSemaphores.flip();
+                for (int i = 0; i < count; i++) {
+                    waitDstStageMask.put(i, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+                }
+
+                VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
+                submitInfo.sType$Default();
+                submitInfo.pWaitSemaphores(waitSemaphores);
+                submitInfo.waitSemaphoreCount(count);
+                submitInfo.pWaitDstStageMask(waitDstStageMask);
+
+                var graphicsQueue = DeviceManager.getGraphicsQueue().vkQueue();
+                vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
+                vkQueueWaitIdle(graphicsQueue);
+            }
+            this.semaphores.clear();
+        }
+        this.semaphoreCbs.forEach(CommandPool.CommandBuffer::reset);
         this.semaphoreCbs.clear();
     }
 

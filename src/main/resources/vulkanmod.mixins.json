@@ -10,6 +10,7 @@
     "window.ScreenManagerMixin",
     "window.WindowMixin",
     "window.WindowAccessor",
+    "window.FramerateLimitTrackerMixin",
 
     "chunk.ClientPacketListenerM",
     "chunk.ClientChunkCacheM",
@@ -30,6 +31,7 @@
     "debug.DebugEntryMemoryM",
     "debug.DebugEntrySystemSpecsM",
     "debug.DebugScreenEntriesM",
+    "debug.DebugScreenOverlayM",
     "debug.KeyboardHandlerM",
 
     "matrix.Matrix4fM",
@@ -40,6 +42,8 @@
     "profiling.LevelRendererMixin",
     "profiling.TimerQueryM",
 
+    "render.BlockEntityRenderDispatcherMixin",
+    "render.DynamicUniformsMixin",
     "render.FogRendererMixin",
     "render.GameRendererMixin",
     "render.GuiRendererMixin",
@@ -69,6 +73,8 @@
     "render.frapi.ModelBlockRendererMixin",
     "render.frapi.SubmitNodeCollectionMixin",
     "render.frapi.SubmitNodeStorageMixin",
+    "render.particle.ParticleAccessor",
+    "render.particle.ParticleEngineMixin",
     "render.particle.QuadParticleGroupM",
     "render.particle.QuadParticleRenderStateM",
     "render.shader.RenderPipelineM",
@@ -82,6 +88,7 @@
 
     "screen.ScreenM",
     "screen.OptionsScreenM",
+    "screen.LevelLoadingScreenM",
 
     "texture.SpriteContentsAnimatedTextureM",
     "texture.TextureAtlasSpriteMixin",
@@ -101,6 +108,9 @@
     "wayland.KeyboardHandlerM",
     "wayland.MinecraftMixin",
 
+    "compatibility.PostChainAccessor",
+    "compatibility.PostChainMixin",
+    "compatibility.PostPassAccessor",
     "compatibility.PostPassM",
 
     "voxel.VoxelShapeMixin",

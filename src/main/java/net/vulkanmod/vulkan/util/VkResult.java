@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.util;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * decode common KHR/Vulkan 1.1+ result codes for readable startup diagnostics.
+ */
+
 public class VkResult {
     public static final int VK_SUCCESS = 0;
     public static final int VK_NOT_READY = 1;
@@ -20,6 +26,12 @@ public class VkResult {
     public static final int VK_ERROR_FORMAT_NOT_SUPPORTED = -11;
     public static final int VK_ERROR_FRAGMENTED_POOL = -12;
     public static final int VK_ERROR_UNKNOWN = -13;
+    public static final int VK_ERROR_OUT_OF_POOL_MEMORY = -1000069000;
+    public static final int VK_ERROR_SURFACE_LOST_KHR = -1000000000;
+    public static final int VK_ERROR_NATIVE_WINDOW_IN_USE_KHR = -1000000001;
+    public static final int VK_SUBOPTIMAL_KHR = 1000001003;
+    public static final int VK_ERROR_OUT_OF_DATE_KHR = -1000001004;
+    public static final int VK_ERROR_INCOMPATIBLE_DISPLAY_KHR = -1000003001;
 
     public static String decode(int result) {
         return switch (result) {
@@ -42,6 +54,12 @@ public class VkResult {
             case VK_ERROR_FORMAT_NOT_SUPPORTED -> "VK_ERROR_FORMAT_NOT_SUPPORTED";
             case VK_ERROR_FRAGMENTED_POOL -> "VK_ERROR_FRAGMENTED_POOL";
             case VK_ERROR_UNKNOWN -> "VK_ERROR_UNKNOWN";
+            case VK_ERROR_OUT_OF_POOL_MEMORY -> "VK_ERROR_OUT_OF_POOL_MEMORY";
+            case VK_ERROR_SURFACE_LOST_KHR -> "VK_ERROR_SURFACE_LOST_KHR";
+            case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR -> "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+            case VK_SUBOPTIMAL_KHR -> "VK_SUBOPTIMAL_KHR";
+            case VK_ERROR_OUT_OF_DATE_KHR -> "VK_ERROR_OUT_OF_DATE_KHR";
+            case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR -> "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
 
             default -> Integer.toString(result);
         };

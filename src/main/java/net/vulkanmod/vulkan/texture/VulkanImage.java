@@ -4,11 +4,14 @@ package net.vulkanmod.vulkan.texture;
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
  * GL_UNPACK_ROW_LENGTH of 0 means tightly packed, and the staged upload size covers only the region read;
- * image layouts are tracked per mip level.
+ * image layouts are tracked per mip level; support BGRA and additional depth formats in formatSize.
  */
 
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.ints.Int2LongArrayMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import net.vulkanmod.render.texture.ImageUploadHelper;
+import net.vulkanmod.render.texture.SpriteUpdateUtil;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -32,6 +35,8 @@ public class VulkanImage {
 
     private static final VkDevice DEVICE = Vulkan.getVkDevice();
 
+    public static final Long2ObjectOpenHashMap<VulkanImage> IMAGES = new Long2ObjectOpenHashMap<>();
+
     public final String name;
     public final int format;
     public final int aspect;
@@ -52,6 +57,7 @@ public class VulkanImage {
     private final long[] levelImageViews;
 
     private long sampler;
+    private int viewFormat = 0;
 
     /** Not a Vulkan layout: marks an image whose mip levels are in different layouts. */
     public static final int LAYOUT_MIXED = -1;
@@ -106,6 +112,8 @@ public class VulkanImage {
         image.mainImageView = createImageView(image.id, image.viewType, image.format, image.aspect, image.arrayLayers, 0, image.mipLevels);
 
         image.sampler = SamplerManager.getSampler(builder.clamp, builder.linearFiltering, builder.mipLevels - 1);
+
+        IMAGES.put(image.id, image);
 
         return image;
     }
@@ -247,6 +255,21 @@ public class VulkanImage {
 
         long uploadSize = (long) (rowLength * (height - 1) + width) * this.formatSize;
 
+        // Preserve SpriteUpdateUtil tracking across any flushCmds() / staging overflow below.
+        boolean wasTrackedForSpriteTransition = MacPerfOpts.inlineImageUploads()
+                && SpriteUpdateUtil.containsTransitionedLayout(this);
+
+        // If this image already has an unsubmitted inline upload on mainCmdBuffer and this new
+        // upload must go onto ImageUploadHelper (e.g. a render pass is now open), flush mainCmdBuffer
+        // BEFORE copying into StagingBuffer so uploads never execute out of order and StagingBuffer is not reset mid-copy.
+        if (MacPerfOpts.inlineImageUploads()
+                && ImageUploadHelper.INSTANCE.hasPendingInlineUpload(this.id)
+                && (!Renderer.isRecording()
+                    || Renderer.getInstance().getBoundRenderPass() != null
+                    || ImageUploadHelper.INSTANCE.getCommandBuffer() != null)) {
+            Renderer.getInstance().flushCmds();
+        }
+
         StagingBuffer stagingBuffer = Vulkan.getStagingBuffer();
 
         // Use a temporary staging buffer if the upload size is greater than
@@ -263,7 +286,13 @@ public class VulkanImage {
 
         long bufferId = stagingBuffer.getId();
 
-        VkCommandBuffer commandBuffer = ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().getHandle();
+        boolean inlineMainCb = MacPerfOpts.inlineImageUploads()
+                && Renderer.isRecording()
+                && Renderer.getInstance().getBoundRenderPass() == null
+                && ImageUploadHelper.INSTANCE.getCommandBuffer() == null;
+        VkCommandBuffer commandBuffer = inlineMainCb
+                ? Renderer.getCommandBuffer()
+                : ImageUploadHelper.INSTANCE.getOrStartCommandBuffer().getHandle();
         try (MemoryStack stack = stackPush()) {
             transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -274,6 +303,11 @@ public class VulkanImage {
                                            srcOffset, rowLength, height);
 
             ImageUtil.imageTransferMemoryBarrier(stack, commandBuffer, this, mipLevel);
+        }
+        if (inlineMainCb) {
+            ImageUploadHelper.INSTANCE.addPendingInlineTransition(this, mipLevel);
+        } else if (wasTrackedForSpriteTransition) {
+            SpriteUpdateUtil.addTransitionedLayout(this);
         }
     }
 
@@ -344,9 +378,16 @@ public class VulkanImage {
         int sourceStage, srcAccessMask, destinationStage, dstAccessMask = 0;
 
         switch (oldLayout) {
-            case VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
+            case VK_IMAGE_LAYOUT_UNDEFINED -> {
                 srcAccessMask = 0;
-                sourceStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+                sourceStage = (newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                        || newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                        ? VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                        : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            }
+            case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
+                srcAccessMask = 0;
+                sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             }
             case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL -> {
                 srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -366,7 +407,9 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> {
                 srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                sourceStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                sourceStage = MacPerfOpts.tbdrPassOpts()
+                        ? (VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                        : VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             }
             default -> throw new RuntimeException("Unexpected value:" + oldLayout);
         }
@@ -382,7 +425,11 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-                destinationStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                // Only small lightmap textures (16x16) are sampled in vertex shaders; fullscreen and
+                // atlas render targets are fragment-only, so omitting VERTEX_SHADER_BIT unblocks Apple TBDR tiling overlap.
+                destinationStage = (MacPerfOpts.tbdrPassOpts() && (this.width > 64 || this.height > 64))
+                        ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                        : (VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
             }
             case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -390,7 +437,9 @@ public class VulkanImage {
             }
             case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL -> {
                 dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+                destinationStage = MacPerfOpts.tbdrPassOpts()
+                        ? (VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                        : VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
             }
             case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                 destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -450,6 +499,8 @@ public class VulkanImage {
                         }
                     });
 
+        IMAGES.remove(this.id);
+
         this.id = 0L;
     }
 
@@ -496,7 +547,18 @@ public class VulkanImage {
     }
 
     public long getImageView() {
-        return mainImageView;
+        if (this.viewFormat == 0 || this.viewFormat == this.format) {
+            return mainImageView;
+        }
+
+        int format = this.viewFormat;
+        long imageView = this.imageViews.get(format);
+        if (imageView == VK_NULL_HANDLE) {
+            imageView = createImageView(this.id, VK_IMAGE_VIEW_TYPE_2D, format, this.aspect, this.arrayLayers, 0, this.mipLevels);
+            this.imageViews.put(format, imageView);
+        }
+
+        return imageView;
     }
 
     public long getImageView(int format) {
@@ -526,6 +588,14 @@ public class VulkanImage {
 
     public long getSampler() {
         return sampler;
+    }
+
+    public int getViewFormat() {
+        return viewFormat;
+    }
+
+    public void setViewFormat(int viewFormat) {
+        this.viewFormat = viewFormat;
     }
 
     public static Builder builder(int width, int height) {
@@ -613,12 +683,14 @@ public class VulkanImage {
         private static int formatSize(int format) {
             return switch (format) {
                 case VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_SRGB,
+                     VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB,
                      VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT,
+                     VK_FORMAT_X8_D24_UNORM_PACK32,
                      VK_FORMAT_R8G8B8A8_UINT, VK_FORMAT_R8G8B8A8_SINT,
-                     VK_FORMAT_R32_SFLOAT -> 4;
+                     VK_FORMAT_R32_SFLOAT, VK_FORMAT_B10G11R11_UFLOAT_PACK32 -> 4;
                 case VK_FORMAT_R16_SFLOAT -> 2;
                 case VK_FORMAT_R8_UNORM -> 1;
-                case VK_FORMAT_R16G16B16A16_SFLOAT -> 8;
+                case VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT -> 8;
 
                 default -> throw new IllegalArgumentException(String.format("Unxepcted format: %s", format));
             };

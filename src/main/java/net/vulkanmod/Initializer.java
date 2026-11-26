@@ -3,9 +3,12 @@ package net.vulkanmod;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * mod id lookup renamed to voolkan; update check disabled.
+ * mod id lookup renamed to voolkan; update check disabled; register macOS battery power-source probe.
  */
 
+import dev.voolkan.compat.DiagnosticLogBuffer;
+import dev.voolkan.power.MacosPowerSource;
+import dev.voolkan.power.PowerSources;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.renderer.v1.Renderer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -26,6 +29,8 @@ public class Initializer implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		DiagnosticLogBuffer.installLogAppender();
+
 		VERSION = FabricLoader.getInstance()
 				.getModContainer("voolkan")
 				.get()
@@ -40,6 +45,9 @@ public class Initializer implements ClientModInitializer {
 
 		CONFIG = loadConfig(configPath);
 		Platform.init();
+		if (Platform.isMacOS()) {
+			PowerSources.set(MacosPowerSource.create());
+		}
 
 		Renderer.register(VulkanModRenderer.INSTANCE);
 

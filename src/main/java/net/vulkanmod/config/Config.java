@@ -3,7 +3,7 @@ package net.vulkanmod.config;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add the renderPath, lowLatency, swapChainImages and pipelineCache options.
+ * add the renderPath, lowLatency, swapChainImages, pipelineCache, backgroundFps, batteryFps, worldScale, blockEntityDistance, chunkUploadBudget, maxParticles, adaptiveVsync, macNativeFullscreen, and macReduceResolution options, and apply macOS fresh-config defaults.
  */
 
 import com.google.gson.Gson;
@@ -39,6 +39,28 @@ public class Config {
     public int frameQueueSize = 2;
     /** Wait for the previous frame's fence before input is polled. */
     public boolean lowLatency = false;
+    /** Frame-rate cap when the window is unfocused; 0 = off. */
+    public int backgroundFps = 30;
+    /** Frame-rate cap while running on battery power; 0 = off. */
+    public int batteryFps = 0;
+    /** World render resolution as a percentage (50..100, step 5); 100 = native (off). */
+    public int worldScale = 100;
+    /** Maximum render distance for block entities (chests, signs, banners) in blocks (16..128); 64 = vanilla default. */
+    public int blockEntityDistance = 64;
+    /** Background chunk section upload budget per frame: 0 = Auto, 1..63 = sections/frame, 64 = Unlimited. */
+    public int chunkUploadBudget = 0;
+    /** Per-frame quad particle limit; 0 = Unlimited (vanilla behavior). */
+    public int maxParticles = 0;
+    /** Use VK_PRESENT_MODE_FIFO_RELAXED_KHR when VSync is on and the driver supports it. */
+    public boolean adaptiveVsync = false;
+    /** Show rolling average frame time and 1% low FPS readout on the F3 debug screen. */
+    public boolean showFrameTimeF3 = true;
+    /** Opt out of Windows fullscreen exclusive / independent flip via VK_EXT_full_screen_exclusive (for capture compatibility). */
+    public boolean disallowFullscreenExclusive = false;
+    /** Use native macOS fullscreen Spaces instead of borderless fullscreen (macOS only). */
+    public boolean macNativeFullscreen = false;
+    /** Render at 1x logical resolution instead of full Retina HiDPI on macOS (macOS only). */
+    public boolean macReduceResolution = false;
     /** Requested swapchain image count; 0 = driver minimum + 1. Clamped to the surface limits. */
     public int swapChainImages = 0;
     public int builderThreads = 0;
@@ -82,9 +104,25 @@ public class Config {
         }
         else {
             config = new Config();
+            config.applyPlatformDefaults();
             config.write();
         }
 
         return config;
+    }
+
+    private void applyPlatformDefaults() {
+        if (Platform.isMacOS()) {
+            // Overlap CPU/GPU across frameQueueSize=2 (safe with per-frame depth attachments)
+            // and split SOLID into the early-Z no-discard shader for Apple TBDR HSR.
+            this.lowLatency = false;
+            this.uniqueOpaqueLayer = false;
+            this.frameQueueSize = 2;
+            this.swapChainImages = 0;
+            this.macNativeFullscreen = false;
+            this.macReduceResolution = false;
+            this.adaptiveVsync = false;
+            this.indirectDraw = false;
+        }
     }
 }

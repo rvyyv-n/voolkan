@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory.buffer.index;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use unified direct-write memory for auto-generated index buffers when enabled.
+ */
+
 import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.memory.MemoryTypes;
 import net.vulkanmod.vulkan.memory.buffer.IndexBuffer;
@@ -56,7 +62,7 @@ public class AutoIndexBuffer {
         }
 
         int size = buffer.capacity();
-        this.indexBuffer = new IndexBuffer(size, MemoryTypes.GPU_MEM, indexType);
+        this.indexBuffer = new IndexBuffer(size, MemoryTypes.getUnifiedOrGpuMem(), indexType);
         this.indexBuffer.copyBuffer(buffer, buffer.remaining());
 
         MemoryUtil.memFree(buffer);

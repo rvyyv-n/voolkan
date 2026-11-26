@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.memory;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * format VMA heap budget lines for the F3 debug screen.
+ */
+
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.Initializer;
@@ -8,6 +14,7 @@ import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.buffer.Buffer;
 import net.vulkanmod.vulkan.queue.Queue;
+import net.vulkanmod.vulkan.shader.DescriptorSets;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import net.vulkanmod.vulkan.util.Pair;
 import net.vulkanmod.vulkan.util.VkResult;
@@ -16,12 +23,14 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.vma.VmaAllocationCreateInfo;
+import org.lwjgl.util.vma.VmaAllocationInfo;
 import org.lwjgl.util.vma.VmaBudget;
 import org.lwjgl.vulkan.VkBufferCreateInfo;
 import org.lwjgl.vulkan.VkImageCreateInfo;
 
 import java.nio.LongBuffer;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
@@ -44,6 +53,7 @@ public class MemoryManager {
     private static long nativeMemory = 0;
 
     private int currentFrame = 0;
+    private int vmaFrameIndex = 0;
 
     private final ObjectArrayList<Buffer.BufferInfo>[] freeableBuffers = new ObjectArrayList[Frames];
     private final ObjectArrayList<VulkanImage>[] freeableImages = new ObjectArrayList[Frames];
@@ -83,6 +93,7 @@ public class MemoryManager {
 
     public synchronized void initFrame(int frame) {
         this.setCurrentFrame(frame);
+        vmaSetCurrentFrameIndex(ALLOCATOR, this.vmaFrameIndex++);
         this.freeBuffers(frame);
         this.freeImages(frame);
         this.doFrameOps(frame);
@@ -106,6 +117,11 @@ public class MemoryManager {
     }
 
     public void createBuffer(long size, int usage, int properties, LongBuffer pBuffer, PointerBuffer pBufferMemory) {
+        createBuffer(size, usage, properties, 0, false, pBuffer, pBufferMemory, null);
+    }
+
+    public void createBuffer(long size, int usage, int requiredFlags, int preferredFlags, boolean mapped,
+                             LongBuffer pBuffer, PointerBuffer pBufferMemory, VmaAllocationInfo pAllocationInfo) {
         try (MemoryStack stack = stackPush()) {
 
             VkBufferCreateInfo bufferInfo = VkBufferCreateInfo.calloc(stack);
@@ -113,10 +129,24 @@ public class MemoryManager {
             bufferInfo.size(size);
             bufferInfo.usage(usage);
 
-            VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack);
-            allocationInfo.requiredFlags(properties);
+            Queue.QueueFamilyIndices qf = Queue.getQueueFamilies();
+            if (qf.graphicsFamily != qf.transferFamily) {
+                bufferInfo.sharingMode(VK_SHARING_MODE_CONCURRENT);
+                bufferInfo.pQueueFamilyIndices(stack.ints(qf.graphicsFamily, qf.transferFamily));
+            } else {
+                bufferInfo.sharingMode(VK_SHARING_MODE_EXCLUSIVE);
+            }
 
-            int result = vmaCreateBuffer(ALLOCATOR, bufferInfo, allocationInfo, pBuffer, pBufferMemory, null);
+            VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack);
+            allocationInfo.requiredFlags(requiredFlags);
+            if (preferredFlags != 0) {
+                allocationInfo.preferredFlags(preferredFlags);
+            }
+            if (mapped) {
+                allocationInfo.flags(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+            }
+
+            int result = vmaCreateBuffer(ALLOCATOR, bufferInfo, allocationInfo, pBuffer, pBufferMemory, pAllocationInfo);
             if (result != VK_SUCCESS) {
                 Initializer.LOGGER.info(String.format("Failed to create buffer with size: %.3f MB", ((float) size / BYTES_IN_MB)));
                 Initializer.LOGGER.info(String.format("Tracked Device Memory used: %d/%d MB", getAllocatedDeviceMemoryMB(), getDeviceMemoryMB()));
@@ -129,17 +159,25 @@ public class MemoryManager {
     }
 
     public synchronized void createBuffer(Buffer buffer, long size, int usage, int properties) {
+        createBuffer(buffer, size, usage, properties, 0, buffer.type.mappable());
+    }
+
+    public synchronized void createBuffer(Buffer buffer, long size, int usage, int requiredFlags, int preferredFlags, boolean mapped) {
         try (MemoryStack stack = stackPush()) {
             LongBuffer pBuffer = stack.mallocLong(1);
             PointerBuffer pAllocation = stack.pointers(VK_NULL_HANDLE);
+            VmaAllocationInfo vmaAllocInfo = mapped ? VmaAllocationInfo.calloc(stack) : null;
 
-            this.createBuffer(size, usage, properties, pBuffer, pAllocation);
+            this.createBuffer(size, usage, requiredFlags, preferredFlags, mapped, pBuffer, pAllocation, vmaAllocInfo);
 
             buffer.setId(pBuffer.get(0));
             buffer.setAllocation(pAllocation.get(0));
             buffer.setBufferSize(size);
+            if (mapped && vmaAllocInfo != null) {
+                buffer.setDataPtr(vmaAllocInfo.pMappedData());
+            }
 
-            if ((properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != 0) {
+            if (buffer.type.getType() == MemoryType.Type.DEVICE_LOCAL) {
                 deviceMemory += size;
             }
             else {
@@ -214,6 +252,7 @@ public class MemoryManager {
         vmaDestroyBuffer(ALLOCATOR, buffer, allocation);
 
         buffers.remove(buffer);
+        DescriptorSets.bumpResourceEpoch();
     }
 
     private static void freeBuffer(Buffer.BufferInfo bufferInfo) {
@@ -227,6 +266,7 @@ public class MemoryManager {
         }
 
         buffers.remove(bufferInfo.id());
+        DescriptorSets.bumpResourceEpoch();
     }
 
     public static void freeImage(long imageId, long allocation) {
@@ -234,6 +274,7 @@ public class MemoryManager {
 
         VulkanImage image = images.remove(imageId);
         deviceMemory -= image.size;
+        DescriptorSets.bumpResourceEpoch();
     }
 
     public synchronized void addToFreeable(Buffer buffer) {
@@ -332,6 +373,38 @@ public class MemoryManager {
             long budget = vmaBudget.budget();
 
             return String.format("Device Memory Heap Usage: %d/%dMB", bytesInMb(usage), bytesInMb(budget));
+        }
+    }
+
+    public List<String> getMemoryBudgetLines() {
+        if (MemoryTypes.GPU_MEM == null || DeviceManager.memoryProperties == null) {
+            return List.of();
+        }
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VmaBudget.Buffer vmaBudgets = VmaBudget.calloc(DeviceManager.memoryProperties.memoryHeapCount(), stack);
+            vmaGetHeapBudgets(ALLOCATOR, vmaBudgets);
+
+            String est = DeviceManager.memoryBudgetSupported ? "" : " (est.)";
+            int gpuHeapIdx = MemoryTypes.GPU_MEM.vkMemoryType.heapIndex();
+            int gpuHeapMB = bytesInMb(MemoryTypes.GPU_MEM.vkMemoryHeap.size());
+            VmaBudget gpuBudget = vmaBudgets.get(gpuHeapIdx);
+            String gpuLabel = MemoryTypes.isUnifiedMemory() ? "Unified memory" : "VRAM";
+            String gpuLine = String.format(Locale.ROOT, "%s: %d/%d MB%s (heap %d MB)",
+                    gpuLabel, bytesInMb(gpuBudget.usage()), bytesInMb(gpuBudget.budget()), est, gpuHeapMB);
+
+            if (MemoryTypes.HOST_MEM != null) {
+                int hostHeapIdx = MemoryTypes.HOST_MEM.vkMemoryType.heapIndex();
+                if (hostHeapIdx != gpuHeapIdx) {
+                    int hostHeapMB = bytesInMb(MemoryTypes.HOST_MEM.vkMemoryHeap.size());
+                    VmaBudget hostBudget = vmaBudgets.get(hostHeapIdx);
+                    String hostLine = String.format(Locale.ROOT, "Shared memory: %d/%d MB%s (heap %d MB)",
+                            bytesInMb(hostBudget.usage()), bytesInMb(hostBudget.budget()), est, hostHeapMB);
+                    return List.of(gpuLine, hostLine);
+                }
+            }
+
+            return List.of(gpuLine);
         }
     }
 }

@@ -48,6 +48,11 @@ public class Framebuffer {
     private record FramebufferKey(RenderPass renderPass, int level, long colorView, long depthView) {}
 
     private final Map<FramebufferKey, Long> renderpassToFramebufferMap = new HashMap<>();
+    private RenderPass cachedFbRenderPass;
+    private int cachedFbLevel = -1;
+    private long cachedFbColorView;
+    private long cachedFbDepthView;
+    private long cachedFbId;
 
     // SwapChain
     protected Framebuffer() {
@@ -176,6 +181,13 @@ public class Framebuffer {
         long colorView = legacyColorView();
         long depthView = legacyDepthView();
 
+        if (renderPass == this.cachedFbRenderPass
+                && this.level == this.cachedFbLevel
+                && colorView == this.cachedFbColorView
+                && depthView == this.cachedFbDepthView) {
+            return this.cachedFbId;
+        }
+
         FramebufferKey key = new FramebufferKey(renderPass, this.level, colorView, depthView);
 
         Long id = this.renderpassToFramebufferMap.get(key);
@@ -184,6 +196,11 @@ public class Framebuffer {
             this.renderpassToFramebufferMap.put(key, id);
         }
 
+        this.cachedFbRenderPass = renderPass;
+        this.cachedFbLevel = this.level;
+        this.cachedFbColorView = colorView;
+        this.cachedFbDepthView = depthView;
+        this.cachedFbId = id;
         return id;
     }
 
@@ -230,6 +247,9 @@ public class Framebuffer {
 
 
         renderpassToFramebufferMap.clear();
+        this.cachedFbRenderPass = null;
+        this.cachedFbLevel = -1;
+        this.cachedFbId = 0L;
     }
 
     public void setLevel(int level) {

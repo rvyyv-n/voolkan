@@ -9,6 +9,8 @@ package net.vulkanmod.render.shader;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.TextureFilteringMethod;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
@@ -26,6 +28,7 @@ public abstract class PipelineManager {
 
     static GraphicsPipeline
             terrainShader, terrainShaderEarlyZ,
+            terrainShaderRgss, terrainShaderEarlyZRgss,
             fastBlitPipeline, cloudsPipeline;
 
     private static Function<TerrainRenderType, GraphicsPipeline> shaderGetter;
@@ -38,19 +41,26 @@ public abstract class PipelineManager {
     }
 
     public static void setDefaultTerrainShaderGetter() {
-        setShaderGetter(renderType -> (!Initializer.CONFIG.uniqueOpaqueLayer && renderType == TerrainRenderType.SOLID)
-                ? terrainShaderEarlyZ
-                : terrainShader);
+        setShaderGetter(renderType -> {
+            boolean useRgss = Minecraft.getInstance().options.textureFiltering().get() == TextureFilteringMethod.RGSS;
+            boolean earlyZ = !Initializer.CONFIG.uniqueOpaqueLayer && renderType == TerrainRenderType.SOLID;
+            if (useRgss) {
+                return earlyZ ? terrainShaderEarlyZRgss : terrainShaderRgss;
+            }
+            return earlyZ ? terrainShaderEarlyZ : terrainShader;
+        });
     }
 
     private static void createBasicPipelines() {
-        terrainShader = createPipeline("terrain", "basic", PipelineConfigs.TERRAIN, CustomVertexFormat.COMPRESSED_TERRAIN);
-        terrainShaderEarlyZ = createPipeline("terrain_earlyZ", "basic", PipelineConfigs.TERRAIN_EARLY_Z_CONFIG, CustomVertexFormat.COMPRESSED_TERRAIN);
+        terrainShader = createPipeline("terrain", "basic", PipelineConfigs.TERRAIN, CustomVertexFormat.COMPRESSED_TERRAIN, null);
+        terrainShaderEarlyZ = createPipeline("terrain_earlyZ", "basic", PipelineConfigs.TERRAIN_EARLY_Z_CONFIG, CustomVertexFormat.COMPRESSED_TERRAIN, null);
+        terrainShaderRgss = createPipeline("terrain_rgss", "basic", PipelineConfigs.TERRAIN, CustomVertexFormat.COMPRESSED_TERRAIN, "#define VOOLKAN_RGSS");
+        terrainShaderEarlyZRgss = createPipeline("terrain_earlyZ_rgss", "basic", PipelineConfigs.TERRAIN_EARLY_Z_CONFIG, CustomVertexFormat.COMPRESSED_TERRAIN, "#define VOOLKAN_RGSS");
         fastBlitPipeline = createPipeline("blit", "basic/blit", CustomVertexFormat.NONE);
         cloudsPipeline = createPipeline("clouds", "basic/clouds", DefaultVertexFormat.POSITION_COLOR);
     }
 
-    private static GraphicsPipeline createPipeline(String configName, String shaderPath, PipelineConfig config, VertexFormat vertexFormat) {
+    private static GraphicsPipeline createPipeline(String configName, String shaderPath, PipelineConfig config, VertexFormat vertexFormat, String fragmentDefine) {
         Pipeline.Builder pipelineBuilder = new Pipeline.Builder(vertexFormat, configName);
 
         final String path = ShaderLoadUtil.resolveShaderPath(shaderPath);
@@ -58,7 +68,11 @@ public abstract class PipelineManager {
         pipelineBuilder.applyConfig(config);
 
         pipelineBuilder.setShaderSrc(SPIRVUtils.ShaderKind.VERTEX_SHADER, ShaderLoadUtil.loadShader(path, "%s.vsh".formatted(config.shaderPaths.get(SPIRVUtils.ShaderKind.VERTEX_SHADER))));
-        pipelineBuilder.setShaderSrc(SPIRVUtils.ShaderKind.FRAGMENT_SHADER, ShaderLoadUtil.loadShader(path, "%s.fsh".formatted(config.shaderPaths.get(SPIRVUtils.ShaderKind.FRAGMENT_SHADER))));
+        String fragSrc = ShaderLoadUtil.loadShader(path, "%s.fsh".formatted(config.shaderPaths.get(SPIRVUtils.ShaderKind.FRAGMENT_SHADER)));
+        if (fragmentDefine != null) {
+            fragSrc = injectShaderDefine(fragSrc, fragmentDefine);
+        }
+        pipelineBuilder.setShaderSrc(SPIRVUtils.ShaderKind.FRAGMENT_SHADER, fragSrc);
 
         var pipeline = pipelineBuilder.createGraphicsPipeline();
 
@@ -67,6 +81,14 @@ public abstract class PipelineManager {
         }
 
         return pipeline;
+    }
+
+    private static String injectShaderDefine(String src, String defineLine) {
+        int nl = src.indexOf('\n');
+        if (nl >= 0) {
+            return src.substring(0, nl + 1) + defineLine + "\n" + src.substring(nl + 1);
+        }
+        return defineLine + "\n" + src;
     }
 
     private static GraphicsPipeline createPipeline(String configName, String shaderPath, VertexFormat vertexFormat) {
@@ -113,6 +135,14 @@ public abstract class PipelineManager {
         return terrainShaderEarlyZ;
     }
 
+    public static GraphicsPipeline getTerrainRgssShader() {
+        return terrainShaderRgss;
+    }
+
+    public static GraphicsPipeline getTerrainEarlyZRgssShader() {
+        return terrainShaderEarlyZRgss;
+    }
+
     public static GraphicsPipeline getFastBlitPipeline() {
         return fastBlitPipeline;
     }
@@ -124,6 +154,8 @@ public abstract class PipelineManager {
     public static void destroyPipelines() {
         terrainShaderEarlyZ.cleanUp();
         terrainShader.cleanUp();
+        terrainShaderEarlyZRgss.cleanUp();
+        terrainShaderRgss.cleanUp();
         fastBlitPipeline.cleanUp();
         cloudsPipeline.cleanUp();
     }

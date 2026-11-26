@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui.widget;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * clip and smoothly scroll centered button labels that exceed narrow button widths.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ComponentPath;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
@@ -49,17 +55,20 @@ public class VButtonWidget extends VAbstractWidget {
 
         // text is down here because of layering
         if (this.centeredText) {
-            GuiRenderer.drawCenteredString(
+            GuiRenderer.drawScrollingString(
                     Minecraft.getInstance().font,
                     this.message,
                     this.x + this.width / 2, (this.y + this.height / 2) - 4,
+                    Math.max(12, this.width - 6),
                     textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
         }
         else {
-            GuiRenderer.drawString(Minecraft.getInstance().font,
-                                   this.message,
-                                   this.x + this.margin, (this.y + this.height / 2) - 4,
-                                   textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
+            GuiRenderer.drawScrollingLeftString(
+                    Minecraft.getInstance().font,
+                    this.message,
+                    this.x + this.margin, (this.y + this.height / 2) - 4,
+                    Math.max(12, this.width - this.margin - 4),
+                    textColor | (Mth.ceil(this.alpha * 255.0f) << 24));
         }
 
     }

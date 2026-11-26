@@ -1,6 +1,13 @@
 package net.vulkanmod.render.engine;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * direct-write initial ByteBuffer contents into unified memory buffers on macOS/Apple Silicon.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
+import dev.voolkan.compat.MacPerfOpts;
 import com.mojang.blaze3d.opengl.*;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -166,7 +173,15 @@ public class VkGpuDevice implements GpuDevice {
             throw new IllegalArgumentException("Buffer source must not be empty");
         } else {
             VkGpuBuffer glBuffer = new VkGpuBuffer(this.debugLabels, supplier, usage, byteBuffer.remaining());
-            this.encoder.writeToBuffer(glBuffer.slice(), byteBuffer);
+            if (MacPerfOpts.unifiedGpuBuffers() && glBuffer.buffer.type.mappable()) {
+                if (glBuffer.isUnifiedUniformRing()) {
+                    glBuffer.tryUnifiedUniformWrite(0L, byteBuffer);
+                } else {
+                    glBuffer.buffer.type.copyToBuffer(glBuffer.buffer, byteBuffer, byteBuffer.remaining(), 0L, 0L);
+                }
+            } else {
+                this.encoder.writeToBuffer(glBuffer.slice(), byteBuffer);
+            }
             return glBuffer;
         }
     }

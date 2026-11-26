@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.build.task;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * skip air blocks early and omit empty TerrainRenderTypes so empty sections are detected and freed properly.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
@@ -30,8 +36,8 @@ public class BuildTask extends ChunkTask {
     @Nullable
     protected RenderRegion region;
 
-    public BuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority) {
-        super(renderSection, cameraPos);
+    public BuildTask(RenderSection renderSection, RenderRegion renderRegion, Vector3d cameraPos, boolean highPriority, int generation) {
+        super(renderSection, cameraPos, generation);
         this.region = renderRegion;
         this.highPriority = highPriority;
     }
@@ -74,9 +80,11 @@ public class BuildTask extends ChunkTask {
     }
 
     private CompileResult compile(float camX, float camY, float camZ, BuilderResources builderResources) {
-        CompileResult compileResult = new CompileResult(this.section, true);
+        CompileResult compileResult = new CompileResult(this.section, true, this.highPriority, this.generation);
 
-        BlockPos startBlockPos = new BlockPos(section.xOffset(), section.yOffset(), section.zOffset()).immutable();
+        final int secOriginX = section.xOffset();
+        final int secOriginY = section.yOffset();
+        final int secOriginZ = section.zOffset();
         VisGraph visGraph = new VisGraph();
 
         if (this.region == null) {
@@ -88,7 +96,7 @@ public class BuildTask extends ChunkTask {
         ThreadBuilderPack bufferBuilders = builderResources.builderPack;
         setupBufferBuilders(bufferBuilders);
 
-        this.region.loadBlockStates();
+        this.region.loadBlockStates(builderResources.blockDataScratch);
         this.region.initTintCache(builderResources.tintCache);
 
         builderResources.update(this.region, this.section);
@@ -102,9 +110,12 @@ public class BuildTask extends ChunkTask {
         for (int y = 0; y < 16; ++y) {
             for (int z = 0; z < 16; ++z) {
                 for (int x = 0; x < 16; ++x) {
-                    blockPos.set(section.xOffset() + x, section.yOffset() + y, section.zOffset() + z);
+                    blockPos.set(secOriginX + x, secOriginY + y, secOriginZ + z);
 
                     BlockState blockState = this.region.getBlockState(blockPos);
+                    if (blockState.isAir()) {
+                        continue;
+                    }
                     if (blockState.isSolidRender()) {
                         visGraph.setOpaque(blockPos);
                     }
@@ -122,7 +133,7 @@ public class BuildTask extends ChunkTask {
                     }
 
                     if (blockState.getRenderShape() == RenderShape.MODEL) {
-                        pos.set(blockPos.getX() & 15, blockPos.getY() & 15, blockPos.getZ() & 15);
+                        pos.set(x, y, z);
                         blockRenderer.renderBlock(blockState, blockPos, pos);
                     }
                 }
@@ -132,17 +143,26 @@ public class BuildTask extends ChunkTask {
         TerrainBuilder trasnlucentTerrainBuilder = bufferBuilders.builder(TerrainRenderType.TRANSLUCENT);
         if (trasnlucentTerrainBuilder.getBufferBuilder(QuadFacing.UNDEFINED.ordinal()).getVertices() > 0) {
             trasnlucentTerrainBuilder.setupQuadSortingPoints();
-            trasnlucentTerrainBuilder.setupQuadSorting(camX - (float) startBlockPos.getX(), camY - (float) startBlockPos.getY(), camZ - (float) startBlockPos.getZ());
+            trasnlucentTerrainBuilder.setupQuadSorting(camX - (float) secOriginX, camY - (float) secOriginY, camZ - (float) secOriginZ);
             compileResult.transparencyState = trasnlucentTerrainBuilder.getSortState();
         }
 
         for (TerrainRenderType renderType : TerrainRenderType.VALUES) {
             TerrainBuilder builder = bufferBuilders.builder(renderType);
 
-            TerrainBuilder.DrawState drawState = builder.endDrawing();
+            boolean hasGeometry = false;
+            for (int i = 0; i < QuadFacing.COUNT; i++) {
+                if (builder.getBufferBuilder(i).getVertices() > 0) {
+                    hasGeometry = true;
+                    break;
+                }
+            }
 
-            UploadBuffer uploadBuffer = new UploadBuffer(builder, drawState);
-            compileResult.renderedLayers.put(renderType, uploadBuffer);
+            TerrainBuilder.DrawState drawState = builder.endDrawing();
+            if (hasGeometry && drawState != null) {
+                UploadBuffer uploadBuffer = new UploadBuffer(builder, drawState);
+                compileResult.renderedLayers.put(renderType, uploadBuffer);
+            }
 
             builder.clear();
         }

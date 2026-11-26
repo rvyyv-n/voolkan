@@ -3,7 +3,7 @@ package net.vulkanmod.config.option;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * add getNameKey() so presets can find options by translation key.
+ * add getNameKey() and isActive() for presets and per-page default restoration.
  */
 
 import net.minecraft.network.chat.Component;
@@ -109,6 +109,10 @@ public abstract class Option<T> {
         return this;
     }
 
+    public boolean isActive() {
+        return this.active;
+    }
+
     protected abstract OptionWidget<?> createWidget();
 
     public OptionWidget<?> getWidget() {
@@ -141,6 +145,15 @@ public abstract class Option<T> {
         return this.name;
     }
 
+    /** Returns the unformatted base option name without any appended value suffix. */
+    public Component getBaseName() {
+        return this.name;
+    }
+
+    /** Hook called unconditionally on every option after a page applies changes. */
+    public void onPostApply() {
+    }
+
     /** Translation key of the option name, or null when the name is not translatable. */
     public String getNameKey() {
         return this.name.getContents() instanceof TranslatableContents contents ? contents.getKey() : null;
@@ -167,6 +180,12 @@ public abstract class Option<T> {
 
     public void resetValue() {
         this.setNewValue(this.value);
+    }
+
+    /** Refreshes both committed and staged values from {@link #valueSupplier}. */
+    public void syncFromSupplier() {
+        this.value = this.valueSupplier.get();
+        this.newValue = this.value;
     }
 
     public T getNewValue() {

@@ -3,10 +3,11 @@ package net.vulkanmod.render.chunk.build.task;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * upload time budgeting, thread pool scaling, and leak prevention.
+ * configurable per-frame chunk upload budget, high-priority upload queue, generation checks, thread pool scaling, and leak prevention.
  */
 
 import com.google.common.collect.Queues;
+import dev.voolkan.render.ChunkUploadBudget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.ProgressScreen;
@@ -18,26 +19,25 @@ import net.vulkanmod.render.chunk.WorldRenderer;
 import net.vulkanmod.render.chunk.buffer.DrawBuffers;
 import net.vulkanmod.render.chunk.build.UploadBuffer;
 import net.vulkanmod.render.chunk.build.thread.BuilderResources;
-import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
 import net.vulkanmod.render.vertex.TerrainRenderType;
+import net.vulkanmod.vulkan.memory.MemoryType;
+import net.vulkanmod.vulkan.memory.MemoryTypes;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Queue;
 
 public class TaskDispatcher {
+    private final Queue<CompileResult> highPriorityResults = Queues.newLinkedBlockingDeque();
     private final Queue<CompileResult> compileResults = Queues.newLinkedBlockingDeque();
-    public final ThreadBuilderPack fixedBuffers;
 
     private volatile boolean stopThreads;
     private Thread[] threads;
     private BuilderResources[] resources;
-    private int idleThreads;
+    private volatile int idleThreads;
     private final Queue<ChunkTask> highPriorityTasks = Queues.newConcurrentLinkedQueue();
     private final Queue<ChunkTask> lowPriorityTasks = Queues.newConcurrentLinkedQueue();
 
     public TaskDispatcher() {
-        this.fixedBuffers = new ThreadBuilderPack();
-
         this.stopThreads = true;
     }
 
@@ -83,16 +83,21 @@ public class TaskDispatcher {
         while (!this.stopThreads) {
             ChunkTask task = this.pollTask();
 
-            if (task == null)
+            if (task == null) {
                 synchronized (this) {
+                    this.idleThreads++;
                     try {
-                        this.idleThreads++;
-                        this.wait();
+                        task = this.pollTask();
+                        if (task == null && !this.stopThreads) {
+                            this.wait();
+                        }
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
+                    } finally {
+                        this.idleThreads--;
                     }
-                    this.idleThreads--;
                 }
+            }
 
             if (task == null)
                 continue;
@@ -112,8 +117,10 @@ public class TaskDispatcher {
             this.lowPriorityTasks.offer(chunkTask);
         }
 
-        synchronized (this) {
-            this.notify();
+        if (this.idleThreads > 0) {
+            synchronized (this) {
+                this.notify();
+            }
         }
     }
 
@@ -150,17 +157,60 @@ public class TaskDispatcher {
     public boolean updateSections() {
         CompileResult result;
         boolean flag = false;
-        boolean skipBudget = this.compileResults.size() > 256 || isWorldLoading();
+        boolean skipBudget = isWorldLoading();
+        MemoryType terrainMemory = MemoryTypes.getUnifiedOrGpuMem();
+        boolean usesStaging = terrainMemory != null && !terrainMemory.mappable();
+        int configuredBudget = ChunkUploadBudget.getConfigured();
         long startTime = System.nanoTime();
-        int processed = 0;
 
+        int highUploaded = 0;
+        long totalBytes = 0L;
+
+        // Drain high-priority updates (player block edits & rebuilds of visible sections) before
+        // background streaming so interactive edits never stall behind flying/teleporting loads.
+        while ((result = this.highPriorityResults.poll()) != null) {
+            long resultBytes = result.estimateUploadBytes();
+            if (doSectionUpdate(result)) {
+                flag = true;
+                highUploaded++;
+                totalBytes += resultBytes;
+
+                if (ChunkUploadBudget.shouldStopHighPriority(
+                        skipBudget, usesStaging, highUploaded, totalBytes, System.nanoTime() - startTime)) {
+                    return flag;
+                }
+            }
+        }
+
+        int bgUploaded = 0;
+        int bgEmptyApplied = 0;
         while ((result = this.compileResults.poll()) != null) {
-            flag = true;
-            doSectionUpdate(result);
-            processed++;
+            long resultBytes = result.estimateUploadBytes();
+            if (doSectionUpdate(result)) {
+                flag = true;
+                if (resultBytes > 0L) {
+                    bgUploaded++;
+                    totalBytes += resultBytes;
+                } else {
+                    bgEmptyApplied++;
+                }
 
-            if (!skipBudget && processed >= 3 && (System.nanoTime() - startTime) >= 2_500_000L) {
-                break;
+                if (bgUploaded > 0 && ChunkUploadBudget.shouldStopBackground(
+                        configuredBudget,
+                        skipBudget,
+                        usesStaging,
+                        bgUploaded,
+                        totalBytes,
+                        System.nanoTime() - startTime,
+                        this.compileResults.size())) {
+                    break;
+                }
+
+                // Cap empty air section applications only if an extreme backlog eats frame time,
+                // without burning explicit GPU upload slots needed for real terrain geometry.
+                if (!skipBudget && bgEmptyApplied >= 128 && (System.nanoTime() - startTime) >= 2_500_000L) {
+                    break;
+                }
             }
         }
 
@@ -176,21 +226,33 @@ public class TaskDispatcher {
     }
 
     public void scheduleSectionUpdate(CompileResult compileResult) {
-        this.compileResults.add(compileResult);
+        if (compileResult.highPriority) {
+            this.highPriorityResults.add(compileResult);
+        } else {
+            this.compileResults.add(compileResult);
+        }
     }
 
-    private void doSectionUpdate(CompileResult compileResult) {
+    private boolean doSectionUpdate(CompileResult compileResult) {
         RenderSection section = compileResult.renderSection;
-        ChunkArea renderArea = section.getChunkArea();
-        DrawBuffers drawBuffers = renderArea.getDrawBuffers();
 
-        // Check if area has been dismissed before uploading
-        ChunkAreaManager chunkAreaManager = WorldRenderer.getInstance().getChunkAreaManager();
-        if (chunkAreaManager.getChunkArea(renderArea.index) != renderArea) {
+        // Drop stale results from superseded builds or recycled sections so low-priority results
+        // can never overwrite newer high-priority player edits or upload to a moved section.
+        if (compileResult.generation != section.getCompileGeneration()) {
             compileResult.renderedLayers.values()
                                         .forEach(UploadBuffer::release);
-            return;
+            return false;
         }
+
+        ChunkArea renderArea = section.getChunkArea();
+        ChunkAreaManager chunkAreaManager = WorldRenderer.getInstance().getChunkAreaManager();
+        if (renderArea == null || chunkAreaManager == null || chunkAreaManager.getChunkArea(renderArea.index) != renderArea) {
+            compileResult.renderedLayers.values()
+                                        .forEach(UploadBuffer::release);
+            return false;
+        }
+
+        DrawBuffers drawBuffers = renderArea.getDrawBuffers();
 
         if (compileResult.fullUpdate) {
             var renderLayers = compileResult.renderedLayers;
@@ -208,13 +270,25 @@ public class TaskDispatcher {
             compileResult.updateSection();
         }
         else {
+            if (compileResult.generation != section.getCompiledGeneration()
+                    || !section.getCompiledSection().hasTransparencyState()
+                    || drawBuffers.getIndexBuffer() == null) {
+                compileResult.renderedLayers.values()
+                                            .forEach(UploadBuffer::release);
+                return false;
+            }
             UploadBuffer uploadBuffer = compileResult.renderedLayers.get(TerrainRenderType.TRANSLUCENT);
-            drawBuffers.upload(section, uploadBuffer, TerrainRenderType.TRANSLUCENT);
+            if (uploadBuffer != null) {
+                drawBuffers.upload(section, uploadBuffer, TerrainRenderType.TRANSLUCENT);
+            }
         }
+        return true;
     }
 
     public boolean isIdle() {
-        return this.idleThreads == this.threads.length && this.compileResults.isEmpty();
+        return this.idleThreads == this.threads.length
+                && this.highPriorityResults.isEmpty()
+                && this.compileResults.isEmpty();
     }
 
     public void clearBatchQueue() {
@@ -233,6 +307,9 @@ public class TaskDispatcher {
         }
 
         CompileResult result;
+        while ((result = this.highPriorityResults.poll()) != null) {
+            result.renderedLayers.values().forEach(UploadBuffer::release);
+        }
         while ((result = this.compileResults.poll()) != null) {
             result.renderedLayers.values().forEach(UploadBuffer::release);
         }

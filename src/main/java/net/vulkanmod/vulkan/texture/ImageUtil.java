@@ -3,9 +3,13 @@ package net.vulkanmod.vulkan.texture;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * per-mip image layouts: transfers touch only their mip level, mipmap generation tracks each level, copyImageToImage added.
+ * per-mip image layouts: transfers touch only their mip level, mipmap generation tracks each level, copyImageToImage added; check format features before blitting and implement glBlitFramebuffer fallback.
  */
 
+import dev.voolkan.compat.FormatCaps;
+import dev.voolkan.compat.MacPerfOpts;
+import net.vulkanmod.Initializer;
+import net.vulkanmod.render.texture.ImageUploadHelper;
 import net.vulkanmod.vulkan.Renderer;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.memory.MemoryManager;
@@ -17,11 +21,22 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.*;
 
 import java.nio.LongBuffer;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.vulkan.VK10.*;
 
 public abstract class ImageUtil {
+    private static final Set<Long> WARNED_UNSUPPORTED_BLITS = ConcurrentHashMap.newKeySet();
+    private static final Set<Integer> WARNED_UNSUPPORTED_MIPS = ConcurrentHashMap.newKeySet();
+
+    public static void warnUnsupportedBlitOnce(int srcFormat, int dstFormat) {
+        long key = ((long) srcFormat << 32) | (dstFormat & 0xFFFFFFFFL);
+        if (WARNED_UNSUPPORTED_BLITS.add(key)) {
+            Initializer.LOGGER.warn("Skipping image blit: format {} -> {} does not support required blit features", srcFormat, dstFormat);
+        }
+    }
 
     public static void copyBufferToImageCmd(MemoryStack stack, VkCommandBuffer commandBuffer, long buffer,
                                             long image, int arrayLayer,
@@ -41,7 +56,16 @@ public abstract class ImageUtil {
         vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
     }
 
+    private static void flushInlineUploadIfNeeded(VulkanImage image) {
+        if (MacPerfOpts.inlineImageUploads()
+                && Renderer.isRecording()
+                && ImageUploadHelper.INSTANCE.hasPendingInlineUpload(image.getId())) {
+            Renderer.getInstance().flushCmds();
+        }
+    }
+
     public static void downloadTexture(VulkanImage image, long ptr) {
+        flushInlineUploadIfNeeded(image);
         try (MemoryStack stack = stackPush()) {
             int prevLayout = image.getLevelLayout(0);
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
@@ -53,14 +77,16 @@ public abstract class ImageUtil {
             PointerBuffer pStagingAllocation = stack.pointers(0L);
             MemoryManager.getInstance().createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                     pStagingBuffer, pStagingAllocation);
+                                                     VK_MEMORY_PROPERTY_HOST_CACHED_BIT, false,
+                                                     pStagingBuffer, pStagingAllocation, null);
 
-            copyImageToBufferCmd(stack, commandBuffer.getHandle(), pStagingBuffer.get(0), image.getId(), 0, image.width,
-                                 image.height, 0, 0, 0, 0, 0);
+            copyImageToBuffer(stack, commandBuffer.getHandle(), pStagingBuffer.get(0), image.getId(), 0, image.width,
+                              image.height, 0, 0, 0, 0, 0);
             restoreLevelLayout(stack, commandBuffer.getHandle(), image, 0, prevLayout);
 
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
 
             MemoryManager.MapAndCopy(pStagingAllocation.get(0),
                                      (data) -> VUtil.memcpy(data.getByteBuffer(0, (int) imageSize), ptr));
@@ -107,26 +133,30 @@ public abstract class ImageUtil {
         dstImage.transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     }
 
-    public static void copyImageToBuffer(VulkanImage image, Buffer buffer, int mipLevel,
+    public static void copyImageToBuffer(Buffer buffer, VulkanImage image, int mipLevel,
                                          int width, int height, int xOffset, int yOffset,
-                                         long bufferOffset, int bufferRowLength, int bufferImageHeight) {
+                                         long bufferOffset, int bufferRowLength, int bufferImageHeight
+    ) {
+        flushInlineUploadIfNeeded(image);
         try (MemoryStack stack = stackPush()) {
             int prevLayout = image.getLevelLayout(mipLevel);
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
             image.transitionLevelLayout(stack, commandBuffer.getHandle(), mipLevel, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-            copyImageToBufferCmd(stack, commandBuffer.getHandle(), buffer.getId(), image.getId(), mipLevel, width,
-                                 height, xOffset, yOffset, bufferOffset, bufferRowLength, bufferImageHeight);
+            copyImageToBuffer(stack, commandBuffer.getHandle(), buffer.getId(), image.getId(), mipLevel, width,
+                              height, xOffset, yOffset, bufferOffset, bufferRowLength, bufferImageHeight);
             restoreLevelLayout(stack, commandBuffer.getHandle(), image, mipLevel, prevLayout);
 
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
         }
     }
 
-    public static void copyImageToBufferCmd(MemoryStack stack, VkCommandBuffer commandBuffer, long buffer, long image,
-                                            int mipLevel, int width, int height, int xOffset, int yOffset, long bufferOffset,
-                                            int bufferRowLength, int bufferImageHeight) {
+    public static void copyImageToBuffer(MemoryStack stack, VkCommandBuffer commandBuffer, long buffer, long image,
+                                         int mipLevel, int width, int height, int xOffset, int yOffset,
+                                         long bufferOffset, int bufferRowLength, int bufferImageHeight
+    ) {
         VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, stack);
         region.bufferOffset(bufferOffset);
         region.bufferRowLength(bufferRowLength);
@@ -141,30 +171,109 @@ public abstract class ImageUtil {
         vkCmdCopyImageToBuffer(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer, region);
     }
 
+    /**
+     * Blits a region of one mip level between two images after verifying format blit features.
+     * Caller must have ended any active render pass on {@code commandBuffer}.
+     */
+    public static void blitImageToImageCmd(MemoryStack stack, VkCommandBuffer commandBuffer,
+                                           VulkanImage srcImage, VulkanImage dstImage, int mipLevel,
+                                           int srcX, int srcY, int dstX, int dstY, int width, int height,
+                                           int filtering) {
+        if (!FormatCaps.canBlit(srcImage.format, dstImage.format)) {
+            warnUnsupportedBlitOnce(srcImage.format, dstImage.format);
+            return;
+        }
+
+        final int effectiveFilter = FormatCaps.chooseBlitFilter(srcImage.format, filtering);
+        final int prevSrcLayout = srcImage.getLevelLayout(mipLevel);
+
+        srcImage.transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        dstImage.transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        VkImageBlit.Buffer blit = VkImageBlit.calloc(1, stack);
+        blit.srcOffsets(0, VkOffset3D.calloc(stack).set(srcX, srcY, 0));
+        blit.srcOffsets(1, VkOffset3D.calloc(stack).set(srcX + width, srcY + height, 1));
+        blit.srcSubresource()
+            .aspectMask(srcImage.aspect)
+            .mipLevel(mipLevel)
+            .baseArrayLayer(0)
+            .layerCount(1);
+
+        blit.dstOffsets(0, VkOffset3D.calloc(stack).set(dstX, dstY, 0));
+        blit.dstOffsets(1, VkOffset3D.calloc(stack).set(dstX + width, dstY + height, 1));
+        blit.dstSubresource()
+            .aspectMask(dstImage.aspect)
+            .mipLevel(mipLevel)
+            .baseArrayLayer(0)
+            .layerCount(1);
+
+        vkCmdBlitImage(commandBuffer, srcImage.getId(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       dstImage.getId(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blit, effectiveFilter);
+
+        restoreLevelLayout(stack, commandBuffer, srcImage, mipLevel, prevSrcLayout);
+        dstImage.transitionLevelLayout(stack, commandBuffer, mipLevel, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+
     public static void blitFramebuffer(VulkanImage srcImage, VulkanImage dstImage) {
         blitFramebuffer(srcImage, dstImage, VK_FILTER_NEAREST);
     }
 
     public static void blitFramebuffer(VulkanImage srcImage, VulkanImage dstImage, int filtering) {
+        if (srcImage == null || dstImage == null) {
+            return;
+        }
+        blitFramebuffer(srcImage, dstImage, 0, 0, srcImage.width, srcImage.height, 0, 0, dstImage.width, dstImage.height, filtering);
+    }
+
+    public static void blitFramebuffer(VulkanImage srcImage, VulkanImage dstImage,
+                                       int srcX0, int srcY0, int srcX1, int srcY1,
+                                       int dstX0, int dstY0, int dstX1, int dstY1,
+                                       int filtering
+    ) {
+        if (srcImage == null || dstImage == null) {
+            return;
+        }
+
+        if (!FormatCaps.canBlit(srcImage.format, dstImage.format)) {
+            int srcW = srcX1 - srcX0;
+            int srcH = srcY1 - srcY0;
+            int dstW = dstX1 - dstX0;
+            int dstH = dstY1 - dstY0;
+            if (srcImage != dstImage && srcImage.format == dstImage.format
+                    && srcW > 0 && srcH > 0 && srcW == dstW && srcH == dstH) {
+                try (MemoryStack stack = stackPush()) {
+                    VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
+                    Renderer.getInstance().endRenderPass(commandBuffer);
+                    copyImageToImageCmd(stack, commandBuffer, srcImage, dstImage, 0, srcX0, srcY0, dstX0, dstY0, srcW, srcH);
+                }
+            } else {
+                warnUnsupportedBlitOnce(srcImage.format, dstImage.format);
+            }
+            return;
+        }
+
+        final int effectiveFilter = FormatCaps.chooseBlitFilter(srcImage.format, filtering);
+
         try (MemoryStack stack = stackPush()) {
             VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
 
             Renderer.getInstance().endRenderPass(commandBuffer);
 
-            dstImage.transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-            srcImage.transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            final int prevSrcLayout = srcImage.getLevelLayout(0);
+            dstImage.transitionLevelLayout(stack, commandBuffer, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            srcImage.transitionLevelLayout(stack, commandBuffer, 0, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
             VkImageBlit.Buffer blit = VkImageBlit.calloc(1, stack);
-            blit.srcOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
-            blit.srcOffsets(1, VkOffset3D.calloc(stack).set(srcImage.width, srcImage.height, 1));
+            blit.srcOffsets(0, VkOffset3D.calloc(stack).set(srcX0, srcY0, 0));
+            blit.srcOffsets(1, VkOffset3D.calloc(stack).set(srcX1, srcY1, 1));
             blit.srcSubresource()
                 .aspectMask(srcImage.aspect)
                 .mipLevel(0)
                 .baseArrayLayer(0)
                 .layerCount(1);
 
-            blit.dstOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
-            blit.dstOffsets(1, VkOffset3D.calloc(stack).set(dstImage.width, dstImage.height, 1));
+            blit.dstOffsets(0, VkOffset3D.calloc(stack).set(dstX0, dstY0, 0));
+            blit.dstOffsets(1, VkOffset3D.calloc(stack).set(dstX1, dstY1, 1));
             blit.dstSubresource()
                 .aspectMask(dstImage.aspect)
                 .mipLevel(0)
@@ -172,54 +281,61 @@ public abstract class ImageUtil {
                 .layerCount(1);
 
             vkCmdBlitImage(commandBuffer, srcImage.getId(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           dstImage.getId(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blit, filtering);
+                           dstImage.getId(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blit, effectiveFilter);
 
-            dstImage.transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            restoreLevelLayout(stack, commandBuffer, srcImage, 0, prevSrcLayout);
+            dstImage.transitionLevelLayout(stack, commandBuffer, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
     }
 
-    public static void blitFramebuffer(VulkanImage dstImage, int srcX0, int srcY0, int srcX1, int srcY1, int dstX0, int dstY0, int dstX1, int dstY1) {
-        // TODO: implement blit
-//        blitFramebuffer(Renderer.getInstance().getSwapChain().getColorAttachment(), dstImage);
-    }
-
     public static void generateMipmaps(VulkanImage image) {
-        try (MemoryStack stack = stackPush()) {
+        flushInlineUploadIfNeeded(image);
+        final boolean canBlit = FormatCaps.canBlit(image.format, image.format);
+        if (!canBlit && WARNED_UNSUPPORTED_MIPS.add(image.format)) {
+            Initializer.LOGGER.warn("Format {} does not support BLIT_SRC/BLIT_DST; skipping GPU mipmap generation", image.format);
+        }
 
+        try (MemoryStack stack = stackPush()) {
             CommandPool.CommandBuffer commandBuffer = DeviceManager.getGraphicsQueue().beginCommands();
             VkCommandBuffer cb = commandBuffer.getHandle();
 
-            // Level 0 holds the source data; every level is a transfer destination first
-            image.transitionImageLayout(stack, cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            if (canBlit && image.mipLevels > 1) {
+                final int filter = FormatCaps.chooseBlitFilter(image.format, VK_FILTER_LINEAR);
 
-            for (int level = 1; level < image.mipLevels; level++) {
-                final int prevLevel = level - 1;
+                // Level 0 holds the source data; every level is a transfer destination first
+                image.transitionImageLayout(stack, cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-                image.transitionLevelLayout(stack, cb, prevLevel, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                for (int level = 1; level < image.mipLevels; level++) {
+                    final int prevLevel = level - 1;
 
-                VkImageBlit.Buffer blit = VkImageBlit.calloc(1, stack);
-                blit.srcOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
-                blit.srcOffsets(1, VkOffset3D.calloc(stack).set(Math.max(image.width >> prevLevel, 1), Math.max(image.height >> prevLevel, 1), 1));
-                blit.srcSubresource()
-                    .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                    .mipLevel(prevLevel)
-                    .baseArrayLayer(0)
-                    .layerCount(1);
+                    image.transitionLevelLayout(stack, cb, prevLevel, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-                blit.dstOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
-                blit.dstOffsets(1, VkOffset3D.calloc(stack).set(Math.max(image.width >> level, 1), Math.max(image.height >> level, 1), 1));
-                blit.dstSubresource().aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).mipLevel(level).baseArrayLayer(0)
-                    .layerCount(1);
+                    VkImageBlit.Buffer blit = VkImageBlit.calloc(1, stack);
+                    blit.srcOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
+                    blit.srcOffsets(1, VkOffset3D.calloc(stack).set(Math.max(image.width >> prevLevel, 1), Math.max(image.height >> prevLevel, 1), 1));
+                    blit.srcSubresource()
+                        .aspectMask(image.aspect)
+                        .mipLevel(prevLevel)
+                        .baseArrayLayer(0)
+                        .layerCount(1);
 
-                vkCmdBlitImage(cb, image.getId(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               image.getId(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blit, VK_FILTER_LINEAR);
+                    blit.dstOffsets(0, VkOffset3D.calloc(stack).set(0, 0, 0));
+                    blit.dstOffsets(1, VkOffset3D.calloc(stack).set(Math.max(image.width >> level, 1), Math.max(image.height >> level, 1), 1));
+                    blit.dstSubresource().aspectMask(image.aspect).mipLevel(level).baseArrayLayer(0)
+                        .layerCount(1);
+
+                    vkCmdBlitImage(cb, image.getId(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   image.getId(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, blit, filter);
+                }
             }
 
+            // Leave every level in SHADER_READ_ONLY_OPTIMAL even when mip generation was skipped
             image.transitionImageLayout(stack, cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
             long fence = DeviceManager.getGraphicsQueue().submitCommands(commandBuffer);
 
             vkWaitForFences(DeviceManager.vkDevice, fence, true, VUtil.UINT64_MAX);
+            commandBuffer.reset();
         }
     }
 
@@ -239,8 +355,8 @@ public abstract class ImageUtil {
 
         barrier.subresourceRange().aspectMask(image.aspect);
 
-        barrier.srcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
-        barrier.dstAccessMask(VK_ACCESS_MEMORY_WRITE_BIT);
+        barrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+        barrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
 
         vkCmdPipelineBarrier(commandBuffer,
                              VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,

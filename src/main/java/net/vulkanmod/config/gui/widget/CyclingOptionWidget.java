@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui.widget;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * respect inactive row state on arrow buttons and guard narrow layouts in segment bar rendering.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.render.TextureSetup;
@@ -33,14 +39,15 @@ public class CyclingOptionWidget extends OptionWidget<CyclingOption<?>> {
     public void renderControls(double mouseX, double mouseY) {
         this.renderBars();
 
-        this.leftButton.setStatus(option.index() > 0);
-        this.rightButton.setStatus(option.index() < option.getValues().length - 1);
+        this.leftButton.setStatus(this.active && option.index() > 0);
+        this.rightButton.setStatus(this.active && option.index() < option.getValues().length - 1);
 
         int color = this.active ? 0xFFFFFFFF : 0xFFA0A0A0;
         Font textRenderer = Minecraft.getInstance().font;
         int x = this.controlX + this.controlWidth / 2;
         int y = this.y + (this.height - 9) / 2;
-        GuiRenderer.drawScrollingString(textRenderer, this.getDisplayedValue(), x, y, (rightButton.x - (leftButton.x + leftButton.width) - 12), color);
+        int maxTextWidth = Math.max(16, rightButton.x - (leftButton.x + leftButton.width) - 8);
+        GuiRenderer.drawScrollingString(textRenderer, this.getDisplayedValue(), x, y, maxTextWidth, color);
 
         this.leftButton.renderButton(mouseX, mouseY);
         this.rightButton.renderButton(mouseX, mouseY);
@@ -48,9 +55,12 @@ public class CyclingOptionWidget extends OptionWidget<CyclingOption<?>> {
 
     public void renderBars() {
         int count = option.getValues().length;
+        if (count <= 0) {
+            return;
+        }
         int current = option.index();
 
-        int margin = 30;
+        int margin = Math.min(30, this.controlWidth / 4);
         int padding = 4;
 
         int barWidth = (this.controlWidth - (2 * margin) - (padding * count)) / count;

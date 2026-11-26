@@ -1,6 +1,11 @@
 package net.vulkanmod.render.chunk.buffer;
 
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * semaphore-sync chunk uploads to avoid per-frame CPU fence stalls, remove redundant disjoint-segment transfer barriers, and set queue family indices to IGNORED.
+ */
+
 import net.vulkanmod.vulkan.Synchronization;
 import net.vulkanmod.vulkan.Vulkan;
 import net.vulkanmod.vulkan.device.DeviceManager;
@@ -12,7 +17,6 @@ import net.vulkanmod.vulkan.queue.TransferQueue;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkBufferMemoryBarrier;
 import org.lwjgl.vulkan.VkCommandBuffer;
-import org.lwjgl.vulkan.VkMemoryBarrier;
 
 import java.nio.ByteBuffer;
 
@@ -28,18 +32,14 @@ public class UploadManager {
     Queue queue = DeviceManager.getTransferQueue();
     CommandPool.CommandBuffer commandBuffer;
 
-    LongOpenHashSet dstBuffers = new LongOpenHashSet();
-
     public void submitUploads() {
         if (this.commandBuffer == null)
             return;
 
-        this.queue.submitCommands(this.commandBuffer);
-
-        Synchronization.INSTANCE.addCommandBuffer(this.commandBuffer);
+        this.queue.submitCommands(this.commandBuffer, true);
+        Synchronization.INSTANCE.addCommandBuffer(this.commandBuffer, true);
 
         this.commandBuffer = null;
-        this.dstBuffers.clear();
     }
 
     public void recordUpload(Buffer buffer, long dstOffset, long bufferSize, ByteBuffer src) {
@@ -48,24 +48,6 @@ public class UploadManager {
 
         beginCommands();
         VkCommandBuffer commandBuffer = this.commandBuffer.getHandle();
-
-        if (!this.dstBuffers.add(buffer.getId())) {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                VkMemoryBarrier.Buffer barrier = VkMemoryBarrier.calloc(1, stack);
-                barrier.sType$Default();
-                barrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                barrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-
-                vkCmdPipelineBarrier(commandBuffer,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        0,
-                        barrier,
-                        null,
-                        null);
-            }
-
-            this.dstBuffers.clear();
-        }
 
         TransferQueue.uploadBufferCmd(commandBuffer, stagingBuffer.getId(), stagingBuffer.getOffset(), buffer.getId(), dstOffset, bufferSize);
     }
@@ -80,12 +62,11 @@ public class UploadManager {
         VkCommandBuffer commandBuffer = this.commandBuffer.getHandle();
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkMemoryBarrier.Buffer barrier = VkMemoryBarrier.calloc(1, stack);
-            barrier.sType$Default();
-
             VkBufferMemoryBarrier.Buffer bufferMemoryBarriers = VkBufferMemoryBarrier.calloc(1, stack);
             VkBufferMemoryBarrier bufferMemoryBarrier = bufferMemoryBarriers.get(0);
             bufferMemoryBarrier.sType$Default();
+            bufferMemoryBarrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+            bufferMemoryBarrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
             bufferMemoryBarrier.buffer(src.getId());
             bufferMemoryBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
             bufferMemoryBarrier.dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
@@ -94,18 +75,32 @@ public class UploadManager {
             vkCmdPipelineBarrier(commandBuffer,
                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                     0,
-                    barrier,
+                    null,
+                    bufferMemoryBarriers,
+                    null);
+
+            TransferQueue.uploadBufferCmd(commandBuffer, src.getId(), srcOffset, dst.getId(), dstOffset, size);
+
+            // Prevent WAW hazard when subsequent uploads in the same transfer CB write into dst's free regions.
+            bufferMemoryBarrier.buffer(dst.getId());
+            bufferMemoryBarrier.srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+            bufferMemoryBarrier.dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    0,
+                    null,
                     bufferMemoryBarriers,
                     null);
         }
-
-        this.dstBuffers.add(dst.getId());
-
-        TransferQueue.uploadBufferCmd(commandBuffer, src.getId(), srcOffset, dst.getId(), dstOffset, size);
     }
 
     public void syncUploads() {
-        submitUploads();
+        if (this.commandBuffer != null) {
+            this.queue.submitCommands(this.commandBuffer, false);
+            Synchronization.INSTANCE.addCommandBuffer(this.commandBuffer, false);
+            this.commandBuffer = null;
+        }
 
         Synchronization.INSTANCE.waitFences();
     }

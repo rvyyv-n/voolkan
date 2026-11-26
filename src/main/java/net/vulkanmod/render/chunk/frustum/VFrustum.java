@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.frustum;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * reuse viewVector in calculateFrustum to eliminate per-frame Vector4f allocations.
+ */
+
 import net.minecraft.world.phys.AABB;
 import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
@@ -41,7 +47,7 @@ public class VFrustum {
         projMatrix.mul(modelViewMatrix, this.matrix);
 
         this.frustum.set(this.matrix, false);
-        this.viewVector = this.matrix.transformTranspose(new Vector4f(0.0F, 0.0F, 1.0F, 0.0F));
+        this.matrix.transformTranspose(this.viewVector.set(0.0F, 0.0F, 1.0F, 0.0F));
     }
 
     public int cubeInFrustum(float x1, float y1, float z1, float x2, float y2, float z2) {

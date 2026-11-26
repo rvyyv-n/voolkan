@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui.widget;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * step by exact option increments on Left/Right arrow keys and clip overflowing slider value text.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.input.KeyEvent;
@@ -13,6 +19,7 @@ import org.lwjgl.glfw.GLFW;
 
 public class RangeOptionWidget extends OptionWidget<RangeOption> {
     private boolean focused;
+    private boolean dragging;
 
     public RangeOptionWidget(RangeOption option, Component name) {
         super(option, name);
@@ -48,26 +55,29 @@ public class RangeOptionWidget extends OptionWidget<RangeOption> {
         int color = this.active ? 0xFFFFFFFF : 0xFFA0A0A0;
         Font font = Minecraft.getInstance().font;
         var text = this.getDisplayedValue();
-        int width = font.width(text);
-        int x = this.controlX + this.controlWidth / 2 - width / 2;
+        int x = this.controlX + this.controlWidth / 2;
         int y = this.y + (this.height - 9) / 2;
-        GuiRenderer.drawString(font, text.getVisualOrderText(), x, y, color);
+        GuiRenderer.drawScrollingString(font, text, x, y, Math.max(16, this.controlWidth - 8), color);
     }
 
     @Override
     public void onClick(double mouseX, double mouseY) {
+        this.dragging = true;
         this.setValueFromMouse(mouseX);
     }
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (!this.active) {
+            return false;
+        }
         boolean isLeft = event.key() == GLFW.GLFW_KEY_LEFT;
         boolean isRight = event.key() == GLFW.GLFW_KEY_RIGHT;
 
         if (isLeft || isRight) {
-            float direction = isLeft ? -1.0f : 1.0f;
-            double currentValue = this.option.getScaledValue();
-            this.setValue(currentValue + (double) (direction / (float) (this.width - 8)));
+            this.option.stepBy(isLeft ? -1 : 1);
+            this.updateDisplayedValue();
+            return true;
         }
 
         return false;
@@ -98,6 +108,9 @@ public class RangeOptionWidget extends OptionWidget<RangeOption> {
 
     @Override
     protected void onDrag(double mouseX, double mouseY, double deltaX, double deltaY) {
+        if (!this.dragging) {
+            return;
+        }
         this.setValueFromMouse(mouseX);
     }
 
@@ -111,7 +124,9 @@ public class RangeOptionWidget extends OptionWidget<RangeOption> {
 
     @Override
     public void onRelease(double mouseX, double mouseY) {
-        if (this.controlHovered) {
+        boolean wasDragging = this.dragging;
+        this.dragging = false;
+        if (wasDragging && this.controlHovered) {
             super.playDownSound(Minecraft.getInstance().getSoundManager());
         }
     }

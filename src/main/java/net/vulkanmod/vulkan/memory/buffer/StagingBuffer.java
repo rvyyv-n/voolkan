@@ -1,5 +1,13 @@
 package net.vulkanmod.vulkan.memory.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * fence-sync chunk and inter-frame transfer uploads and drain pending async semaphores on staging overflow before resetting the buffer;
+ * use a compact 16 MB staging buffer default when unified direct-write is active on macOS/Apple Silicon.
+ */
+
+import dev.voolkan.compat.MacPerfOpts;
 import net.vulkanmod.render.chunk.buffer.UploadManager;
 import net.vulkanmod.render.chunk.util.Util;
 import net.vulkanmod.render.texture.ImageUploadHelper;
@@ -15,9 +23,16 @@ import static org.lwjgl.vulkan.VK10.*;
 
 public class StagingBuffer extends Buffer {
     private static final long DEFAULT_SIZE = 64 * 1024 * 1024;
+    private static final long UNIFIED_DEFAULT_SIZE = 16 * 1024 * 1024;
 
     public StagingBuffer() {
-        this(DEFAULT_SIZE);
+        this(defaultSize());
+    }
+
+    private static long defaultSize() {
+        return (MemoryTypes.unifiedDirectWriteActive && MacPerfOpts.unifiedGpuBuffers())
+                ? UNIFIED_DEFAULT_SIZE
+                : DEFAULT_SIZE;
     }
 
     public StagingBuffer(long size) {
@@ -57,9 +72,17 @@ public class StagingBuffer extends Buffer {
 
     private void submitUploads() {
         // Submit and wait all recorded uploads before resetting the buffer
-        UploadManager.INSTANCE.submitUploads();
+        UploadManager.INSTANCE.syncUploads();
         ImageUploadHelper.INSTANCE.submitCommands(false);
-        Renderer.getInstance().flushCmds();
+        Renderer renderer = Renderer.getInstance();
+        if (Renderer.isRecording()) {
+            renderer.flushCmds();
+        } else {
+            renderer.submitTransferCbSync();
+            if (Synchronization.INSTANCE.getWaitSemaphoreCount() > 0) {
+                Synchronization.INSTANCE.clearSemaphoresAfterIdle();
+            }
+        }
         Synchronization.INSTANCE.waitFences();
 
         this.reset();

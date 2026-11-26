@@ -57,16 +57,26 @@ function Get-ValidationSettings([string]$RunDir) {
     )
 }
 
-function Get-ProfilesSettings([string]$ProfileFile) {
-    $p = $ProfileFile -replace '\\', '/'
-    @(
-        "khronos_profiles.profile_file = $p",
-        'khronos_profiles.profile_name = VP_VOOLKAN_R7_350',
-        'khronos_profiles.simulate_capabilities = SIMULATE_API_VERSION_BIT,SIMULATE_PROPERTIES_BIT',
-        'khronos_profiles.exclude_device_extensions = VK_KHR_dynamic_rendering,VK_KHR_synchronization2',
-        'khronos_profiles.emulate_portability = false',
-        'khronos_profiles.debug_actions = DEBUG_ACTION_STDOUT_BIT'
+function Get-ProfilesSettings {
+    param(
+        [Parameter(Position = 0, Mandatory)][string]$ProfileFile,
+        [string]$ProfileName = 'VP_VOOLKAN_R7_350',
+        [string]$SimulateCapabilities = 'SIMULATE_API_VERSION_BIT,SIMULATE_PROPERTIES_BIT',
+        [string]$ExcludeDeviceExtensions = 'VK_KHR_dynamic_rendering,VK_KHR_synchronization2',
+        [switch]$EmulatePortability
     )
+    $p = $ProfileFile -replace '\\', '/'
+    $lines = @(
+        "khronos_profiles.profile_file = $p",
+        "khronos_profiles.profile_name = $ProfileName",
+        "khronos_profiles.simulate_capabilities = $SimulateCapabilities"
+    )
+    if ($ExcludeDeviceExtensions) {
+        $lines += "khronos_profiles.exclude_device_extensions = $ExcludeDeviceExtensions"
+    }
+    $lines += "khronos_profiles.emulate_portability = $(if ($EmulatePortability) { 'true' } else { 'false' })"
+    $lines += 'khronos_profiles.debug_actions = DEBUG_ACTION_STDOUT_BIT'
+    return $lines
 }
 
 # Runs `gradlew runClient` with the given environment. Returns the process exit code

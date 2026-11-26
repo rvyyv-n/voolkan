@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.texture;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * carries upstream fixes cherry-picked for v1.5 (multi image view formats).
+ */
+
 import net.vulkanmod.Initializer;
 import net.vulkanmod.gl.VkGlTexture;
 import net.vulkanmod.render.engine.VkGpuTexture;
@@ -31,6 +37,18 @@ public abstract class VTextureSelector {
             Initializer.LOGGER.error(String.format("On Texture binding: index %d out of range [0, %d]", i, SIZE - 1));
             return;
         }
+
+        boundTextures[i] = texture;
+        levels[i] = -1;
+    }
+
+    public static void bindTexture(int i, VulkanImage texture, int viewFormat) {
+        if (i < 0 || i >= SIZE) {
+            Initializer.LOGGER.error(String.format("On Texture binding: index %d out of range [0, %d]", i, SIZE - 1));
+            return;
+        }
+
+        texture.setViewFormat(viewFormat);
 
         boundTextures[i] = texture;
         levels[i] = -1;
@@ -134,6 +152,10 @@ public abstract class VTextureSelector {
 
     public static VulkanImage getBoundTexture(int i) {
         return boundTextures[i];
+    }
+
+    public static VulkanImage[] getBoundTextures() {
+        return boundTextures;
     }
 
     public static VulkanImage getWhiteTexture() {

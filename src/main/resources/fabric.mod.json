@@ -5,7 +5,7 @@
   "version": "${version}",
 
   "name": "voolkan",
-  "description": "Unofficial fork of VulkanMod: Vulkan renderer for Minecraft, with a legacy render pass path for GPUs without VK_KHR_dynamic_rendering.",
+  "description": "Unofficial fork of VulkanMod: high-performance Vulkan renderer for Minecraft on Windows (including legacy GPUs without VK_KHR_dynamic_rendering) and Apple Silicon macOS (MoltenVK).",
   "authors": [
     "Collateral",
     "voolkan project"

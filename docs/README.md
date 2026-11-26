@@ -5,15 +5,17 @@
 | `dev-setup.md` | toolchain, versions, install commands |
 | `compatibility.md` | mod compatibility, conflicts, and companion recommendations |
 | `smoke-test.md` | the manual/automated smoke checklist |
+| `mac-test.md` | one-page test checklist for Apple Silicon Mac testers |
 | `upstream.md` | how to fetch/rebase/cherry-pick from upstream VulkanMod |
 | `conventions.md` | branches, tags, commits, packages, properties, LGPL notice |
-| `upstream-pr-plan.md` | plan for sending fixes to upstream VulkanMod (nothing opened) |
 | `presets.md` | values of the Video page Presets row |
 | `presentmon.md` | how to capture and compare frame times on the R7 |
-| `settings-ui-proposal.md` | scope proposal for the settings UI overhaul (`settings-ui`, parked) |
+| `settings-ui-proposal.md` | scope proposal for the settings UI overhaul + QoL (`settings-ui`, first in parked queue) |
 | `line-refs.txt` | plan file:line references checked by `tools\check-linerefs.ps1` |
 | `checklist.md` | steps for a release, including the Modrinth listing |
 | `mc-26-plus.md` | notes on Minecraft 26.x (26.1 port facts, 26.2 Vulkan, OpenGL + Sodium) and the owner decisions |
+| `v1-5-plan.md` | v1.5 scope: macOS (MoltenVK) plan, testing without a Mac, QoL ranking, build passes 8-16 |
+| `v1-5-candidates.md` | extra v1.5 performance and QoL ideas, not yet approved (backlog) |
 | `modrinth.md` | draft Modrinth listing (not published) |
 | `gpu/r7-350/` | vulkaninfo snapshot of the target GPU (owner task `vulkaninfo`) |
 
@@ -23,7 +25,7 @@ Elsewhere in the repo:
 |---|---|
 | `AGENTS.md` | rules for automated agents working here |
 | `STATUS.md` | open work only; read this first |
-| `ROADMAP.md` | phases 0-7 checklist and history; grep by tag, do not read in full |
+| `ROADMAP.md` | phases 0-6 checklist and history; grep by tag, do not read in full |
 | `tools/` | harness scripts (`run-*.ps1`, `summarise-vk-log.ps1`, `make-test-world.ps1`), `profiles/` |
 | `tools/mesa`, `tools/bin` | downloaded tools, git-ignored |
 | `test-world/` | test-world notes; the generated world is git-ignored |

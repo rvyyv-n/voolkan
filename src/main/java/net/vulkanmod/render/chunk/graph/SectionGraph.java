@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.graph;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * avoid queueing empty ChunkAreas, skip zero-direction neighbor traversal, and avoid BlockPos allocations.
+ */
+
 import com.google.common.collect.Lists;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -104,7 +110,7 @@ public class SectionGraph {
             for (int x1 = -renderDistance; x1 <= renderDistance; ++x1) {
                 for (int z1 = -renderDistance; z1 <= renderDistance; ++z1) {
 
-                    RenderSection renderSection1 = this.sectionGrid.getSectionAtBlockPos(new BlockPos(x + SectionPos.sectionToBlockCoord(x1, 8), y, z + SectionPos.sectionToBlockCoord(z1, 8)));
+                    RenderSection renderSection1 = this.sectionGrid.getSectionAtBlockPos(x + SectionPos.sectionToBlockCoord(x1, 8), y, z + SectionPos.sectionToBlockCoord(z1, 8));
                     if (renderSection1 != null) {
                         initFirstNode(renderSection1, this.lastFrame);
                         list.add(renderSection1);
@@ -174,11 +180,11 @@ public class SectionGraph {
                 continue;
 
             if (!renderSection.isCompletelyEmpty()) {
-                renderSection.getChunkArea().sectionQueue.add(renderSection);
+                ChunkArea chunkArea = renderSection.getChunkArea();
+                chunkArea.sectionQueue.add(renderSection);
+                this.chunkAreaQueue.add(chunkArea);
                 this.nonEmptyChunks++;
             }
-
-            this.chunkAreaQueue.add(renderSection.getChunkArea());
 
             if (renderSection.containsBlockEntities()) {
                 this.blockEntitiesSections.ensureCapacity(1);
@@ -220,6 +226,9 @@ public class SectionGraph {
 
     private void visitAdjacentNodes(RenderSection renderSection, byte dirs) {
         dirs &= renderSection.adjDirs;
+        if (dirs == 0) {
+            return;
+        }
 
         this.sectionQueue.ensureCapacity(6);
 
@@ -258,11 +267,11 @@ public class SectionGraph {
                 continue;
 
             if (!renderSection.isCompletelyEmpty()) {
-                renderSection.getChunkArea().sectionQueue.add(renderSection);
+                ChunkArea chunkArea = renderSection.getChunkArea();
+                chunkArea.sectionQueue.add(renderSection);
+                this.chunkAreaQueue.add(chunkArea);
                 this.nonEmptyChunks++;
             }
-
-            this.chunkAreaQueue.add(renderSection.getChunkArea());
 
             if (renderSection.isDirty()) {
                 this.rebuildQueue.ensureCapacity(1);

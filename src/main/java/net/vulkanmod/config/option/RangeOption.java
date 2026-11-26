@@ -1,5 +1,11 @@
 package net.vulkanmod.config.option;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add stepBy keyboard stepping and clamp bounds safely when min equals max.
+ */
+
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.vulkanmod.config.gui.widget.OptionWidget;
@@ -46,7 +52,17 @@ public class RangeOption extends Option<Integer> {
 
         n = this.step * Math.round(n / this.step);
 
-        this.setNewValue((int) n);
+        this.setNewValue(Mth.clamp((int) n, this.min, this.max));
+    }
+
+    public void stepBy(int deltaSteps) {
+        if (deltaSteps == 0 || this.step <= 0) {
+            return;
+        }
+        int next = Mth.clamp(this.newValue + deltaSteps * this.step, this.min, this.max);
+        if (next != this.newValue) {
+            this.setNewValue(next);
+        }
     }
 
     public void setNewValue(Integer newValue) {
@@ -60,6 +76,9 @@ public class RangeOption extends Option<Integer> {
     }
 
     private float computeScaledValue(float value) {
-        return (value - this.min) / (this.max - this.min);
+        if (this.max <= this.min) {
+            return 0.0f;
+        }
+        return Mth.clamp((value - this.min) / (this.max - this.min), 0.0f, 1.0f);
     }
 }

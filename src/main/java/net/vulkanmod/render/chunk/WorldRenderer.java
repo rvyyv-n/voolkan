@@ -3,12 +3,14 @@ package net.vulkanmod.render.chunk;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * gate indirect draw on device support.
+ * gate indirect draw on device support; trigger pipeline warm-up on world load.
  */
 
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.opengl.GlStateManager;
 import com.mojang.blaze3d.vertex.PoseStack;
+import dev.voolkan.cache.PipelineWarmup;
+import dev.voolkan.compat.MacPerfOpts;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.Camera;
@@ -55,12 +57,14 @@ import net.vulkanmod.vulkan.memory.buffer.IndexBuffer;
 import net.vulkanmod.vulkan.memory.buffer.IndirectBuffer;
 import net.vulkanmod.vulkan.memory.MemoryTypes;
 import net.vulkanmod.vulkan.shader.GraphicsPipeline;
+import net.vulkanmod.vulkan.shader.descriptor.UBO;
 import net.vulkanmod.vulkan.texture.SamplerManager;
 import net.vulkanmod.vulkan.texture.VTextureSelector;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.vulkan.VkCommandBuffer;
 
 import java.util.*;
 
@@ -140,11 +144,13 @@ public class WorldRenderer {
         this.taskDispatcher = new TaskDispatcher();
 
         ChunkTask.setTaskDispatcher(this.taskDispatcher);
-        allocateIndirectBuffers();
+        if (!MacPerfOpts.drawCoalescing() || Initializer.CONFIG.indirectDraw) {
+            allocateIndirectBuffers();
+        }
         TerrainRenderType.updateMapping();
 
         Renderer.getInstance().addOnResizeCallback(() -> {
-            if (this.indirectBuffers.length != Renderer.getFramesNum())
+            if (this.indirectBuffers != null && this.indirectBuffers.length != Renderer.getFramesNum())
                 allocateIndirectBuffers();
         });
     }
@@ -156,7 +162,7 @@ public class WorldRenderer {
         this.indirectBuffers = new IndirectBuffer[Renderer.getFramesNum()];
 
         for (int i = 0; i < this.indirectBuffers.length; ++i) {
-            this.indirectBuffers[i] = new IndirectBuffer(1000000, MemoryTypes.HOST_MEM);
+            this.indirectBuffers[i] = new IndirectBuffer(1000000, MemoryTypes.BAR_MEM);
         }
     }
 
@@ -187,11 +193,13 @@ public class WorldRenderer {
         int sectionZ = SectionPos.posToSectionCoord(cameraZ);
 
         profiler.push("reposition");
-        if (this.lastCameraSectionX != sectionX || this.lastCameraSectionY != sectionY || this.lastCameraSectionZ != sectionZ) {
+        if (this.lastCameraSectionX != sectionX || this.lastCameraSectionZ != sectionZ) {
             this.lastCameraSectionX = sectionX;
             this.lastCameraSectionY = sectionY;
             this.lastCameraSectionZ = sectionZ;
             this.sectionGrid.repositionCamera(cameraX, cameraZ);
+        } else {
+            this.lastCameraSectionY = sectionY;
         }
         profiler.pop();
 
@@ -226,7 +234,9 @@ public class WorldRenderer {
             }
         }
 
-        this.indirectBuffers[Renderer.getCurrentFrame()].reset();
+        if (this.indirectBuffers != null) {
+            this.indirectBuffers[Renderer.getCurrentFrame()].reset();
+        }
 
         mcProfiler.pop();
         profiler.pop();
@@ -299,16 +309,20 @@ public class WorldRenderer {
 
 //        this.entityRenderDispatcher.setLevel(level);
         this.level = level;
+        dev.voolkan.telemetry.FrameTimeTracker.reset();
         ChunkStatusMap.createInstance(renderDistance);
         if (level != null) {
             this.allChanged();
+            PipelineWarmup.beginWorldLoad();
         } else {
+            PipelineWarmup.cancel();
             if (this.sectionGrid != null) {
                 this.sectionGrid.freeAllBuffers();
                 this.sectionGrid = null;
             }
 
             this.taskDispatcher.stopThreads();
+            this.taskDispatcher.clearBatchQueue();
 
             this.graphNeedsUpdate = true;
         }
@@ -328,14 +342,23 @@ public class WorldRenderer {
      * SOLID before CUTOUT so solid blocks populate the depth buffer for early-Z fast reject.
      */
     public void renderSectionLayer(TerrainRenderType renderType, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projection) {
+        Set<TerrainRenderType> allowedRenderTypes = Initializer.CONFIG.uniqueOpaqueLayer
+                ? TerrainRenderType.COMPACT_RENDER_TYPES
+                : TerrainRenderType.SEMI_COMPACT_RENDER_TYPES;
+        if (!allowedRenderTypes.contains(renderType)) {
+            return;
+        }
+
         Renderer.getInstance().getMainPass().rebindMainTarget();
 
-        this.sortTranslucentSections(camX, camY, camZ);
+        final boolean isTranslucent = renderType == TerrainRenderType.TRANSLUCENT;
+        if (isTranslucent) {
+            this.sortTranslucentSections(camX, camY, camZ);
+        }
 
         ProfilerFiller mcProfiler = net.minecraft.util.profiling.Profiler.get();
         Zone zone = mcProfiler.zone(() -> "render_" + renderType);
 
-        final boolean isTranslucent = renderType == TerrainRenderType.TRANSLUCENT;
         final boolean indirectDraw = Initializer.CONFIG.indirectDraw && DeviceManager.device.isDrawIndirectSupported();
 
         if (!isTranslucent) {
@@ -384,51 +407,95 @@ public class WorldRenderer {
         int atlasTexHeight = texView.getHeight(0);
 
         VRenderSystem.setTextureSize(atlasTexWidth, atlasTexHeight);
-        VRenderSystem.setCurrentTime((int) System.currentTimeMillis());
-
         long currentTimeMs = System.currentTimeMillis();
+        VRenderSystem.setCurrentTime((int) currentTimeMs);
+
         float fadeTime = Minecraft.getInstance().options.chunkSectionFadeInTime().get().floatValue();
         int fadeTimeMs = (int) (fadeTime * 1000);
         float fadeTimeInv = fadeTime > 0 ? 1 / (fadeTime * 1000) : 1;
 
+        VkCommandBuffer commandBuffer = Renderer.getCommandBuffer();
         IndexBuffer indexBuffer = Renderer.getDrawer().getQuadsIndexBuffer().getIndexBuffer();
-        Renderer.getDrawer().bindIndexBuffer(Renderer.getCommandBuffer(), indexBuffer, indexBuffer.indexType.value);
+        Renderer.getDrawer().bindIndexBuffer(commandBuffer, indexBuffer, indexBuffer.indexType.value);
 
         int currentFrame = Renderer.getCurrentFrame();
-        Set<TerrainRenderType> allowedRenderTypes = Initializer.CONFIG.uniqueOpaqueLayer ? TerrainRenderType.COMPACT_RENDER_TYPES : TerrainRenderType.SEMI_COMPACT_RENDER_TYPES;
-        if (allowedRenderTypes.contains(renderType)) {
-            renderType.setCutoutUniform();
+        IndirectBuffer indirectBuffer = null;
+        if (indirectDraw) {
+            if (this.indirectBuffers == null || this.indirectBuffers.length != Renderer.getFramesNum()) {
+                allocateIndirectBuffers();
+            }
+            indirectBuffer = this.indirectBuffers[currentFrame];
+        } else if (this.indirectBuffers != null) {
+            indirectBuffer = this.indirectBuffers[currentFrame];
+        }
+        renderType.setCutoutUniform();
 
+        UBO ubo0 = pipeline.getUBO(0);
+        UBO ubo1 = pipeline.getUBO(1);
+        boolean layerUbosUploaded = false;
+        try {
             for (Iterator<ChunkArea> iterator = this.sectionGraph.getChunkAreaQueue().iterator(isTranslucent); iterator.hasNext(); ) {
                 ChunkArea chunkArea = iterator.next();
                 var queue = chunkArea.sectionQueue;
                 DrawBuffers drawBuffers = chunkArea.drawBuffers;
 
-                if (drawBuffers.getAreaBuffer(renderType) != null && queue.size() > 0) {
+                if (drawBuffers.getAreaBuffer(renderType) == null || queue.size() == 0) {
+                    continue;
+                }
 
-                    drawBuffers.bindBuffers(Renderer.getCommandBuffer(), pipeline, renderType,
+                if (indirectDraw) {
+                    int drawCount = drawBuffers.buildIndirectBatch(cameraPos, queue, renderType);
+                    if (drawCount == 0) {
+                        continue;
+                    }
+
+                    drawBuffers.bindBuffers(commandBuffer, pipeline, renderType,
                                             camX, camY, camZ,
                                             currentTimeMs, fadeTimeMs, fadeTimeInv);
 
                     renderer.uploadAndBindUBOs(pipeline);
+                    if (!layerUbosUploaded) {
+                        if (ubo0 != null) ubo0.setUseGlobalBuffer(false);
+                        if (ubo1 != null) ubo1.setUseGlobalBuffer(false);
+                        layerUbosUploaded = true;
+                    }
 
-                    if (indirectDraw) {
-                        drawBuffers.buildDrawBatchesIndirect(cameraPos, indirectBuffers[currentFrame], queue, renderType);
-                    }
-                    else {
-                        drawBuffers.buildDrawBatchesDirect(cameraPos, queue, renderType);
-                    }
+                    drawBuffers.submitIndirectBatch(commandBuffer, indirectBuffer, drawCount);
                 }
+                else {
+                    int sectionCount = drawBuffers.prepareDirectBatch(cameraPos, queue, renderType);
+                    if (sectionCount == 0) {
+                        continue;
+                    }
+
+                    drawBuffers.bindBuffers(commandBuffer, pipeline, renderType,
+                                            camX, camY, camZ,
+                                            currentTimeMs, fadeTimeMs, fadeTimeInv);
+
+                    renderer.uploadAndBindUBOs(pipeline);
+                    if (!layerUbosUploaded) {
+                        if (ubo0 != null) ubo0.setUseGlobalBuffer(false);
+                        if (ubo1 != null) ubo1.setUseGlobalBuffer(false);
+                        layerUbosUploaded = true;
+                    }
+
+                    drawBuffers.submitDirectBatch(commandBuffer, renderType, sectionCount);
+                }
+            }
+        } finally {
+            if (layerUbosUploaded) {
+                if (ubo0 != null) ubo0.setUseGlobalBuffer(true);
+                if (ubo1 != null) ubo1.setUseGlobalBuffer(true);
             }
         }
 
-        if (renderType == TerrainRenderType.CUTOUT || renderType == TerrainRenderType.TRIPWIRE) {
-            indirectBuffers[currentFrame].submitUploads();
+        if (indirectBuffer != null && (renderType == TerrainRenderType.CUTOUT || renderType == TerrainRenderType.TRIPWIRE)) {
+            indirectBuffer.submitUploads();
 //            uniformBuffers.submitUploads();
         }
 
         // Need to reset push constants in case the pipeline will still be used for rendering
-        if (!indirectDraw) {
+        if (!indirectDraw && !MacPerfOpts.drawCoalescing()) {
             VRenderSystem.setModelOffset(0, 0, 0);
             renderer.pushConstants(pipeline);
         }
@@ -475,12 +542,13 @@ public class WorldRenderer {
         double camY = vec3.y();
         double camZ = vec3.z();
 
+        boolean hasDestruction = !destructionProgress.isEmpty();
         for (RenderSection renderSection : this.sectionGraph.getBlockEntitiesSections()) {
             List<BlockEntity> list = renderSection.getCompiledSection().getBlockEntities();
             if (!list.isEmpty()) {
                 for (BlockEntity blockEntity : list) {
                     BlockPos blockPos = blockEntity.getBlockPos();
-                    SortedSet<BlockDestructionProgress> sortedSet = destructionProgress.get(blockPos.asLong());
+                    SortedSet<BlockDestructionProgress> sortedSet = hasDestruction ? destructionProgress.get(blockPos.asLong()) : null;
                     ModelFeatureRenderer.CrumblingOverlay crumblingOverlay;
                     if (sortedSet != null && !sortedSet.isEmpty()) {
                         poseStack.pushPose();

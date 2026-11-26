@@ -1,13 +1,21 @@
 package net.vulkanmod.render.chunk.build.renderer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * cache cullTest predicate and BlockRenderDispatcher, and avoid duplicate getChunkRenderType lookups.
+ */
+
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.renderer.v1.mesh.ShadeMode;
 import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.block.model.BlockStateModel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.SingleThreadedRandomSource;
@@ -27,11 +35,15 @@ import net.vulkanmod.render.vertex.TerrainRenderType;
 import net.vulkanmod.vulkan.util.ColorUtil;
 import org.joml.Vector3f;
 
+import java.util.function.Predicate;
+
 public class BlockRenderer extends AbstractBlockRenderContext {
     private Vector3f pos;
 
     private BuilderResources resources;
     private TerrainBuilder terrainBuilder;
+    private BlockRenderDispatcher blockRenderDispatcher;
+    private final Predicate<Direction> cullTest = this::isFaceCulled;
 
     final boolean backFaceCulling = Initializer.CONFIG.backFaceCulling;
 
@@ -48,27 +60,36 @@ public class BlockRenderer extends AbstractBlockRenderContext {
         this.random = new SingleThreadedRandomSource(42L);
     }
 
+    @Override
+    public void prepareForWorld(BlockAndTintGetter blockView, boolean enableCulling) {
+        super.prepareForWorld(blockView, enableCulling);
+        if (this.blockRenderDispatcher == null) {
+            this.blockRenderDispatcher = Minecraft.getInstance().getBlockRenderer();
+        }
+    }
+
     public void renderBlock(BlockState blockState, BlockPos blockPos, Vector3f pos) {
         this.pos = pos;
         this.blockPos = blockPos;
         this.blockState = blockState;
         this.random.setSeed(blockState.getSeed(blockPos));
 
-        TerrainRenderType renderType = TerrainRenderType.get(ItemBlockRenderTypes.getChunkRenderType(blockState));
+        ChunkSectionLayer chunkLayer = ItemBlockRenderTypes.getChunkRenderType(blockState);
+        TerrainRenderType renderType = TerrainRenderType.get(chunkLayer);
         renderType = TerrainRenderType.getRemapped(renderType);
         this.renderType = renderType;
         this.terrainBuilder = this.resources.builderPack.builder(renderType);
         this.terrainBuilder.setBlockAttributes(blockState);
 
-        BlockStateModel model = Minecraft.getInstance().getBlockRenderer().getBlockModel(blockState);
+        BlockStateModel model = this.blockRenderDispatcher.getBlockModel(blockState);
 
         BlockAndTintGetter renderRegion = this.renderRegion;
         Vec3 offset = blockState.getOffset(blockPos);
         pos.add((float) offset.x, (float) offset.y, (float) offset.z);
 
-        this.prepareForBlock(blockState, blockPos, blockState.getLightEmission() == 0);
+        this.prepareForBlock(blockState, blockPos, chunkLayer, blockState.getLightEmission() == 0);
 
-        model.emitQuads(this.getEmitter(), renderRegion, blockPos, blockState, this.random, this::isFaceCulled);
+        model.emitQuads(this.getEmitter(), renderRegion, blockPos, blockState, this.random, this.cullTest);
     }
 
     @Override

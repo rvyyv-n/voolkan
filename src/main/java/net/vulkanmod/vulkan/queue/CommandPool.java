@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan.queue;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * avoid signaling or resetting an unwaited command-buffer fence on semaphore-synchronized submissions.
+ */
+
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.vulkanmod.vulkan.Vulkan;
 import org.lwjgl.PointerBuffer;
@@ -153,11 +159,13 @@ public class CommandPool {
         }
 
         public long submitCommands(MemoryStack stack, VkQueue queue, boolean useSemaphore) {
-            long fence = this.fence;
+            long fence = useSemaphore ? VK_NULL_HANDLE : this.fence;
 
             vkEndCommandBuffer(this.handle);
 
-            vkResetFences(Vulkan.getVkDevice(), this.fence);
+            if (!useSemaphore) {
+                vkResetFences(Vulkan.getVkDevice(), this.fence);
+            }
 
             VkSubmitInfo submitInfo = VkSubmitInfo.calloc(stack);
             submitInfo.sType(VK_STRUCTURE_TYPE_SUBMIT_INFO);

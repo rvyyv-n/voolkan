@@ -1,5 +1,11 @@
 package net.vulkanmod.vulkan;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * report the active main framebuffer dimensions in updateScreenSize for scaled world rendering.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.platform.Window;
 
@@ -8,6 +14,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.fog.FogData;
 import net.vulkanmod.render.engine.VkGpuBuffer;
 import net.vulkanmod.vulkan.device.DeviceManager;
+import net.vulkanmod.vulkan.framebuffer.Framebuffer;
 import net.vulkanmod.vulkan.shader.PipelineState;
 import net.vulkanmod.vulkan.util.ColorUtil;
 import net.vulkanmod.vulkan.util.MappedBuffer;
@@ -97,6 +104,15 @@ public abstract class VRenderSystem {
     }
 
     public static void updateScreenSize() {
+        // While the world is drawn at a lower resolution, report the scaled target size
+        Renderer renderer = Renderer.getInstance();
+        if (renderer != null && renderer.getMainPass() != null && renderer.getMainPass().isWorldActive()) {
+            Framebuffer framebuffer = renderer.getMainPass().getMainFramebuffer();
+            screenSize.putFloat(0, (float) framebuffer.getWidth());
+            screenSize.putFloat(4, (float) framebuffer.getHeight());
+            return;
+        }
+
         Window window = Minecraft.getInstance().getWindow();
 
         screenSize.putFloat(0, (float) window.getWidth());
@@ -131,6 +147,9 @@ public abstract class VRenderSystem {
         return DeviceManager.deviceProperties.limits().maxImageDimension2D();
     }
 
+    private static final Matrix4f scratchMV = new Matrix4f();
+    private static final Matrix4f scratchP = new Matrix4f();
+
     public static void applyMVP(Matrix4f MV, Matrix4f P) {
         applyModelViewMatrix(MV);
         applyProjectionMatrix(P);
@@ -138,30 +157,28 @@ public abstract class VRenderSystem {
     }
 
     public static void applyModelViewMatrix(Matrix4f mat) {
-        mat.get(modelViewMatrix.buffer.asFloatBuffer());
+        mat.get(0, modelViewMatrix.buffer);
     }
 
     public static void applyProjectionMatrix(Matrix4f mat) {
-        mat.get(projectionMatrix.buffer.asFloatBuffer());
+        mat.get(0, projectionMatrix.buffer);
     }
 
     public static void applyProjectionMatrix(GpuBufferSlice bufferSlice) {
-        long ptr = ((VkGpuBuffer) bufferSlice.buffer()).getBuffer().getDataPtr();
-        ByteBuffer byteBuffer = MemoryUtil.memByteBuffer(ptr + bufferSlice.offset(), (int) bufferSlice.length());
-        Matrix4f matrix4f = new Matrix4f().set(byteBuffer);
-
-        matrix4f.get(projectionMatrix.buffer.asFloatBuffer());
+        VkGpuBuffer gpuBuffer = (VkGpuBuffer) bufferSlice.buffer();
+        long ptr = gpuBuffer.getBuffer().getDataPtr();
+        MemoryUtil.memCopy(ptr + gpuBuffer.getDynamicBaseOffset() + bufferSlice.offset(), projectionMatrix.ptr, 64L);
     }
 
     public static void calculateMVP() {
-        org.joml.Matrix4f MV = new org.joml.Matrix4f(modelViewMatrix.buffer.asFloatBuffer());
-        org.joml.Matrix4f P = new org.joml.Matrix4f(projectionMatrix.buffer.asFloatBuffer());
+        scratchMV.set(0, modelViewMatrix.buffer);
+        scratchP.set(0, projectionMatrix.buffer);
 
-        P.mul(MV).get(MVP.buffer);
+        scratchP.mul(scratchMV).get(0, MVP.buffer);
     }
 
     public static void setTextureMatrix(Matrix4f mat) {
-        mat.get(TextureMatrix.buffer.asFloatBuffer());
+        mat.get(0, TextureMatrix.buffer);
     }
 
     public static MappedBuffer getTextureMatrix() {

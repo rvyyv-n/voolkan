@@ -1,5 +1,11 @@
 package net.vulkanmod.render.chunk.buffer;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * maintain an intrusive free-segment list for O(free) allocation, grow by up to 50% (capped at 8 MB) to reduce reallocations, and support zero-staging direct writes on unified memory.
+ */
+
 import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.render.chunk.util.Util;
@@ -15,7 +21,9 @@ public class AreaBuffer {
     private static final boolean DEBUG = false;
     private static final Logger LOGGER = Initializer.LOGGER;
 
-    private static final MemoryType MEMORY_TYPE = MemoryTypes.GPU_MEM;
+    private final MemoryType memoryType = MemoryTypes.getUnifiedOrGpuMem();
+
+    private static final int MAX_GROWTH_INCREMENT = 8 * 1024 * 1024;
 
     private final int usage;
     private final int elementSize;
@@ -23,6 +31,7 @@ public class AreaBuffer {
     private final Int2ReferenceOpenHashMap<Segment> usedSegments = new Int2ReferenceOpenHashMap<>();
 
     Segment first, last;
+    private Segment freeHead;
 
     private Buffer buffer;
 
@@ -40,14 +49,37 @@ public class AreaBuffer {
 
         segments++;
         last = first = s;
+        addFree(s);
+    }
+
+    private void addFree(Segment s) {
+        s.prevFree = null;
+        s.nextFree = this.freeHead;
+        if (this.freeHead != null) {
+            this.freeHead.prevFree = s;
+        }
+        this.freeHead = s;
+    }
+
+    private void removeFree(Segment s) {
+        if (s.prevFree != null) {
+            s.prevFree.nextFree = s.nextFree;
+        } else if (this.freeHead == s) {
+            this.freeHead = s.nextFree;
+        }
+        if (s.nextFree != null) {
+            s.nextFree.prevFree = s.prevFree;
+        }
+        s.prevFree = null;
+        s.nextFree = null;
     }
 
     private Buffer allocateBuffer() {
         Buffer buffer;
         if (this.usage == Usage.VERTEX.usage) {
-            buffer = new VertexBuffer(this.size, MEMORY_TYPE);
+            buffer = new VertexBuffer(this.size, this.memoryType);
         } else {
-            buffer = new IndexBuffer(this.size, MEMORY_TYPE);
+            buffer = new IndexBuffer(this.size, this.memoryType);
         }
         return buffer;
     }
@@ -57,6 +89,7 @@ public class AreaBuffer {
             throw new RuntimeException("Unaligned buffer");
 
         Segment segment = findSegment(size);
+        removeFree(segment);
 
         if (segment.size - size > 0) {
             Segment s1 = new Segment(segment.offset + size, segment.size - size);
@@ -68,6 +101,7 @@ public class AreaBuffer {
                 this.last = s1;
 
             segment.bindNext(s1);
+            addFree(s1);
 
             segment.size = size;
         }
@@ -101,7 +135,11 @@ public class AreaBuffer {
         }
 
         Buffer dst = this.buffer;
-        UploadManager.INSTANCE.recordUpload(dst, segment.offset + offset, size, byteBuffer);
+        if (dst.type.mappable()) {
+            dst.type.copyToBuffer(dst, byteBuffer, size, 0, segment.offset + offset);
+        } else {
+            UploadManager.INSTANCE.recordUpload(dst, segment.offset + offset, size, byteBuffer);
+        }
     }
 
     public Segment upload(ByteBuffer byteBuffer, int oldOffset, long paramsPtr) {
@@ -113,6 +151,7 @@ public class AreaBuffer {
             throw new RuntimeException("Unaligned buffer");
 
         Segment segment = findSegment(size);
+        removeFree(segment);
 
         if (segment.size - size > 0) {
             Segment s1 = new Segment(segment.offset + size, segment.size - size);
@@ -124,6 +163,7 @@ public class AreaBuffer {
                 this.last = s1;
 
             segment.bindNext(s1);
+            addFree(s1);
 
             segment.size = size;
         }
@@ -134,7 +174,11 @@ public class AreaBuffer {
         segment.paramsPtr = paramsPtr;
 
         Buffer dst = this.buffer;
-        UploadManager.INSTANCE.recordUpload(dst, segment.offset, size, byteBuffer);
+        if (dst.type.mappable()) {
+            dst.type.copyToBuffer(dst, byteBuffer, size, 0, segment.offset);
+        } else {
+            UploadManager.INSTANCE.recordUpload(dst, segment.offset, size, byteBuffer);
+        }
 
         this.used += size;
 
@@ -144,17 +188,21 @@ public class AreaBuffer {
     public Segment findSegment(int size) {
         Segment segment = null;
 
-        Segment segment1 = this.first;
+        Segment segment1 = this.freeHead;
         while (segment1 != null) {
-            if (segment1.isFree() && segment1.size >= size) {
-                if (segment == null || segment1.size < segment.size)
+            if (segment1.size >= size) {
+                if (segment1.size == size) {
+                    return segment1;
+                }
+                if (segment == null || segment1.size < segment.size) {
                     segment = segment1;
+                }
             }
 
-            segment1 = segment1.next;
+            segment1 = segment1.nextFree;
         }
 
-        if (segment == null || segment.size < size) {
+        if (segment == null) {
             return this.reallocate(size);
         }
 
@@ -164,10 +212,9 @@ public class AreaBuffer {
     public Segment reallocate(int uploadSize) {
         int oldSize = this.size;
 
-        int minIncrement = this.size >> 3;
+        int minIncrement = Math.min(this.size >> 1, MAX_GROWTH_INCREMENT);
         minIncrement = (int) Util.align(minIncrement, this.elementSize);
 
-//        int increment = Math.max(minIncrement, uploadSize << 1);
         int increment = Math.max(minIncrement, uploadSize);
 
         if (increment < uploadSize)
@@ -178,7 +225,11 @@ public class AreaBuffer {
         this.size = newSize;
         Buffer dst = this.allocateBuffer();
 
-        UploadManager.INSTANCE.copyBuffer(this.buffer, dst);
+        if (dst.type.mappable() && this.buffer.type.mappable()) {
+            MemoryTypes.copyMappableBuffer(this.buffer, 0, dst, 0, oldSize);
+        } else {
+            UploadManager.INSTANCE.copyBuffer(this.buffer, dst);
+        }
 
         // TODO: moving only used segments causes corruption
 //        moveUsedSegments(dst);
@@ -197,6 +248,7 @@ public class AreaBuffer {
             last.bindNext(segment);
 
             last = segment;
+            addFree(segment);
         }
 
         if (DEBUG)
@@ -229,7 +281,11 @@ public class AreaBuffer {
                         this.first = segment;
                         segment.prev = null;
                     } else {
-                        UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        if (dst.type.mappable() && this.buffer.type.mappable()) {
+                            MemoryTypes.copyMappableBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        } else {
+                            UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+                        }
 
                         dstOffset += uploadSize;
                     }
@@ -258,7 +314,11 @@ public class AreaBuffer {
         }
 
         if (uploadSize > 0) {
-            UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            if (dst.type.mappable() && this.buffer.type.mappable()) {
+                MemoryTypes.copyMappableBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            } else {
+                UploadManager.INSTANCE.copyBuffer(this.buffer, srcOffset, dst, dstOffset, uploadSize);
+            }
         }
 
         if (prevUsed != null) {
@@ -279,14 +339,17 @@ public class AreaBuffer {
 
         segment.free = true;
         segment.paramsPtr = -1;
+        addFree(segment);
 
         Segment next = segment.next;
         if (next != null && next.isFree()) {
+            removeFree(next);
             mergeSegments(segment, next);
         }
 
         Segment prev = segment.prev;
         if (prev != null && prev.isFree()) {
+            removeFree(segment);
             mergeSegments(prev, segment);
         }
     }
@@ -403,6 +466,7 @@ public class AreaBuffer {
         long paramsPtr;
 
         Segment next, prev;
+        Segment nextFree, prevFree;
 
         private Segment(int offset, int size) {
             this.offset = offset;

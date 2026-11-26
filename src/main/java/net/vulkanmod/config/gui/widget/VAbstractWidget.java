@@ -1,5 +1,11 @@
 package net.vulkanmod.config.gui.widget;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * add setMessage and optional static tooltip support for action buttons.
+ */
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -18,8 +24,17 @@ public abstract class VAbstractWidget extends GuiElement {
     public boolean focused;
 
     protected Component message;
+    protected Component tooltip;
     protected boolean centeredText = true;
     protected int margin = 4;
+
+    public void setMessage(Component message) {
+        this.message = message;
+    }
+
+    public void setTooltip(Component tooltip) {
+        this.tooltip = tooltip;
+    }
 
     public void setDimensions(int x, int y, int width, int height) {
         this.x = x;
@@ -137,7 +152,7 @@ public abstract class VAbstractWidget extends GuiElement {
     }
 
     public Component getTooltip() {
-        return null;
+        return this.tooltip;
     }
 
     public PerformanceImpact getImpact() {

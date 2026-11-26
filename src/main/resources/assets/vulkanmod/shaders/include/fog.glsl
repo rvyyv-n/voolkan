@@ -23,16 +23,7 @@ float fog_distance(vec3 pos, int shape) {
 }
 
 float linear_fog_value(float vertexDistance, float fogStart, float fogEnd) {
-    if (vertexDistance <= fogStart) {
-        return 0.0;
-    } else if (vertexDistance >= fogEnd) {
-        return 1.0;
-    }
-
-    float fogValue = (vertexDistance - fogStart) / (fogEnd - fogStart);
-
-//    return clamp(fogValue, 0.0, 1.0);
-    return fogValue;
+    return clamp((vertexDistance - fogStart) / max(fogEnd - fogStart, 1e-6), 0.0, 1.0);
 }
 
 float total_fog_value(float sphericalVertexDistance, float cylindricalVertexDistance, float environmentalStart, float environmantalEnd, float renderDistanceStart, float renderDistanceEnd) {

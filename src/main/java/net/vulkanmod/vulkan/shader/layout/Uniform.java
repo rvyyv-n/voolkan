@@ -1,9 +1,16 @@
 package net.vulkanmod.vulkan.shader.layout;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use primitive float and int suppliers to avoid boxing on scalar uniform updates.
+ */
+
 import net.vulkanmod.vulkan.shader.Uniforms;
 import net.vulkanmod.vulkan.util.MappedBuffer;
 import org.lwjgl.system.MemoryUtil;
 
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public class Uniform {
@@ -114,8 +121,8 @@ public class Uniform {
         int offset;
 
         Supplier<MappedBuffer> bufferSupplier;
-        Supplier<Integer> intSupplier;
-        Supplier<Float> floatSupplier;
+        IntSupplier intSupplier;
+        Uniforms.FloatSupplier floatSupplier;
 
         Info(String type, String name, int align, int size) {
             this.type = type;

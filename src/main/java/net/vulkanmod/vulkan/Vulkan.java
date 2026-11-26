@@ -3,9 +3,16 @@ package net.vulkanmod.vulkan;
 /*
  * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
  * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
- * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes.
+ * render path (dynamic rendering or legacy render pass) is chosen at runtime; validation layers are enabled with -Dvoolkan.validation=true; checkResult only throws on negative (error) VkResult codes; VMA memory budget bit enabled when VK_EXT_memory_budget is active; enable VK_KHR_portability_enumeration when advertised, query VK_EXT_layer_settings support, log startup capabilities, and shut down platform power probe on cleanup.
  */
 
+import dev.voolkan.cache.PipelineWarmup;
+import dev.voolkan.compat.DiagnosticLogBuffer;
+import dev.voolkan.compat.StartupLog;
+import dev.voolkan.macos.MacosWindowUtil;
+import dev.voolkan.power.PowerSources;
+import net.vulkanmod.Initializer;
+import net.vulkanmod.config.Platform;
 import net.vulkanmod.vulkan.device.Device;
 import net.vulkanmod.vulkan.device.DeviceManager;
 import net.vulkanmod.vulkan.framebuffer.SwapChain;
@@ -19,14 +26,15 @@ import net.vulkanmod.vulkan.texture.SamplerManager;
 import net.vulkanmod.vulkan.util.VkResult;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.vma.VmaAllocatorCreateInfo;
 import org.lwjgl.util.vma.VmaVulkanFunctions;
 import org.lwjgl.vulkan.*;
 
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -37,6 +45,7 @@ import static org.lwjgl.glfw.GLFWVulkan.glfwCreateWindowSurface;
 import static org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions;
 import static org.lwjgl.system.MemoryStack.*;
 import static org.lwjgl.system.MemoryUtil.NULL;
+import static org.lwjgl.util.vma.Vma.VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
 import static org.lwjgl.util.vma.Vma.vmaCreateAllocator;
 import static org.lwjgl.util.vma.Vma.vmaDestroyAllocator;
 import static org.lwjgl.vulkan.EXTDebugUtils.*;
@@ -80,14 +89,18 @@ public class Vulkan {
 
         VkDebugUtilsMessengerCallbackDataEXT callbackData = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
 
+        String rawMessage = callbackData.pMessageString();
+        boolean isError = (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0;
+        DiagnosticLogBuffer.record(isError ? "ERROR" : "WARN", "vulkan", rawMessage);
+
         String s;
-        if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
-            s = "\u001B[31m" + callbackData.pMessageString();
+        if (isError) {
+            s = "\u001B[31m" + rawMessage;
 
 //            System.err.println("Stack dump:");
 //            Thread.dumpStack();
         } else {
-            s = callbackData.pMessageString();
+            s = rawMessage;
         }
 
         System.err.println(s);
@@ -141,6 +154,9 @@ public class Vulkan {
     private static final StagingBuffers stagingBuffers = new StagingBuffers();
 
     public static boolean use24BitsDepthFormat = true;
+    public static boolean surfaceCapabilities2Supported = false;
+    public static boolean portabilityEnumerationSupported = false;
+    public static boolean layerSettingsSupported = false;
     private static int DEFAULT_DEPTH_FORMAT = 0;
 
     public static void initVulkan(long window) {
@@ -156,6 +172,7 @@ public class Vulkan {
         createCommandPool();
 
         setupDepthFormat();
+        StartupLog.logStartupCapabilities();
     }
 
     static void createStagingBuffers() {
@@ -171,6 +188,7 @@ public class Vulkan {
     }
 
     public static void cleanUp() {
+        PipelineWarmup.cancel();
         vkDeviceWaitIdle(DeviceManager.vkDevice);
         vkDestroyCommandPool(DeviceManager.vkDevice, commandPool, null);
         vkDestroyFence(DeviceManager.vkDevice, immediateFence, null);
@@ -194,6 +212,11 @@ public class Vulkan {
         destroyDebugUtilsMessengerEXT(instance, debugMessenger, null);
         KHRSurface.vkDestroySurfaceKHR(instance, surface, null);
         vkDestroyInstance(instance, null);
+        PowerSources.shutdown();
+        if (Platform.isMacOS()) {
+            MacosWindowUtil.reset();
+        }
+        StartupLog.reset();
     }
 
     private static void freeStagingBuffers() {
@@ -207,6 +230,15 @@ public class Vulkan {
         }
 
         try (MemoryStack stack = stackPush()) {
+            Set<String> availableExtensionNames = queryAvailableInstanceExtensions(stack);
+
+            portabilityEnumerationSupported = availableExtensionNames.contains(
+                    KHRPortabilityEnumeration.VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+            layerSettingsSupported = availableExtensionNames.contains("VK_EXT_layer_settings");
+            surfaceCapabilities2Supported = org.lwjgl.system.Platform.get() == org.lwjgl.system.Platform.WINDOWS
+                    && shouldDisallowFullscreenExclusive()
+                    && availableExtensionNames.contains(
+                            KHRGetSurfaceCapabilities2.VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
 
             // Use calloc to initialize the structs with 0s. Otherwise, the program can crash due to random values
 
@@ -223,7 +255,11 @@ public class Vulkan {
 
             createInfo.sType(VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO);
             createInfo.pApplicationInfo(appInfo);
-            createInfo.ppEnabledExtensionNames(getRequiredInstanceExtensions());
+            if (portabilityEnumerationSupported) {
+                createInfo.flags(createInfo.flags()
+                        | KHRPortabilityEnumeration.VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR);
+            }
+            createInfo.ppEnabledExtensionNames(getRequiredInstanceExtensions(stack));
 
             if (ENABLE_VALIDATION_LAYERS) {
 
@@ -317,6 +353,10 @@ public class Vulkan {
 
             surface = pSurface.get(0);
         }
+
+        if (Platform.isMacOS() && Initializer.CONFIG != null && Initializer.CONFIG.macReduceResolution) {
+            MacosWindowUtil.syncMetalLayerScale(window, true);
+        }
     }
 
     private static void createVma() {
@@ -331,6 +371,9 @@ public class Vulkan {
             allocatorCreateInfo.pVulkanFunctions(vulkanFunctions);
             allocatorCreateInfo.instance(instance);
             allocatorCreateInfo.vulkanApiVersion(VK_API_VERSION_1_2);
+            if (DeviceManager.memoryBudgetSupported) {
+                allocatorCreateInfo.flags(VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT);
+            }
 
             PointerBuffer pAllocator = stack.pointers(VK_NULL_HANDLE);
 
@@ -361,24 +404,68 @@ public class Vulkan {
         }
     }
 
-    private static PointerBuffer getRequiredInstanceExtensions() {
+    public static boolean shouldDisallowFullscreenExclusive() {
+        return Boolean.getBoolean("voolkan.disallowFullscreenExclusive")
+                || (Initializer.CONFIG != null && Initializer.CONFIG.disallowFullscreenExclusive);
+    }
 
-        PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
-
-        if (ENABLE_VALIDATION_LAYERS) {
-
-            MemoryStack stack = stackGet();
-
-            PointerBuffer extensions = stack.mallocPointer(glfwExtensions.capacity() + 1);
-
-            extensions.put(glfwExtensions);
-            extensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
-
-            // Rewind the buffer before returning it to reset its position back to 0
-            return extensions.rewind();
+    private static Set<String> queryAvailableInstanceExtensions(MemoryStack stack) {
+        IntBuffer propertyCount = stack.ints(0);
+        int res = vkEnumerateInstanceExtensionProperties((String) null, propertyCount, null);
+        if (res < VK_SUCCESS) {
+            return Set.of();
         }
 
-        return glfwExtensions;
+        int count = propertyCount.get(0);
+        if (count <= 0) {
+            return Set.of();
+        }
+
+        try (VkExtensionProperties.Buffer availableExtensions = VkExtensionProperties.malloc(count)) {
+            res = vkEnumerateInstanceExtensionProperties((String) null, propertyCount, availableExtensions);
+            if (res < VK_SUCCESS) {
+                return Set.of();
+            }
+            int written = Math.min(Math.max(propertyCount.get(0), 0), count);
+            availableExtensions.limit(written);
+            return availableExtensions.stream()
+                                      .map(VkExtensionProperties::extensionNameString)
+                                      .collect(toSet());
+        }
+    }
+
+    private static PointerBuffer getRequiredInstanceExtensions(MemoryStack stack) {
+
+        PointerBuffer glfwExtensions = glfwGetRequiredInstanceExtensions();
+        if (glfwExtensions == null) {
+            throw new RuntimeException("GLFW failed to provide required Vulkan instance extensions");
+        }
+
+        if (!ENABLE_VALIDATION_LAYERS && !surfaceCapabilities2Supported && !portabilityEnumerationSupported) {
+            return glfwExtensions;
+        }
+
+        Set<String> extensionNames = new LinkedHashSet<>();
+        for (int i = glfwExtensions.position(); i < glfwExtensions.limit(); i++) {
+            extensionNames.add(MemoryUtil.memUTF8(glfwExtensions.get(i)));
+        }
+        if (ENABLE_VALIDATION_LAYERS) {
+            extensionNames.add(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
+        if (surfaceCapabilities2Supported) {
+            extensionNames.add(KHRGetSurfaceCapabilities2.VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+        }
+        if (portabilityEnumerationSupported) {
+            extensionNames.add(KHRPortabilityEnumeration.VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+        }
+
+        PointerBuffer extensions = stack.mallocPointer(extensionNames.size());
+        for (String name : extensionNames) {
+            extensions.put(stack.UTF8(name));
+        }
+
+        // Rewind the buffer before returning it to reset its position back to 0
+        return extensions.rewind();
     }
 
     public static void checkResult(int result, String errorMessage) {

@@ -1,5 +1,12 @@
 package net.vulkanmod.render.chunk;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * track per-layer occupancy bitmask, fix deferred VRAM segment freeing in resetDrawParameters,
+ * and track compile generation / player-changed priority for budgeted chunk uploads.
+ */
+
 import com.google.common.collect.Sets;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.world.level.Level;
@@ -40,8 +47,11 @@ public class RenderSection {
 
     private boolean dirty = true;
     private boolean playerChanged;
+    private int compileGeneration = 0;
+    private int compiledGeneration = -1;
     private boolean completelyEmpty = true;
     private boolean containsBlockEntities = false;
+    public byte layerMask = 0;
 
     public long visibility;
 
@@ -206,12 +216,17 @@ public class RenderSection {
 
         if (this.compileStatus.sortTask != null) {
             this.compileStatus.sortTask.cancel();
+            this.compileStatus.sortTask = null;
         }
 
-        if (!compiledSection.hasTransparencyState()) {
+        // If a newer build is already pending (compileGeneration > compiledGeneration), skip sorting:
+        // the pending BuildTask will produce freshly sorted translucent indices for the new geometry.
+        if (this.compiledGeneration != this.compileGeneration
+                || !compiledSection.hasTransparencyState()) {
             return false;
         } else {
-            this.compileStatus.sortTask = ChunkTask.createSortTask(this, cameraPos);
+            this.compileStatus.sortTask = ChunkTask.createSortTask(
+                    this, cameraPos, this.compiledGeneration, compiledSection);
             taskDispatcher.schedule(this.compileStatus.sortTask);
             return true;
         }
@@ -245,8 +260,26 @@ public class RenderSection {
         RenderRegion renderRegion = renderRegionCache.createRegion(level, secX, secY, secZ);
 
         boolean flag1 = this.compileStatus.compiledSection == CompiledSection.UNCOMPILED;
-        this.compileStatus.buildTask = ChunkTask.createBuildTask(this, renderRegion, cameraPos, !flag1 || flag);
+        boolean highPriority = !flag1 || flag || this.isDirtyFromPlayer();
+        int generation = this.nextCompileGeneration();
+        this.compileStatus.buildTask = ChunkTask.createBuildTask(this, renderRegion, cameraPos, highPriority, generation);
         return this.compileStatus.buildTask;
+    }
+
+    public int getCompileGeneration() {
+        return this.compileGeneration;
+    }
+
+    public int nextCompileGeneration() {
+        return ++this.compileGeneration;
+    }
+
+    public int getCompiledGeneration() {
+        return this.compiledGeneration;
+    }
+
+    public void setCompiledGeneration(int generation) {
+        this.compiledGeneration = generation;
     }
 
     protected boolean cancelTasks() {
@@ -291,15 +324,34 @@ public class RenderSection {
     }
 
     public void resetDrawParameters(TerrainRenderType renderType) {
-        for (int i = 0; i < QuadFacing.COUNT; ++i) {
-            DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
-            long ptr = DrawParametersBuffer.getParamsPtr(drawBuffers.getDrawParamsPtr(), this.inAreaIndex, renderType.ordinal(), i);
+        this.layerMask &= (byte) ~(1 << renderType.ordinal());
+        if (this.chunkArea == null)
+            return;
 
-            AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
-            int vertexOffset = DrawParametersBuffer.getVertexOffset(ptr);
-            if (areaBuffer != null && vertexOffset != -1) {
-                int segmentOffset = vertexOffset * drawBuffers.vertexSize;
-                areaBuffer.setSegmentFree(segmentOffset);
+        DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
+        AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
+        long basePtr = drawBuffers.getDrawParamsPtr();
+        boolean freedVertex = false;
+
+        for (int i = 0; i < QuadFacing.COUNT; ++i) {
+            long ptr = DrawParametersBuffer.getParamsPtr(basePtr, this.inAreaIndex, renderType.ordinal(), i);
+
+            if (!freedVertex && areaBuffer != null) {
+                int vertexOffset = DrawParametersBuffer.getVertexOffset(ptr);
+                if (vertexOffset != -1) {
+                    areaBuffer.freeSegment(vertexOffset);
+                    freedVertex = true;
+                }
+            }
+
+            if (renderType == TerrainRenderType.TRANSLUCENT && i == QuadFacing.UNDEFINED.ordinal()) {
+                AreaBuffer indexBuffer = drawBuffers.getIndexBuffer();
+                if (indexBuffer != null && DrawParametersBuffer.getIndexCount(ptr) > 0) {
+                    int firstIndex = DrawParametersBuffer.getFirstIndex(ptr);
+                    if (firstIndex >= 0) {
+                        indexBuffer.freeSegment(firstIndex);
+                    }
+                }
             }
 
             DrawParametersBuffer.resetParameters(ptr);
@@ -375,8 +427,11 @@ public class RenderSection {
 
     private void reset() {
         this.cancelTasks();
+        this.compileGeneration++;
+        this.compiledGeneration = -1;
         this.compileStatus.compiledSection = CompiledSection.UNCOMPILED;
         this.dirty = true;
+        this.playerChanged = false;
         this.visibility = 0;
         this.completelyEmpty = true;
 
@@ -384,15 +439,12 @@ public class RenderSection {
     }
 
     private void resetDrawParameters() {
+        this.layerMask = 0;
         if (this.chunkArea == null)
             return;
 
-        long basePtr = this.chunkArea.getDrawBuffers().getDrawParamsPtr();
         for (TerrainRenderType renderType : TerrainRenderType.VALUES) {
-            for (QuadFacing facing : QuadFacing.VALUES) {
-                long ptr = DrawParametersBuffer.getParamsPtr(basePtr, this.inAreaIndex, renderType.ordinal(), facing.ordinal());
-                DrawParametersBuffer.resetParameters(ptr);
-            }
+            this.resetDrawParameters(renderType);
         }
     }
 

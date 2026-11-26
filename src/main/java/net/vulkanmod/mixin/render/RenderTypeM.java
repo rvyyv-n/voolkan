@@ -1,6 +1,11 @@
 package net.vulkanmod.mixin.render;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * remove dead duplicate immediate vertex/index uploads and per-draw temporary allocations.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderPass;
@@ -8,7 +13,6 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.systems.ScissorState;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.MeshData;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.vulkanmod.interfaces.ExtendedRenderType;
@@ -29,9 +33,17 @@ import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 @Mixin(RenderType.class)
 public class RenderTypeM implements ExtendedRenderType {
+    @Unique
+    private static final Vector4f VOOLKAN_IDENTITY_COLOR = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
+    @Unique
+    private static final Vector3f VOOLKAN_ZERO_OFFSET = new Vector3f();
+    @Unique
+    private static final Supplier<String> VOOLKAN_IMMEDIATE_LABEL = () -> "Immediate draw";
+
     @Unique
     TerrainRenderType terrainRenderType;
 
@@ -66,29 +78,18 @@ public class RenderTypeM implements ExtendedRenderType {
 
         GpuBufferSlice gpuBufferSlice = RenderSystem.getDynamicUniforms()
                                                     .writeTransform(RenderSystem.getModelViewMatrix(),
-                                                                    new Vector4f(1.0F, 1.0F, 1.0F, 1.0F),
-                                                                    new Vector3f(),
+                                                                    VOOLKAN_IDENTITY_COLOR,
+                                                                    VOOLKAN_ZERO_OFFSET,
                                                                     renderSetupAccessor.textureTransform().getMatrix());
 
         Map<String, RenderSetup.TextureAndSampler> map = this.state.getTextures();
-
-        GpuBuffer gpuBuffer = renderSetupAccessor.pipeline().getVertexFormat().uploadImmediateVertexBuffer(meshData.vertexBuffer());
-        GpuBuffer gpuBuffer2;
-        VertexFormat.IndexType indexType;
-        if (meshData.indexBuffer() == null) {
-            RenderSystem.AutoStorageIndexBuffer autoStorageIndexBuffer = RenderSystem.getSequentialBuffer(meshData.drawState().mode());
-            gpuBuffer2 = autoStorageIndexBuffer.getBuffer(meshData.drawState().indexCount());
-            indexType = autoStorageIndexBuffer.type();
-        } else {
-            gpuBuffer2 = renderSetupAccessor.pipeline().getVertexFormat().uploadImmediateIndexBuffer(meshData.indexBuffer());
-            indexType = meshData.drawState().indexType();
-        }
 
         RenderTarget renderTarget = renderSetupAccessor.outputTarget().getRenderTarget();
         GpuTextureView gpuTextureView = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : renderTarget.getColorTextureView();
         GpuTextureView gpuTextureView2 = renderTarget.useDepth ? (RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : renderTarget.getDepthTextureView()) : null;
 
-        try (RenderPass renderPass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Immediate draw for " + this.name, gpuTextureView, OptionalInt.empty(), gpuTextureView2, OptionalDouble.empty())) {
+        VkCommandEncoder commandEncoder = (VkCommandEncoder) RenderSystem.getDevice().createCommandEncoder();
+        try (RenderPass renderPass = commandEncoder.createRenderPass(VOOLKAN_IMMEDIATE_LABEL, gpuTextureView, OptionalInt.empty(), gpuTextureView2, OptionalDouble.empty())) {
             renderPass.setPipeline(renderSetupAccessor.pipeline());
             ScissorState scissorState = RenderSystem.getScissorStateForRenderTypeDraws();
             if (scissorState.enabled()) {
@@ -97,19 +98,14 @@ public class RenderTypeM implements ExtendedRenderType {
 
             RenderSystem.bindDefaultUniforms(renderPass);
             renderPass.setUniform("DynamicTransforms", gpuBufferSlice);
-            renderPass.setVertexBuffer(0, gpuBuffer);
 
-            for(Map.Entry<String, RenderSetup.TextureAndSampler> entry : map.entrySet()) {
+            for (Map.Entry<String, RenderSetup.TextureAndSampler> entry : map.entrySet()) {
                 renderPass.bindTexture(entry.getKey(), entry.getValue().textureView(), entry.getValue().sampler());
             }
 
             VRenderSystem.applyModelViewMatrix(RenderSystem.getModelViewMatrix());
             VRenderSystem.calculateMVP();
 
-//            renderPass.setIndexBuffer(gpuBuffer2, indexType);
-//            renderPass.drawIndexed(0, 0, meshData.drawState().indexCount(), 1);
-
-            VkCommandEncoder commandEncoder = (VkCommandEncoder) RenderSystem.getDevice().createCommandEncoder();
             commandEncoder.trySetup((VkRenderPass) renderPass);
 
             Renderer.getDrawer().draw(meshData.vertexBuffer(), meshData.indexBuffer(), meshData.drawState().mode(), meshData.drawState().format(), meshData.drawState().vertexCount());

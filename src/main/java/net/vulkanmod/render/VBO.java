@@ -1,5 +1,11 @@
 package net.vulkanmod.render;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * remove redundant UBO upload in bind() since draw() uploads and binds UBOs; use unified direct-write memory when enabled.
+ */
+
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.vulkanmod.vulkan.Renderer;
@@ -24,7 +30,7 @@ public class VBO {
     private int vertexCount;
 
     public VBO(boolean useGpuMem) {
-        this.memoryType = useGpuMem ? MemoryTypes.GPU_MEM : MemoryTypes.HOST_MEM;
+        this.memoryType = useGpuMem ? MemoryTypes.getUnifiedOrGpuMem() : MemoryTypes.HOST_MEM;
     }
 
     public void upload(MeshData meshData) {
@@ -64,7 +70,7 @@ public class VBO {
                 this.indexBuffer.scheduleFree();
             }
 
-            this.indexBuffer = new IndexBuffer(data.remaining(), MemoryTypes.GPU_MEM);
+            this.indexBuffer = new IndexBuffer(data.remaining(), MemoryTypes.getUnifiedOrGpuMem());
             this.indexBuffer.copyBuffer(data, data.remaining());
         }
     }
@@ -107,7 +113,6 @@ public class VBO {
         Renderer renderer = Renderer.getInstance();
         renderer.bindGraphicsPipeline(pipeline);
         VTextureSelector.bindShaderTextures(pipeline);
-        renderer.uploadAndBindUBOs(pipeline);
     }
 
     public void draw() {

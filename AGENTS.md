@@ -4,7 +4,7 @@
 Read `STATUS.md` (open work, one page) first. Do not read `ROADMAP.md` or `docs/` in full: grep ROADMAP.md by tag, and use the map in `docs/README.md` to open only the one doc you need. Keep `STATUS.md` current when an item opens, closes or changes owner.
 
 ## Goal
-voolkan is an unofficial, private (for now) **LGPL-3.0** fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral. It makes Minecraft **1.21.11** run on an **AMD Radeon R7 350** (GCN1, 2 GB VRAM, Windows driver 23.11.1, Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`) by repairing VulkanMod's legacy `VkRenderPass` path, then adds stability and low-latency work. Windows only. PvP features live in a separate mod, not here. The plan is `ROADMAP.md` (phases 0-6, milestone `first-world` = a world renders on the R7).
+voolkan is an unofficial, **LGPL-3.0** fork of [VulkanMod](https://github.com/xCollateral/VulkanMod) by xCollateral. It makes Minecraft **1.21.11** run on an **AMD Radeon R7 350** (GCN1, 2 GB VRAM, Windows driver 23.11.1, Vulkan 1.2.178, no `VK_KHR_dynamic_rendering`) by repairing VulkanMod's legacy `VkRenderPass` path, adds stability, FPS, QoL, and low-latency work, and supports **Apple Silicon macOS** via MoltenVK. PvP features live in a separate mod, not here. The plan is `ROADMAP.md` (phases 0-6, milestone `first-world` = a world renders on the R7).
 
 ## Base and upstream
 - Base = upstream `7f69043` ("Fix typo", tag `upstream-base`) + the `gradle.properties` version bump. It matches the official VulkanMod 0.6.8+1.21.11 release.
@@ -24,6 +24,9 @@ tools\make-test-world.ps1 -AcceptEula   # owner accepts the Mojang EULA
 ```
 Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. On the R7 PC (its only GPU), on the base `runClient` fails with `Unsupported extension: [VK_KHR_dynamic_rendering]` by design until Phase 1. WAGAY has an RX 9070 XT, so reproduce the R7's limits there with `tools\run-r7-profile.ps1`.
 
+### Headless builder runner policy
+Automated builder runners operating in headless or multi-project environments must NOT run `runClient`, interactive test worlds, or any scripts that spawn GLFW/GUI windows. Verification on headless builder runners is strictly non-GUI: `.\gradlew build` (and offline compiler/test checks). In-game testing on Windows (R7 350) is done manually by the owner; macOS in-game testing (Rounds 1-4) is done manually by the Mac tester with exported jars.
+
 ## Git rules
 - Commit locally with the repo's configured identity. One commit per logical step.
 - Push only your own work branch (never `main`). Changes reach `main` through a pull request: open it against `main` when the work is finished, with a short description and the test results, and let the owner merge it (or merge when told to). Don't create GitHub repos or releases, and don't push tags, unless the owner says so.
@@ -34,11 +37,8 @@ Checklist: `docs/smoke-test.md`. Setup details: `docs/dev-setup.md`. On the R7 P
 ## One folder, one chat
 Follow the global rule. Dev servers and ports of other chats are not yours.
 
-## Model guidance
-- **Opus 5.5** (medium effort): the default. Rendering correctness, synchronization, memory, architecture and ADRs, anything that decides what ships (versions, merges, tags).
-- **Sonnet 5.5**: long coding tasks: extended build passes, scripts, cherry-picks, run-and-fix loops. Opus reviews before anything builds on them.
-- **Haiku or Sonnet at low effort**: repo scouting, validation and test runs (`tools\run-validation.ps1`, `tools\summarise-vk-log.ps1`), log and CI summaries.
-- Thread length, worktrees and delegation follow the global rules; build passes use a `pass-N` branch.
+## Workflow
+- Build passes use a `pass-N` branch; anything that decides what ships (versions, merges, tags) requires the owner's approval.
 - Never leave `runClient`, a Gradle daemon you started, or any watcher running at the end of a turn.
 
 ## Licence rules
@@ -51,4 +51,4 @@ Follow the global rule. Dev servers and ports of other chats are not yours.
 Large downloads, logs and run folders are git-ignored (`logs/`, `run/`, `tools/mesa/`, `tools/bin/`, `test-world/*/`). Lavapipe is never registered system-wide; scripts use `VK_DRIVER_FILES` per process.
 
 ## Verify
-For a test handoff, run `.\gradlew build` from the repo root with the JDK 21 `JAVA_HOME` above. Do not run the game or the validation scripts.
+For a test handoff, run `.\gradlew build` from the repo root with the JDK 21 `JAVA_HOME` above, along with `powershell -File .\tools\check-notices.ps1` and `powershell -File .\tools\check-linerefs.ps1`. Do not run the game or the validation scripts.

@@ -1,18 +1,30 @@
 package net.vulkanmod.vulkan.shader;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * use primitive float and int suppliers to eliminate per-draw scalar uniform boxing.
+ */
+
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.TextureFilteringMethod;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.util.MappedBuffer;
 
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 public class Uniforms {
 
-    public static Object2ReferenceOpenHashMap<String, Supplier<Integer>> vec1i_uniformMap = new Object2ReferenceOpenHashMap<>();
+    @FunctionalInterface
+    public interface FloatSupplier {
+        float getAsFloat();
+    }
 
-    public static Object2ReferenceOpenHashMap<String, Supplier<Float>> vec1f_uniformMap = new Object2ReferenceOpenHashMap<>();
+    public static Object2ReferenceOpenHashMap<String, IntSupplier> vec1i_uniformMap = new Object2ReferenceOpenHashMap<>();
+
+    public static Object2ReferenceOpenHashMap<String, FloatSupplier> vec1f_uniformMap = new Object2ReferenceOpenHashMap<>();
     public static Object2ReferenceOpenHashMap<String, Supplier<MappedBuffer>> vec2f_uniformMap = new Object2ReferenceOpenHashMap<>();
     public static Object2ReferenceOpenHashMap<String, Supplier<MappedBuffer>> vec3f_uniformMap = new Object2ReferenceOpenHashMap<>();
     public static Object2ReferenceOpenHashMap<String, Supplier<MappedBuffer>> vec4f_uniformMap = new Object2ReferenceOpenHashMap<>();

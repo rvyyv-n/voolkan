@@ -1,5 +1,11 @@
 package net.vulkanmod.render.engine;
 
+/*
+ * This file is part of VulkanMod (https://github.com/xCollateral/VulkanMod),
+ * licensed under the GNU LGPL-3.0. Modified by the voolkan project, 2026:
+ * remove write-only dirtyUniforms set to eliminate per-pass hash set allocations.
+ */
+
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -10,8 +16,6 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
 import java.util.function.Supplier;
 
 import net.fabricmc.api.EnvType;
@@ -36,7 +40,6 @@ public class VkRenderPass implements RenderPass {
     private final ScissorState scissorState = new ScissorState();
     protected final HashMap<String, GpuBufferSlice> uniforms = new HashMap<>();
     protected final HashMap<String, TextureViewAndSampler> samplers = new HashMap<>();
-    protected final Set<String> dirtyUniforms = new HashSet<>();
     protected int pushedDebugGroups;
 
     private final boolean autoManaged;
@@ -75,11 +78,6 @@ public class VkRenderPass implements RenderPass {
 
     @Override
     public void setPipeline(RenderPipeline renderPipeline) {
-        if (this.pipeline == null || this.pipeline != renderPipeline) {
-            this.dirtyUniforms.addAll(this.uniforms.keySet());
-        }
-
-
         this.pipeline = renderPipeline;
 
         if (ExtendedRenderPipeline.of(renderPipeline).getPipeline() == null) {
@@ -95,14 +93,11 @@ public class VkRenderPass implements RenderPass {
         } else {
             this.samplers.put(string, new TextureViewAndSampler((VkTextureView)gpuTextureView, (VkSampler)gpuSampler));
         }
-
-        this.dirtyUniforms.add(string);
     }
 
     @Override
     public void setUniform(String string, GpuBuffer gpuBuffer) {
         this.uniforms.put(string, gpuBuffer.slice());
-        this.dirtyUniforms.add(string);
     }
 
     @Override
@@ -112,7 +107,6 @@ public class VkRenderPass implements RenderPass {
             throw new IllegalArgumentException("Uniform buffer offset must be aligned to " + i);
         } else {
             this.uniforms.put(string, gpuBufferSlice);
-            this.dirtyUniforms.add(string);
         }
     }
 
